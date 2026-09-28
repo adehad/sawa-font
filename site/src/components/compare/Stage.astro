@@ -77,6 +77,7 @@ const { locale } = Astro.props;
   }
 
   .panes :global(.pane) {
+    container: pane / inline-size;
     display: grid;
     align-content: start;
     gap: 0.75rem;
@@ -195,6 +196,100 @@ const { locale } = Astro.props;
     color: var(--color-muted);
     line-height: 1.5;
   }
+
+  .panes :global(.metrics-overlay) {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .panes :global(.guide),
+  .panes :global(.guide-box) {
+    position: absolute;
+    inset-inline: 0;
+  }
+
+  .panes :global(.guide) {
+    block-size: 0;
+    border-block-start: 1px dashed var(--grid-rule);
+  }
+
+  .panes :global(.guide[data-guide="baseline"]) {
+    border-block-start: 1px solid var(--color-accent);
+  }
+
+  .panes :global(.guide-box[data-parity="even"]) {
+    background: var(--grid-band);
+  }
+
+  .panes[data-show-metrics="on"] :global(.sample-wrap) {
+    padding-inline-end: 4.75rem;
+  }
+
+  .panes :global(.guide-label) {
+    position: absolute;
+    inset-inline-end: 0;
+    inline-size: 4.5rem;
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--color-muted);
+  }
+
+  .panes :global(.guide-legend) {
+    display: none;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    margin: 0;
+    margin-block-start: 0.25rem;
+    padding: 0;
+    list-style: none;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-muted);
+  }
+
+  .panes :global(.guide-legend li) {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .panes :global(.legend-swatch) {
+    inline-size: 1.25rem;
+    block-size: 0;
+    border-block-start: 1px dashed var(--grid-rule);
+  }
+
+  .panes :global(.legend-swatch[data-guide="baseline"]) {
+    border-block-start: 1px solid var(--color-accent);
+  }
+
+  .panes :global(.legend-swatch[data-guide="lineBox"]) {
+    block-size: 0.6rem;
+    border: 0;
+    background: var(--grid-band);
+    outline: 1px solid var(--grid-rule);
+  }
+
+  @container pane (width < 26rem) {
+    .panes[data-show-metrics="on"] :global(.sample-wrap) {
+      padding-inline-end: 0;
+    }
+
+    .panes :global(.guide-label) {
+      display: none;
+    }
+
+    .panes :global(.pane[data-guides="true"] .guide-legend) {
+      display: flex;
+    }
+  }
+
 
   .panes :global(.pane-meta:empty) {
     display: none;

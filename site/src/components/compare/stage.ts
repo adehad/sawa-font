@@ -1,8 +1,10 @@
 import { clientFormat } from "./messages";
 import { localFont, onLocalFont } from "./local-font";
+import { buildOverlay, measureOverlay, placeOverlay, type GuideLabels } from "./overlay";
 import { paneElement, type PaneContext } from "./pane-dom";
 import { paneFont } from "./pane-font";
 import { syncScroll } from "./sync-scroll";
+import { absentFeatures, featureSettings } from "../../fonts/features";
 import { commit, readState, subscribe } from "../../state/store";
 import {
   clampSize,
@@ -10,8 +12,13 @@ import {
   isPalette,
   setOverride,
   visiblePanes,
+  type FontOrLocal,
   type PlaygroundState,
 } from "../../state/url";
+
+function isolate(text: string): string {
+  return `⁦${text}⁩`;
+}
 
 function setMeta(article: HTMLElement, name: string, text: string): void {
   const line = article.querySelector<HTMLElement>(`[data-${name}]`);
@@ -23,9 +30,19 @@ function setMeta(article: HTMLElement, name: string, text: string): void {
 /** Renders the Compare panes into `stage` and keeps them in step with the URL state. */
 export function mountStage(stage: HTMLElement, panes: HTMLElement): void {
   const format = clientFormat();
+  const tagList = new Intl.ListFormat(document.documentElement.lang, { type: "unit" });
+  const guideLabels: GuideLabels = {
+    lineBox: format("compare.guide.lineBox"),
+    ascender: format("compare.guide.ascender"),
+    capHeight: format("compare.guide.capHeight"),
+    xHeight: format("compare.guide.xHeight"),
+    baseline: format("compare.guide.baseline"),
+    descender: format("compare.guide.descender"),
+  };
   const context: PaneContext = {
     format,
     locale: document.documentElement.lang === "ar" ? "ar" : "en",
+    guideLabels,
   };
   const note = (name: string) => stage.querySelector<HTMLElement>(`[data-${name}]`);
   const tanzilCredit = note("tanzil-credit");
@@ -34,6 +51,29 @@ export function mountStage(stage: HTMLElement, panes: HTMLElement): void {
   const fontOverrides = note("font-overrides-note");
   let structureKey = "";
   let unsync: (() => void) | undefined;
+  let overlayFrame = 0;
+
+  function metricsNote(id: FontOrLocal): string {
+    if (id === "status") {
+      return format("compare.metricsStatus");
+    }
+    const metrics = paneFont(id).metrics;
+    if (metrics === "woff2") {
+      return format("compare.metricsWoff2");
+    }
+    return metrics === "unreadable" ? format("compare.metricsUnreadable") : "";
+  }
+
+  function featureNote(id: FontOrLocal, feat: readonly string[]): string {
+    const font = paneFont(id);
+    if (font.features === null) {
+      return font.stack !== "" && feat.length > 0 ? format("compare.featuresUnknown") : "";
+    }
+    const absent = absentFeatures(feat, font.features);
+    return absent.length > 0
+      ? format("compare.featuresAbsent", { tags: isolate(tagList.format(absent)) })
+      : "";
+  }
 
   function applyStyles(state: PlaygroundState): void {
     panes.querySelectorAll<HTMLElement>("[data-pane]").forEach((article) => {
@@ -46,8 +86,12 @@ export function mountStage(stage: HTMLElement, panes: HTMLElement): void {
       const weight = font.weight(state.weight);
       body.style.fontFamily = font.stack;
       body.style.fontWeight = String(weight.weight);
+      body.style.fontFeatureSettings = featureSettings(state.features);
       body.style.setProperty("--sample-size", `${clampSize(state.size)}px`);
       body.style.lineHeight = state.lineHeight === "default" ? "normal" : String(state.lineHeight);
+      article.dataset.guides = String(
+        state.metrics && typeof font.metrics === "object" && body.dataset.placeholder === undefined,
+      );
       setMeta(
         article,
         "pane-weight",
@@ -55,7 +99,32 @@ export function mountStage(stage: HTMLElement, panes: HTMLElement): void {
           weight: weight.weight,
         }),
       );
+      setMeta(article, "pane-features", featureNote(id, state.features));
+      setMeta(article, "pane-metrics", state.metrics ? metricsNote(id) : "");
     });
+  }
+
+  /** Measures every wrap first, then swaps in every layer, so layout is read once. */
+  function drawOverlays(): void {
+    const state = readState();
+    const plans = [...panes.querySelectorAll<HTMLElement>("[data-pane]")].flatMap((article) => {
+      const id = article.dataset.paneFont ?? "";
+      const metrics = isFontOrLocal(id) ? paneFont(id).metrics : "none";
+      return [...article.querySelectorAll<HTMLElement>("[data-sample-wrap]")].map((wrap) => ({
+        wrap,
+        plan: state.metrics && typeof metrics === "object" ? measureOverlay(wrap, metrics) : null,
+      }));
+    });
+    for (const { wrap, plan } of plans) {
+      placeOverlay(wrap, plan ? buildOverlay(plan, guideLabels) : null);
+    }
+    panes.dataset.overlay = state.metrics ? "drawn" : "off";
+  }
+
+  function scheduleOverlays(): void {
+    cancelAnimationFrame(overlayFrame);
+    panes.dataset.overlay = "pending";
+    overlayFrame = requestAnimationFrame(drawOverlays);
   }
 
   function render(state: PlaygroundState): void {
@@ -89,6 +158,7 @@ export function mountStage(stage: HTMLElement, panes: HTMLElement): void {
       }
     }
     applyStyles(state);
+    scheduleOverlays();
 
     if (state.background) {
       stage.dataset.bg = state.background;
@@ -96,6 +166,7 @@ export function mountStage(stage: HTMLElement, panes: HTMLElement): void {
       delete stage.dataset.bg;
     }
     stage.dataset.view = state.view;
+    panes.dataset.showMetrics = state.metrics ? "on" : "off";
     if (tanzilCredit) {
       tanzilCredit.hidden = state.preset !== "quran";
     }
@@ -113,6 +184,8 @@ export function mountStage(stage: HTMLElement, panes: HTMLElement): void {
 
   subscribe(render);
   onLocalFont(() => render(readState()));
+  new ResizeObserver(scheduleOverlays).observe(panes);
+  document.fonts.addEventListener("loadingdone", scheduleOverlays);
 
   panes.addEventListener("change", (event) => {
     const select = event.target;

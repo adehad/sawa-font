@@ -76,6 +76,19 @@ const VIEWS = ["stacked", "side"] as const;
     <p id="compare-weight-note" class="control-note">{t(locale, "compare.weightNote")}</p>
   </div>
 
+  <div class="control">
+    <div class="check">
+      <input
+        id="compare-metrics"
+        type="checkbox"
+        aria-describedby="compare-metrics-note"
+        data-metrics
+      />
+      <label for="compare-metrics">{t(locale, "compare.metrics")}</label>
+    </div>
+    <p id="compare-metrics-note" class="control-note">{t(locale, "compare.metricsNote")}</p>
+  </div>
+
   <fieldset class="control">
     <legend>{t(locale, "compare.background")}</legend>
     <div class="segmented">
@@ -131,6 +144,7 @@ const VIEWS = ["stacked", "side"] as const;
     const lhOutput = query<HTMLOutputElement>("[data-lh-output]");
     const lhDefault = query<HTMLInputElement>("[data-lh-default]");
     const weight = query<HTMLInputElement>("[data-weight]");
+    const metrics = query<HTMLInputElement>("[data-metrics]");
     const weightOutput = query<HTMLOutputElement>("[data-weight-output]");
     const bgButtons = root.querySelectorAll<HTMLButtonElement>("[data-bg-button]");
     const viewButtons = root.querySelectorAll<HTMLButtonElement>("[data-view-button]");
@@ -162,6 +176,9 @@ const VIEWS = ["stacked", "side"] as const;
         weightOutput.value = text;
         weight.setAttribute("aria-valuetext", text);
       }
+      if (metrics) {
+        metrics.checked = state.metrics;
+      }
       bgButtons.forEach((button) => {
         const pressed = (state.background ?? "system") === button.dataset.bgButton;
         button.setAttribute("aria-pressed", String(pressed));
@@ -185,6 +202,7 @@ const VIEWS = ["stacked", "side"] as const;
     weight?.addEventListener("input", () => {
       commit({ ...readState(), weight: storedWeight(weight.valueAsNumber, COMPARE_WEIGHT) });
     });
+    metrics?.addEventListener("change", () => commit({ ...readState(), metrics: metrics.checked }));
     bgButtons.forEach((button) => {
       button.addEventListener("click", () => {
         const bg = button.dataset.bgButton ?? "";

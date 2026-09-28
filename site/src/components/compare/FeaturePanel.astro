@@ -1,0 +1,174 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+---
+
+<details class="feature-panel" data-feature-panel>
+  <summary class="control-title">{t(locale, "compare.features")}</summary>
+  <p class="control-note">{t(locale, "compare.featuresIntro")}</p>
+  <div class="feature-groups" data-feature-groups></div>
+  <p class="control-note" data-features-always></p>
+  <p class="control-note">{t(locale, "compare.featuresRequired")}</p>
+</details>
+
+<script>
+  import { clientFormat } from "./messages";
+  import { paneFont } from "./pane-font";
+  import {
+    FEATURE_GROUPS,
+    REQUIRED_FEATURES,
+    groupFeatures,
+    isFeatureOn,
+  } from "../../fonts/features";
+  import { commit, readState, subscribe } from "../../state/store";
+  import { toggleFeature, visiblePanes, type PlaygroundState } from "../../state/url";
+  import { onLocalFont } from "./local-font";
+
+  const root = document.querySelector<HTMLDetailsElement>("[data-feature-panel]");
+  const container = root?.querySelector<HTMLElement>("[data-feature-groups]");
+  const always = root?.querySelector<HTMLElement>("[data-features-always]");
+  if (root && container && always) {
+    const format = clientFormat();
+    const list = new Intl.ListFormat(document.documentElement.lang, { type: "unit" });
+    let renderedKey = "";
+
+    function featureCheck(tag: string, state: PlaygroundState): HTMLElement {
+      const row = document.createElement("div");
+      row.className = "check";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.id = `compare-feat-${tag}`;
+      input.dataset.feature = tag;
+      input.checked = isFeatureOn(tag, state.features);
+      const label = document.createElement("label");
+      label.htmlFor = input.id;
+      if (tag === "rlig") {
+        input.disabled = true;
+        label.textContent = format("compare.featureRequired", { tag: `⁦${tag}⁩` });
+      } else {
+        const code = document.createElement("code");
+        code.dir = "ltr";
+        code.textContent = tag;
+        label.append(code);
+      }
+      row.append(input, label);
+      return row;
+    }
+
+    function render(state: PlaygroundState): void {
+      // A tag in the URL that no font on screen has still gets a switch, so it can be cleared.
+      const tags = new Set(state.features.filter((tag) => !REQUIRED_FEATURES.has(tag)));
+      for (const pane of visiblePanes(state)) {
+        for (const tag of paneFont(pane.font).features ?? []) {
+          tags.add(tag);
+        }
+      }
+      const { groups, required } = groupFeatures(tags);
+      const key = JSON.stringify([groups, state.features]);
+      if (key === renderedKey) {
+        return;
+      }
+      renderedKey = key;
+      const focused = document.activeElement;
+      const refocus =
+        focused instanceof HTMLInputElement && container?.contains(focused)
+          ? focused.dataset.feature
+          : undefined;
+      const fieldsets = FEATURE_GROUPS.filter((group) => groups[group].length > 0).map((group) => {
+        const fieldset = document.createElement("fieldset");
+        fieldset.className = "feature-group";
+        fieldset.dataset.featureGroup = group;
+        const legend = document.createElement("legend");
+        legend.textContent = format(`compare.featureGroup.${group}`);
+        const checks = document.createElement("div");
+        checks.className = "feature-checks";
+        checks.append(...groups[group].map((tag) => featureCheck(tag, state)));
+        fieldset.append(legend, checks);
+        return fieldset;
+      });
+      if (fieldsets.length === 0) {
+        const none = document.createElement("p");
+        none.className = "control-note";
+        none.textContent = format("compare.featuresNone");
+        container?.replaceChildren(none);
+      } else {
+        container?.replaceChildren(...fieldsets);
+      }
+      if (always) {
+        always.textContent =
+          required.length > 0
+            ? format("compare.featuresAlways", { tags: `⁦${list.format(required)}⁩` })
+            : "";
+      }
+      if (refocus) {
+        container?.querySelector<HTMLElement>(`[data-feature="${refocus}"]`)?.focus();
+      }
+    }
+
+    root.open = readState().features.length > 0;
+    subscribe(render);
+    onLocalFont(() => render(readState()));
+
+    container.addEventListener("change", (event) => {
+      const input = event.target;
+      if (input instanceof HTMLInputElement && input.dataset.feature) {
+        commit(toggleFeature(readState(), input.dataset.feature));
+      }
+    });
+  }
+</script>
+
+<style>
+  .feature-panel {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .feature-panel > :not(summary) {
+    margin-block-start: 0.5rem;
+  }
+
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-block-size: 44px;
+    cursor: pointer;
+  }
+
+  .feature-groups {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .feature-groups :global(.feature-group) {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-inline-size: 0;
+  }
+
+  .feature-groups :global(legend) {
+    padding: 0;
+    margin-block-end: 0.25rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+
+  .feature-groups :global(.feature-checks) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+    column-gap: 0.75rem;
+  }
+
+  .feature-groups :global(code) {
+    font-size: 0.95rem;
+  }
+</style>

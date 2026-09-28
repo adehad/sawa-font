@@ -1,5 +1,7 @@
 import { fontNameKey, type ClientKey, type Format } from "./messages";
 import { localFont } from "./local-font";
+import { GUIDE_NAMES, type GuideLabels } from "./overlay";
+import { paneFont } from "./pane-font";
 import { waterfallSizes } from "../../fonts/compare";
 import { FONT_ROSTER } from "../../fonts/roster";
 import { PALETTE_NAMES } from "../../fonts/specimen";
@@ -15,6 +17,7 @@ import {
 export interface PaneContext {
   readonly format: Format;
   readonly locale: "en" | "ar";
+  readonly guideLabels: GuideLabels;
 }
 
 export function element<K extends keyof HTMLElementTagNameMap>(
@@ -66,6 +69,10 @@ function overrideSelect(
     select.append(option);
   }
   select.value = key === "font" ? spec.font : spec.palette;
+  if (key === "pal" && !paneFont(spec.font).hasPalettes) {
+    select.disabled = true;
+    select.setAttribute("aria-describedby", "compare-palette-none");
+  }
   label.append(select);
   return label;
 }
@@ -73,6 +80,8 @@ function overrideSelect(
 function sampleText(text: string, size?: number): HTMLElement {
   const wrap = element("div", "sample-wrap");
   wrap.dataset.sampleWrap = "";
+  // The overlay's label gutter must sit on the same side in both UIs.
+  wrap.dir = "ltr";
   const paragraph = element("p", "sample-text", text);
   paragraph.dir = "auto";
   paragraph.dataset.sampleText = "";
@@ -105,6 +114,20 @@ function sampleBlock(context: PaneContext, block: SampleBlock, state: Playground
   return container;
 }
 
+/** The key to the guide lines, shown instead of line labels when a pane is narrow. */
+function guideLegend(labels: GuideLabels): HTMLElement {
+  const legend = element("ul", "guide-legend");
+  legend.dataset.guideLegend = "";
+  for (const name of GUIDE_NAMES) {
+    const item = element("li");
+    const swatch = element("span", "legend-swatch");
+    swatch.dataset.guide = name;
+    item.append(swatch, element("span", undefined, labels[name]));
+    legend.append(item);
+  }
+  return legend;
+}
+
 export function paneElement(
   context: PaneContext,
   spec: VisiblePane,
@@ -125,11 +148,12 @@ export function paneElement(
     name.dir = "auto";
   }
   head.append(name, element("p", "pane-note", fontNote(format, spec.font)));
-  for (const meta of ["paneWeight"]) {
+  for (const meta of ["paneWeight", "paneFeatures", "paneMetrics"]) {
     const line = element("p", "pane-meta");
     line.dataset[meta] = "";
     head.append(line);
   }
+  head.append(guideLegend(context.guideLabels));
   if (side) {
     const overrides = element("div", "pane-overrides");
     overrides.append(

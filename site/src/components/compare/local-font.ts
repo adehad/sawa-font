@@ -1,8 +1,12 @@
+import { readSfnt, type SfntResult } from "../../fonts/sfnt";
+
 /** A font file the visitor picked, loaded into this tab only. */
 export interface LocalFont {
   /** A family name unique to this load, so a replaced file never shadows the new one. */
   readonly family: string;
   readonly fileName: string;
+  /** The file's own metrics, features and weight axis, when it can be read. */
+  readonly sfnt: SfntResult;
 }
 
 const EVENT = "sawa:local-font";
@@ -25,6 +29,18 @@ export function onLocalFont(listener: (font: LocalFont) => void): void {
   });
 }
 
+/** The FontFace weight: the wght axis range, the OS/2 weight class, or the default. */
+function weightDescriptor(sfnt: SfntResult): string {
+  if (sfnt.kind !== "ok") {
+    return "normal";
+  }
+  const { axis, weightClass } = sfnt.info;
+  if (axis) {
+    return `${axis.min} ${axis.max}`;
+  }
+  return weightClass ? String(weightClass) : "normal";
+}
+
 /**
  * Loads `file` as a FontFace from an object URL. The file never leaves the
  * browser. The previous face and URL are released once the new one loads.
@@ -34,8 +50,9 @@ export async function loadLocalFont(file: File): Promise<LocalFont | undefined> 
   loads += 1;
   const token = loads;
   const family = `sawa-local-${token}`;
+  const sfnt = await readSfnt(await file.arrayBuffer());
   const url = URL.createObjectURL(file);
-  const face = new FontFace(family, `url("${url}")`);
+  const face = new FontFace(family, `url("${url}")`, { weight: weightDescriptor(sfnt) });
   try {
     await face.load();
   } catch (error) {
@@ -55,7 +72,7 @@ export async function loadLocalFont(file: File): Promise<LocalFont | undefined> 
   }
   currentFace = face;
   currentUrl = url;
-  current = { family, fileName: file.name };
+  current = { family, fileName: file.name, sfnt };
   window.dispatchEvent(new Event(EVENT));
   return current;
 }

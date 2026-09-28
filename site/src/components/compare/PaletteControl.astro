@@ -1,0 +1,73 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { PALETTE_NAMES } from "../../fonts/specimen";
+import { defaultState } from "../../state/url";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const initial = defaultState();
+---
+
+<div class="control" data-palette-control>
+  <fieldset class="control" data-palette-switch hidden>
+    <legend>{t(locale, "compare.palette")}</legend>
+    <div class="segmented">
+      {
+        PALETTE_NAMES.map((palette) => (
+          <button
+            type="button"
+            data-palette={palette}
+            aria-pressed={palette === initial.palette ? "true" : "false"}
+          >
+            {t(locale, `palette.${palette}`)}
+          </button>
+        ))
+      }
+    </div>
+  </fieldset>
+  <p id="compare-palette-none" class="control-note" data-palette-none>
+    {t(locale, "compare.paletteNone")}
+  </p>
+</div>
+
+<script>
+  import { paneFont } from "./pane-font";
+  import { onLocalFont } from "./local-font";
+  import { PALETTE_NAMES } from "../../fonts/specimen";
+  import { commit, readState, subscribe } from "../../state/store";
+  import { visiblePanes, type PlaygroundState } from "../../state/url";
+
+  const root = document.querySelector<HTMLElement>("[data-palette-control]");
+  const fieldset = root?.querySelector<HTMLFieldSetElement>("[data-palette-switch]");
+  const none = root?.querySelector<HTMLElement>("[data-palette-none]");
+  if (root && fieldset && none) {
+    const buttons = root.querySelectorAll<HTMLButtonElement>("[data-palette]");
+
+    function render(state: PlaygroundState): void {
+      const any = visiblePanes(state).some((pane) => paneFont(pane.font).hasPalettes);
+      if (fieldset && none) {
+        fieldset.hidden = !any;
+        none.hidden = any;
+      }
+      buttons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.palette === state.palette));
+      });
+    }
+
+    subscribe(render);
+    onLocalFont(() => render(readState()));
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const palette = PALETTE_NAMES.find((name) => name === button.dataset.palette);
+        if (palette) {
+          commit({ ...readState(), palette });
+        }
+      });
+    });
+  }
+</script>

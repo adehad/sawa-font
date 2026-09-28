@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { compareFont, matchStaticWeight, renderedWeight, waterfallSizes } from "./compare";
+import {
+  compareFont,
+  guideOffsets,
+  matchStaticWeight,
+  renderedWeight,
+  waterfallSizes,
+} from "./compare";
 import type { FamilyInfo, Face, FontEntry, FontsData } from "./types";
 
 function family(overrides: Partial<FamilyInfo> = {}): FamilyInfo {
@@ -120,5 +126,39 @@ describe("waterfallSizes", () => {
     expect(waterfallSizes(32)).toEqual([12, 16, 20, 24, 32]);
     expect(waterfallSizes(12)).toEqual([12]);
     expect(waterfallSizes(144)).toEqual([12, 16, 20, 24, 32, 48, 72, 96, 120, 144]);
+  });
+});
+
+describe("guideOffsets", () => {
+  const metrics = {
+    unitsPerEm: 1000,
+    ascender: 1137,
+    descender: -675,
+    lineGap: 0,
+    xHeight: 536,
+    capHeight: 714,
+  };
+
+  it("uses the rounded ascent and descent for a normal line box", () => {
+    expect(guideOffsets(metrics, 32, "normal")).toEqual({
+      lineTop: -36,
+      lineHeight: 36 + 22,
+      ascender: -36,
+      capHeight: -714 * 0.032,
+      xHeight: -536 * 0.032,
+      descender: 22,
+    });
+  });
+
+  it("splits a numeric line height's leading evenly", () => {
+    const offsets = guideOffsets(metrics, 32, 2);
+    expect(offsets.lineHeight).toBe(64);
+    expect(offsets.lineTop).toBe(-(36 + (64 - 58) / 2));
+  });
+
+  it("leaves out guides the font doesn't define", () => {
+    const offsets = guideOffsets({ ...metrics, xHeight: null, capHeight: null }, 16, "normal");
+    expect(offsets.xHeight).toBeNull();
+    expect(offsets.capHeight).toBeNull();
   });
 });

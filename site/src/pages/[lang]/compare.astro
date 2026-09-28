@@ -5,6 +5,8 @@ import TypeControls from "../../components/compare/TypeControls.astro";
 import FontRoster from "../../components/compare/FontRoster.astro";
 import LocalFont from "../../components/compare/LocalFont.astro";
 import Stage from "../../components/compare/Stage.astro";
+import FeaturePanel from "../../components/compare/FeaturePanel.astro";
+import PaletteControl from "../../components/compare/PaletteControl.astro";
 import { CLIENT_KEYS, messagesJson, type ClientMessages } from "../../components/compare/messages";
 import { rawMessage, t } from "../../i18n/t";
 import { LOCALES, type Locale } from "../../i18n/locales";
@@ -35,6 +37,8 @@ const pageCss = paletteCss(loadFontsData());
       <SampleControls locale={locale} />
       <TypeControls locale={locale} />
       <FontRoster locale={locale} />
+      <PaletteControl locale={locale} />
+      <FeaturePanel locale={locale} />
       <LocalFont locale={locale} />
     </div>
     <Stage locale={locale} />
@@ -99,6 +103,10 @@ const pageCss = paletteCss(loadFontsData());
     margin: 0;
     padding: 0;
     border: 0;
+  }
+
+  .compare .control[hidden] {
+    display: none;
   }
 
   .compare .control legend,

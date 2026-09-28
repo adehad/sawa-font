@@ -117,3 +117,41 @@ export function waterfallSizes(size: number): number[] {
   const steps = [12, 16, 20, 24, 32, 48, 72, 96, 120];
   return [...steps.filter((step) => step < size), size];
 }
+
+/** Guide positions in px from a line's baseline, positive downwards. */
+export interface GuideOffsets {
+  readonly lineTop: number;
+  readonly lineHeight: number;
+  readonly ascender: number;
+  readonly capHeight: number | null;
+  readonly xHeight: number | null;
+  readonly descender: number;
+}
+
+/**
+ * Where each guide sits relative to the baseline for a font at `fontSize`.
+ * Chrome rounds ascent, descent and line gap to whole pixels before building
+ * a line box, so the line box edges here do too. A numeric line height
+ * splits its leading evenly above and below the content area.
+ */
+export function guideOffsets(
+  metrics: GuideMetrics,
+  fontSize: number,
+  lineHeight: "normal" | number,
+): GuideOffsets {
+  const scale = fontSize / metrics.unitsPerEm;
+  const ascent = Math.round(metrics.ascender * scale);
+  const descent = Math.round(-metrics.descender * scale);
+  const gap = Math.round(metrics.lineGap * scale);
+  const height = lineHeight === "normal" ? ascent + descent + gap : lineHeight * fontSize;
+  const above =
+    lineHeight === "normal" ? ascent + gap / 2 : ascent + (height - ascent - descent) / 2;
+  return {
+    lineTop: -above,
+    lineHeight: height,
+    ascender: -ascent,
+    capHeight: metrics.capHeight === null ? null : -metrics.capHeight * scale,
+    xHeight: metrics.xHeight === null ? null : -metrics.xHeight * scale,
+    descender: descent,
+  };
+}
