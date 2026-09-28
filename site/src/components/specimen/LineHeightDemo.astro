@@ -1,0 +1,160 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { lineBoxEm, type LineMetrics, type SpecimenFamilyInfo } from "../../fonts/specimen";
+import { SPECIMEN_FAMILIES, type SpecimenFamily } from "../../state/url";
+import { specimenStrings } from "../../samples";
+
+interface Props {
+  locale: Locale;
+  families: Record<SpecimenFamily, SpecimenFamilyInfo>;
+  statusMetrics: LineMetrics;
+}
+
+const { locale, families, statusMetrics } = Astro.props;
+const emFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 });
+
+function boxNote(metrics: LineMetrics): string {
+  return t(locale, "lineHeight.box", {
+    value: emFormat.format(lineBoxEm(metrics)),
+    ascender: metrics.ascender,
+    descender: metrics.descender,
+    upm: metrics.unitsPerEm,
+  });
+}
+---
+
+<section class="line-demo" aria-labelledby="line-demo-title" data-line-demo data-grid="off">
+  <h2 id="line-demo-title">{t(locale, "lineHeight.h2")}</h2>
+  <p class="section-intro">{t(locale, "lineHeight.intro")}</p>
+
+  <div class="line-toggle">
+    <input id="line-grid" type="checkbox" data-grid-toggle />
+    <label for="line-grid">{t(locale, "lineHeight.grid")}</label>
+  </div>
+  <p class="section-note">{t(locale, "lineHeight.gridNote")}</p>
+
+  <div class="line-panes">
+    <figure class="line-pane">
+      <figcaption>
+        {
+          SPECIMEN_FAMILIES.map((id) => (
+            <span data-for-family={id}>{t(locale, `font.${id}.name`)}</span>
+          ))
+        }
+      </figcaption>
+      <p class="grid-text in-family" dir="auto">{specimenStrings.lineHeight}</p>
+      {
+        SPECIMEN_FAMILIES.map((id) => (
+          <p class="pane-note" data-for-family={id}>
+            {boxNote(families[id].metrics)}
+          </p>
+        ))
+      }
+    </figure>
+
+    <figure class="line-pane">
+      <figcaption>{t(locale, "lineHeight.statusLabel")}</figcaption>
+      <p class="grid-text status-stack" dir="auto" data-status-text>
+        {specimenStrings.lineHeight}
+      </p>
+      <p class="pane-note">{t(locale, "lineHeight.statusNote")}</p>
+      <p class="pane-note">{boxNote(statusMetrics)}</p>
+    </figure>
+  </div>
+</section>
+
+<script>
+  import { commit, readState, subscribe } from "../../state/store";
+
+  const root = document.querySelector<HTMLElement>("[data-line-demo]");
+  const toggle = root?.querySelector<HTMLInputElement>("[data-grid-toggle]");
+  if (root && toggle) {
+    subscribe((state) => {
+      root.dataset.grid = state.metrics ? "on" : "off";
+      toggle.checked = state.metrics;
+    });
+    toggle.addEventListener("change", () => commit({ ...readState(), metrics: toggle.checked }));
+  }
+</script>
+
+<style>
+  .line-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-block-size: 44px;
+  }
+
+  .line-toggle input {
+    inline-size: 1.4rem;
+    block-size: 1.4rem;
+    margin: 0;
+    accent-color: var(--color-accent);
+  }
+
+  .line-toggle label {
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .line-panes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+    gap: 1.5rem;
+    margin-block-start: 1rem;
+  }
+
+  .line-pane {
+    display: grid;
+    align-content: start;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 1.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+  }
+
+  .line-pane figcaption {
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+
+  .grid-text {
+    margin: 0;
+    font-size: 1.25rem;
+    line-height: normal;
+  }
+
+  /*
+   * Chrome rounds the ascent and descent to whole pixels separately before
+   * adding them into a line box, so the grid does too or it drifts a
+   * fraction of a pixel per line.
+   */
+  .line-demo[data-grid="on"] .grid-text {
+    --asc: round(nearest, calc(var(--line-ascent) * 1em), 1px);
+    --box: calc(
+      var(--asc) + round(nearest, calc(var(--line-descent) * 1em), 1px) +
+        round(nearest, calc(var(--line-gap) * 1em), 1px)
+    );
+
+    background-image:
+      linear-gradient(
+        transparent calc(var(--asc) - 1px),
+        var(--grid-rule) calc(var(--asc) - 1px),
+        var(--grid-rule) var(--asc),
+        transparent var(--asc)
+      ),
+      linear-gradient(var(--grid-band) 50%, transparent 50%);
+    background-size:
+      100% var(--box),
+      100% calc(var(--box) * 2);
+  }
+
+  .pane-note {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-muted);
+  }
+</style>

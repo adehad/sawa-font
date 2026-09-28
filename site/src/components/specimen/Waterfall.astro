@@ -1,0 +1,75 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { defaultState } from "../../state/url";
+import { specimenSample } from "../../samples";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const SIZES = [12, 16, 20, 24, 32, 48, 72] as const;
+const initial = defaultState();
+const initialSample = specimenSample(initial.preset, initial.text);
+---
+
+<section class="waterfall" aria-labelledby="waterfall-title" data-waterfall>
+  <h2 id="waterfall-title">{t(locale, "waterfall.h2")}</h2>
+  <p class="section-intro">{t(locale, "waterfall.intro")}</p>
+  <div class="waterfall-rows">
+    {
+      SIZES.map((size) => (
+        <div class="waterfall-row">
+          <span class="waterfall-size">{t(locale, "waterfall.size", { size })}</span>
+          <p class="waterfall-text in-family" dir="auto" style={`--row-size: ${size}px`} data-waterfall-text>
+            {initialSample}
+          </p>
+        </div>
+      ))
+    }
+  </div>
+</section>
+
+<script>
+  import { specimenSample } from "../../samples";
+  import { subscribe } from "../../state/store";
+
+  const rows = document.querySelectorAll<HTMLElement>("[data-waterfall-text]");
+  subscribe((state) => {
+    const text = specimenSample(state.preset, state.text);
+    rows.forEach((row) => {
+      row.textContent = text;
+    });
+  });
+</script>
+
+<style>
+  .waterfall-rows {
+    display: grid;
+    border-block-start: 1px solid var(--color-rule);
+  }
+
+  .waterfall-row {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 1rem;
+    padding-block: 0.6rem;
+    border-block-end: 1px solid var(--color-rule);
+  }
+
+  .waterfall-size {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--color-muted);
+  }
+
+  .waterfall-text {
+    margin: 0;
+    font-size: var(--row-size);
+    line-height: 1.5;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+</style>

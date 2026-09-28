@@ -1,0 +1,182 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import type { SpecimenFamilyInfo } from "../../fonts/specimen";
+import { SPECIMEN_FAMILIES, type SpecimenFamily } from "../../state/url";
+import { langRuns, specimenStrings } from "../../samples";
+
+interface Props {
+  locale: Locale;
+  families: Record<SpecimenFamily, SpecimenFamilyInfo>;
+}
+
+const { locale, families } = Astro.props;
+
+function codepointRange(first: number, last: number): string[] {
+  return Array.from({ length: last - first + 1 }, (_, index) =>
+    String.fromCodePoint(first + index),
+  );
+}
+
+const familyCardRuns = langRuns(specimenStrings.familyCard);
+
+const charSets = [
+  { key: "families.arabic", lang: "ar", chars: codepointRange(0x0621, 0x064a) },
+  {
+    key: "families.latin",
+    lang: "en",
+    chars: [...codepointRange(0x41, 0x5a), ...codepointRange(0x61, 0x7a)],
+  },
+  {
+    key: "families.digits",
+    lang: undefined,
+    chars: [...codepointRange(0x30, 0x39), ...codepointRange(0x0660, 0x0669)],
+  },
+] as const;
+---
+
+<section class="families" aria-labelledby="families-title">
+  <h2 id="families-title">{t(locale, "families.h2")}</h2>
+  <p class="section-intro">{t(locale, "families.intro")}</p>
+
+  <div class="family-grid">
+    {
+      SPECIMEN_FAMILIES.map((id) => {
+        const family = families[id];
+        return (
+          <article class="family-card" aria-labelledby={`family-${id}`}>
+            <h3 id={`family-${id}`} class="family-name" data-font={id} dir="ltr">
+              {t(locale, `font.${id}.name`)}
+            </h3>
+            <p class="family-meta">{t(locale, `font.${id}.note`)}</p>
+            <p class="family-pangram" data-font={id} dir="auto">
+              {familyCardRuns.map((run) => (
+                <span lang={run.lang}>{run.text}</span>
+              ))}
+            </p>
+            <p class="family-meta">
+              {t(locale, "families.axis", {
+                min: family.axis.min,
+                max: family.axis.max,
+                def: family.axis.default,
+              })}
+            </p>
+            <h4>{t(locale, "families.instances")}</h4>
+            <ul class="instance-list" data-font={id}>
+              {family.instances.map((instance) => (
+                <li style={`font-weight: ${instance.wght}`}>
+                  {t(locale, "specimen.instance", { name: instance.name, weight: instance.wght })}
+                </li>
+              ))}
+            </ul>
+            {charSets.map((set) => (
+              <>
+                <h4>{t(locale, set.key)}</h4>
+                <div class="char-grid" data-font={id} dir="auto" lang={set.lang}>
+                  {set.chars.map((char) => (
+                    <span>{char}</span>
+                  ))}
+                </div>
+              </>
+            ))}
+            {id === "sawa-mono" && (
+              <>
+                <h4>{t(locale, "families.code")}</h4>
+                <pre class="code-sample" data-font={id} dir="ltr"><code>{specimenStrings.code}</code></pre>
+              </>
+            )}
+          </article>
+        );
+      })
+    }
+  </div>
+</section>
+
+<style>
+  .family-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+    gap: 1.25rem;
+  }
+
+  .family-card {
+    display: grid;
+    align-content: start;
+    gap: 0.6rem;
+    min-inline-size: 0;
+    padding: 1.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+  }
+
+  .family-card h4 {
+    margin: 0;
+    margin-block-start: 0.6rem;
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .family-name {
+    margin: 0;
+    font-size: 2.2rem;
+    font-weight: 400;
+    line-height: 1.2;
+    text-align: start;
+  }
+
+  .family-meta {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-muted);
+  }
+
+  .family-pangram {
+    margin: 0;
+    font-size: 1.35rem;
+  }
+
+  .instance-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.9rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .char-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(2.4rem, 1fr));
+    border-block-start: 1px solid var(--color-rule);
+    border-inline-start: 1px solid var(--color-rule);
+    font-size: 1.35rem;
+  }
+
+  .char-grid span {
+    display: grid;
+    place-items: center;
+    block-size: 2.8rem;
+    border-block-end: 1px solid var(--color-rule);
+    border-inline-end: 1px solid var(--color-rule);
+  }
+
+  .code-sample {
+    margin: 0;
+    padding: 0.9rem;
+    overflow: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    background: var(--color-bg);
+    border: 1px solid var(--color-rule);
+    border-radius: 0.4rem;
+  }
+
+  .code-sample code {
+    font-family: inherit;
+  }
+</style>

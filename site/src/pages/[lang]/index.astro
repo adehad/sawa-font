@@ -1,16 +1,108 @@
 ---
 import Base from "../../layouts/Base.astro";
+import Hero from "../../components/specimen/Hero.astro";
+import LineHeightDemo from "../../components/specimen/LineHeightDemo.astro";
+import Tashkeel from "../../components/specimen/Tashkeel.astro";
+import FamilyCards from "../../components/specimen/FamilyCards.astro";
+import Waterfall from "../../components/specimen/Waterfall.astro";
+import Downloads from "../../components/specimen/Downloads.astro";
 import { t } from "../../i18n/t";
 import { LOCALES, type Locale } from "../../i18n/locales";
+import { loadFontsData } from "../../fonts/load";
+import { fontStack } from "../../fonts/css";
+import { lineMetrics, paletteCss, specimenCss, specimenFamilies } from "../../fonts/specimen";
+import { SPECIMEN_FAMILIES, defaultState } from "../../state/url";
 
 export function getStaticPaths() {
   return LOCALES.map((lang) => ({ params: { lang } }));
 }
 
 const locale = Astro.params.lang as Locale;
+const fontsData = loadFontsData();
+const families = specimenFamilies(fontsData);
+const statusFamily = fontsData.fonts.status?.families[fontsData.fonts.status.stack[0] ?? ""];
+if (!statusFamily) {
+  throw new Error("fonts.json: font 'status' has no family info");
+}
+const statusMetrics = lineMetrics(statusFamily);
+const familyVisibility = SPECIMEN_FAMILIES.map(
+  (id) => `.landing:not([data-family="${id}"]) [data-for-family="${id}"] {\n  display: none;\n}`,
+).join("\n\n");
+const pageCss = [
+  specimenCss(families, { stack: fontStack(fontsData, "status"), metrics: statusMetrics }),
+  familyVisibility,
+  paletteCss(fontsData),
+].join("\n\n");
 ---
 
-<Base locale={locale} page="specimen" title={t(locale, "specimen.title")}>
-  <h1>{t(locale, "specimen.h1")}</h1>
-  <p>{t(locale, "specimen.body")}</p>
+<Base locale={locale} page="specimen" title={t(locale, "specimen.title")} wide>
+  <style is:global set:html={pageCss}></style>
+  <div class="landing" data-landing data-family={defaultState().family}>
+    <Hero locale={locale} families={families} />
+    <LineHeightDemo locale={locale} families={families} statusMetrics={statusMetrics} />
+    <Tashkeel locale={locale} families={families} />
+    <FamilyCards locale={locale} families={families} />
+    <Waterfall locale={locale} />
+    <Downloads locale={locale} />
+  </div>
 </Base>
+
+<script>
+  import { loadFontsData } from "../../fonts/load";
+  import { effectiveWeight, normalizeSelection, specimenFamilies } from "../../fonts/specimen";
+  import { commit, readState, subscribe } from "../../state/store";
+  import { clampSize } from "../../state/url";
+
+  const landing = document.querySelector<HTMLElement>("[data-landing]");
+  if (landing) {
+    const families = specimenFamilies(loadFontsData());
+
+    const loaded = readState();
+    const normalized = normalizeSelection(loaded, families);
+    if (normalized !== loaded) {
+      commit(normalized);
+    }
+
+    subscribe((state) => {
+      const family = families[state.family];
+      landing.dataset.family = state.family;
+      landing.style.setProperty("--wght", String(effectiveWeight(state.weight, family.axis)));
+      landing.style.setProperty("--specimen-size", `${clampSize(state.size)}px`);
+    });
+  }
+</script>
+
+<style is:global>
+  .landing {
+    display: grid;
+    gap: 3.5rem;
+  }
+
+  .landing h2 {
+    margin-block: 0 0.5rem;
+    font-size: clamp(1.6rem, 4vw, 2.2rem);
+    font-weight: 500;
+  }
+
+  .landing h3 {
+    margin-block: 1.75rem 0.5rem;
+    font-size: 1.3rem;
+    font-weight: 500;
+  }
+
+  .section-intro {
+    margin-block: 0 1rem;
+    max-inline-size: 46rem;
+  }
+
+  .section-note {
+    margin-block: 0.25rem 0;
+    font-size: 0.9rem;
+    color: var(--color-muted);
+  }
+
+  .in-family {
+    font-family: var(--specimen-font);
+    font-weight: var(--wght, var(--wght-default));
+  }
+</style>

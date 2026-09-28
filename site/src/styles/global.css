@@ -5,6 +5,18 @@
   --color-accent: #2f5d50;
   --color-rule: #e3ddd1;
   --color-muted: #4a453d;
+  --color-surface: #fffdf9;
+  --color-on-accent: #ffffff;
+  --grid-band: rgb(47 93 80 / 0.08);
+  --grid-rule: rgb(47 93 80 / 0.55);
+  --mark-short: #0072b2;
+  --mark-tanween: #c0510a;
+  --mark-sukun: #8e8a82;
+  --mark-shadda: #a8467f;
+  --mark-madd: #00785a;
+  --mark-hamza: #9a6a00;
+  --mark-waqf: #5f5a50;
+  --mark-other: #7a7466;
   --font-serif: Georgia, "Times New Roman", Cambria, serif;
 }
 
@@ -15,6 +27,18 @@
     --color-accent: #6fbfa8;
     --color-rule: #33372f;
     --color-muted: #a9a297;
+    --color-surface: #1e2123;
+    --color-on-accent: #10201b;
+    --grid-band: rgb(111 191 168 / 0.1);
+    --grid-rule: rgb(111 191 168 / 0.6);
+    --mark-short: #56b4e9;
+    --mark-tanween: #f0883e;
+    --mark-sukun: #7a766f;
+    --mark-shadda: #e58fc4;
+    --mark-madd: #3fc79b;
+    --mark-hamza: #e0b440;
+    --mark-waqf: #b8b0a1;
+    --mark-other: #948d80;
   }
 }
 
@@ -50,6 +74,74 @@ pre {
 
 a {
   color: var(--color-accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--color-rule);
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.segmented button {
+  flex: 1 1 auto;
+  min-block-size: 44px;
+  padding-inline: 0.9rem;
+  border: 0;
+  border-inline-end: 1px solid var(--color-rule);
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.segmented button:last-child {
+  border-inline-end: 0;
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip-button,
+.text-button {
+  min-block-size: 44px;
+  padding-inline: 0.8rem;
+  border: 1px solid var(--color-rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.chip-button[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.text-button {
+  justify-self: start;
+  border-radius: 0.4rem;
+}
+
+button {
+  font-family: inherit;
 }
 
 .visually-hidden {
@@ -99,6 +191,17 @@ main {
   padding-inline: 1.5rem;
   padding-block: 2rem;
   max-inline-size: 42rem;
+}
+
+main.main-wide {
+  max-inline-size: 76rem;
+  margin-inline: auto;
+}
+
+@media (width < 40rem) {
+  main {
+    padding-inline: 1rem;
+  }
 }
 
 .site-footer {

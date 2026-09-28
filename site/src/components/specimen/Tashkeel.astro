@@ -1,0 +1,275 @@
+---
+import { t, type MessageKey } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { PALETTE_NAMES, type SpecimenFamilyInfo } from "../../fonts/specimen";
+import { MARK_GROUPS, sampleMarks, type MarkGroupId } from "../../marks/groups";
+import { SPECIMEN_FAMILIES, defaultState, type SpecimenFamily } from "../../state/url";
+import { presets } from "../../samples";
+
+interface Props {
+  locale: Locale;
+  families: Record<SpecimenFamily, SpecimenFamilyInfo>;
+}
+
+const { locale, families } = Astro.props;
+const initial = defaultState();
+const anyPalettes = SPECIMEN_FAMILIES.some((id) => families[id].hasPalettes);
+// Verse numbers belong to the Quran text, so they use Arabic-Indic digits in both UIs.
+const verseNumbers = new Intl.NumberFormat("ar-u-nu-arab");
+
+const GROUP_NAMES: Record<MarkGroupId, MessageKey> = {
+  short: "marks.short",
+  tanween: "marks.tanween",
+  sukun: "marks.sukun",
+  shadda: "marks.shadda",
+  madd: "marks.madd",
+  hamza: "marks.hamza",
+  waqf: "marks.waqf",
+  other: "marks.other",
+};
+---
+
+<section class="tashkeel" aria-labelledby="tashkeel-title" data-tashkeel>
+  <h2 id="tashkeel-title">{t(locale, "tashkeel.h2")}</h2>
+  <p class="section-intro">{t(locale, "tashkeel.intro")}</p>
+
+  <div class="fatiha" data-font="sawa-serif" dir="auto" lang="ar" data-fatiha data-pal={initial.palette}>
+    {
+      presets.quran.map((verse, index) => (
+        <span class="verse">
+          <span data-verse>{verse}</span>
+          <span class="verse-number" aria-hidden="true">
+            {verseNumbers.format(index + 1)}
+          </span>
+        </span>
+      ))
+    }
+  </div>
+  <p class="credit">
+    {t(locale, "tashkeel.credit")}{" "}
+    <a href="https://tanzil.net" dir="ltr" data-tanzil-link>{t(locale, "tashkeel.creditLink")}</a>
+  </p>
+
+  <h3>{t(locale, "tashkeel.legend")}</h3>
+  <p class="section-intro">{t(locale, "tashkeel.legendIntro")}</p>
+
+  {
+    SPECIMEN_FAMILIES.filter((id) => !families[id].hasPalettes).map((id) => (
+      <p class="palette-note" data-for-family={id}>
+        {t(locale, "tashkeel.noPalettes", { family: t(locale, `font.${id}.name`) })}
+      </p>
+    ))
+  }
+
+  <fieldset class="palette-switch" data-palette-switch hidden={!anyPalettes}>
+    <legend>{t(locale, "tashkeel.palette")}</legend>
+    <div class="segmented">
+      {
+        PALETTE_NAMES.map((palette) => (
+          <button
+            type="button"
+            data-palette={palette}
+            aria-pressed={palette === initial.palette ? "true" : "false"}
+          >
+            {t(locale, `palette.${palette}`)}
+          </button>
+        ))
+      }
+    </div>
+  </fieldset>
+
+  <ul class="mark-legend" data-mark-legend>
+    {
+      MARK_GROUPS.map((group) => (
+        <li class="mark-chip" data-group={group.id}>
+          <span class="mark-name">{t(locale, GROUP_NAMES[group.id])}</span>
+          <span class="mark-samples" data-font="sawa-serif" lang="ar">
+            {sampleMarks(group, 3).map((mark) => (
+              <span>{mark}</span>
+            ))}
+          </span>
+          <code class="mark-codepoints" dir="ltr">
+            {group.codepoints.join(" ")}
+          </code>
+        </li>
+      ))
+    }
+  </ul>
+</section>
+
+<script>
+  import { loadFontsData } from "../../fonts/load";
+  import { PALETTE_NAMES, specimenFamilies } from "../../fonts/specimen";
+  import { commit, readState, subscribe } from "../../state/store";
+
+  const root = document.querySelector<HTMLElement>("[data-tashkeel]");
+  if (root) {
+    const families = specimenFamilies(loadFontsData());
+    const fatiha = root.querySelector<HTMLElement>("[data-fatiha]");
+    const paletteSwitch = root.querySelector<HTMLFieldSetElement>("[data-palette-switch]");
+    const buttons = root.querySelectorAll<HTMLButtonElement>("[data-palette]");
+
+    subscribe((state) => {
+      const hasPalettes = families[state.family].hasPalettes;
+      if (paletteSwitch) {
+        paletteSwitch.hidden = !hasPalettes;
+      }
+      if (fatiha) {
+        fatiha.dataset.pal = hasPalettes ? state.palette : "";
+      }
+      buttons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.palette === state.palette));
+      });
+    });
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const palette = PALETTE_NAMES.find((name) => name === button.dataset.palette);
+        if (palette) {
+          commit({ ...readState(), palette });
+        }
+      });
+    });
+  }
+</script>
+
+<style>
+  .fatiha {
+    margin-block: 1rem 0.5rem;
+    padding: 1.5rem;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    line-height: 2.1;
+    background: var(--color-surface);
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+  }
+
+  .fatiha[data-pal="mono"] {
+    font-palette: --sawa-mono;
+  }
+
+  .fatiha[data-pal="gray"] {
+    font-palette: --sawa-gray;
+  }
+
+  .fatiha[data-pal="groups"] {
+    font-palette: --sawa-groups;
+  }
+
+  .verse-number {
+    display: inline-block;
+    min-inline-size: 1.6em;
+    margin-inline: 0.3em;
+    font-size: 0.6em;
+    line-height: 1.6;
+    text-align: center;
+    color: var(--color-accent);
+    border: 1px solid currentcolor;
+    border-radius: 50%;
+  }
+
+  .credit {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-muted);
+  }
+
+  .credit a {
+    display: inline-block;
+    min-block-size: 44px;
+    line-height: 44px;
+  }
+
+  .palette-note {
+    padding-block: 0.75rem;
+    padding-inline: 1rem;
+    border-inline-start: 3px solid var(--color-accent);
+    background: var(--color-surface);
+  }
+
+  .palette-switch {
+    margin: 0;
+    margin-block-end: 1rem;
+    padding: 0;
+    border: 0;
+  }
+
+  .palette-switch[hidden] {
+    display: none;
+  }
+
+  .palette-switch legend {
+    font-weight: 600;
+    margin-block-end: 0.5rem;
+  }
+
+  .mark-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .mark-chip {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.9rem 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-rule);
+    border-inline-start: 4px solid var(--mark);
+    border-radius: 0.4rem;
+  }
+
+  .mark-name {
+    font-weight: 600;
+  }
+
+  .mark-samples {
+    display: flex;
+    gap: 1rem;
+    padding-block-start: 0.25em;
+    font-size: 2.6rem;
+    line-height: 2;
+    color: var(--mark);
+  }
+
+  .mark-codepoints {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .mark-chip[data-group="short"] {
+    --mark: var(--mark-short);
+  }
+
+  .mark-chip[data-group="tanween"] {
+    --mark: var(--mark-tanween);
+  }
+
+  .mark-chip[data-group="sukun"] {
+    --mark: var(--mark-sukun);
+  }
+
+  .mark-chip[data-group="shadda"] {
+    --mark: var(--mark-shadda);
+  }
+
+  .mark-chip[data-group="madd"] {
+    --mark: var(--mark-madd);
+  }
+
+  .mark-chip[data-group="hamza"] {
+    --mark: var(--mark-hamza);
+  }
+
+  .mark-chip[data-group="waqf"] {
+    --mark: var(--mark-waqf);
+  }
+
+  .mark-chip[data-group="other"] {
+    --mark: var(--mark-other);
+  }
+</style>

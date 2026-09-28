@@ -11,9 +11,11 @@ interface Props {
   locale: Locale;
   page: PageName;
   title: string;
+  /** Lets the page use the full content width instead of a reading column. */
+  wide?: boolean;
 }
 
-const { locale, page, title } = Astro.props;
+const { locale, page, title, wide = false } = Astro.props;
 const dir = LOCALE_INFO[locale].dir;
 const base = import.meta.env.BASE_URL;
 
@@ -84,7 +86,7 @@ const uiFaceHref = `${base}fonts/${uiFace.file}`;
       </nav>
       <LanguageSwitcher currentLocale={locale} />
     </header>
-    <main>
+    <main class:list={{ "main-wide": wide }}>
       <slot />
     </main>
     <footer class="site-footer">

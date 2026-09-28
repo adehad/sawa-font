@@ -33,6 +33,10 @@
     {
       "id": "bookstore-receipt",
       "text": "اشتريت ٣ كتب من مكتبة جرير (Jarir Bookstore) بسعر 45 SAR."
+    },
+    {
+      "id": "family-card",
+      "text": "Sawa sets quick English text and Arabic on one level line. يكتب سوا العربية والإنجليزية معًا في سطر واحد بتناسب ثابت."
     }
   ]
 }
