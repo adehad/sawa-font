@@ -1,9 +1,8 @@
 {
   "name": "sawa-site",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "version": "0.1.0",
-  "packageManager": "bun@1.4.0",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -35,5 +34,6 @@
     "stylelint-use-logical": "^2.1.3",
     "typescript": "^6.0.3",
     "vitest": "^5.0.2"
-  }
+  },
+  "packageManager": "bun@1.4.0"
 }

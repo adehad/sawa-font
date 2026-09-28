@@ -17,9 +17,7 @@ describe("t", () => {
   });
 
   it("formats a distinct Arabic plural form for each CLDR category", () => {
-    const forms = [0, 1, 2, 3, 11, 100].map((count) =>
-      t("ar", "report.testsFailed", { count }),
-    );
+    const forms = [0, 1, 2, 3, 11, 100].map((count) => t("ar", "report.testsFailed", { count }));
     expect(new Set(forms).size).toBe(forms.length);
   });
 });

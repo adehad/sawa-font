@@ -10,10 +10,10 @@ async function redirectedUrl(
   const context = await browser.newContext({ locale: options.locale });
   try {
     if (options.storedLocale) {
-      await context.addInitScript(
-        ({ key, value }) => localStorage.setItem(key, value),
-        { key: LOCALE_STORAGE_KEY, value: options.storedLocale },
-      );
+      await context.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+        key: LOCALE_STORAGE_KEY,
+        value: options.storedLocale,
+      });
     }
     const page = await context.newPage();
     await page.goto(options.path ?? BASE_PATH);

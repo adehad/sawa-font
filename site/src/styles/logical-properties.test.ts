@@ -24,10 +24,7 @@ describe("csstools/use-logical", () => {
   });
 
   it("allows a physical property under the report overlay allow-list", async () => {
-    const warnings = await lint(
-      "p { margin-left: 4px; }",
-      "src/pages/report/overlay/canvas.css",
-    );
+    const warnings = await lint("p { margin-left: 4px; }", "src/pages/report/overlay/canvas.css");
     expect(warnings).toHaveLength(0);
   });
 
