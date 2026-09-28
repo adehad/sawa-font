@@ -1,0 +1,18 @@
+{
+  "plugins": ["stylelint-use-logical"],
+  "rules": {
+    "csstools/use-logical": "always"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.astro"],
+      "customSyntax": "postcss-html"
+    },
+    {
+      "files": ["src/**/report/overlay/**"],
+      "rules": {
+        "csstools/use-logical": null
+      }
+    }
+  ]
+}

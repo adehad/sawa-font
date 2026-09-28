@@ -11,7 +11,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint:css": "stylelint \"src/**/*.{css,astro}\""
   },
   "dependencies": {
     "astro": "^7.3.5",
@@ -19,6 +20,10 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@types/node": "^26.6.2",
+    "postcss-html": "^2.0.0",
+    "stylelint": "^17.15.0",
+    "stylelint-use-logical": "^2.1.3",
     "typescript": "^6.0.3",
     "vitest": "^5.0.2"
   }
