@@ -1,0 +1,105 @@
+{
+  "sources": {
+    "amiri": {
+      "kind": "zip",
+      "name": "Amiri",
+      "version": "1.003",
+      "url": "https://github.com/aliftype/amiri/releases/download/1.003/Amiri-1.003.zip",
+      "sha256": "81af0aff7d2086d8af24cea7202f7546130997982534691373485cd96744d05e"
+    },
+    "scheherazade": {
+      "kind": "zip",
+      "name": "Scheherazade New",
+      "version": "4.500",
+      "url": "https://github.com/silnrsi/font-scheherazade/releases/download/v4.500/ScheherazadeNew-4.500.zip",
+      "sha256": "49c789c21305bed13d90d7500877b50d62db1e8e4d6f7715178e556319ddbda9"
+    },
+    "noto_naskh_arabic": {
+      "kind": "zip",
+      "name": "Noto Naskh Arabic",
+      "version": "2.021",
+      "url": "https://github.com/notofonts/arabic/releases/download/NotoNaskhArabic-v2.021/NotoNaskhArabic-v2.021.zip",
+      "sha256": "6c050ab9bd087d69b733c505a7576e60c528c2f33cd7b91005a5bd7da4514032"
+    },
+    "noto_serif": {
+      "kind": "zip",
+      "name": "Noto Serif",
+      "version": "2.015",
+      "url": "https://github.com/notofonts/latin-greek-cyrillic/releases/download/NotoSerif-v2.015/NotoSerif-v2.015.zip",
+      "sha256": "0e9a43c8a4b94ac76f55069ed1d7385bbcaf6b99527a94deb5619e032b7e76c1"
+    },
+    "source_sans": {
+      "kind": "zip",
+      "name": "Source Sans 3",
+      "version": "3.052R",
+      "url": "https://github.com/adobe-fonts/source-sans/releases/download/3.052R/TTF-source-sans-3.052R.zip",
+      "sha256": "1b0dd1ec44b39f1dd98bbd153a1a3815f083639874ddee02c842bd601bad3d21"
+    },
+    "source_sans_licence": {
+      "kind": "file",
+      "name": "Source Sans 3 licence",
+      "version": "3.052R",
+      "comment": "Release zips carry no licence file; raw.githubusercontent.com pinned to the tag's resolved commit, not the tag name, since a tag ref can move.",
+      "url": "https://raw.githubusercontent.com/adobe-fonts/source-sans/ed1808970eb3c7301c9a523bee26473ba0bb62fa/LICENSE.md",
+      "sha256": "89ad2c4f66dd29127527493e729c31e731f111cf10faf5774c3db9275ed0c22c"
+    }
+  },
+  "fonts": {
+    "amiri": {
+      "name": "Amiri",
+      "licence": [{ "source": "amiri", "path": "Amiri-1.003/OFL.txt" }],
+      "files": [
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Regular.ttf", "to": "Amiri-Regular" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Bold.ttf", "to": "Amiri-Bold" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Italic.ttf", "to": "Amiri-Italic" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-BoldItalic.ttf", "to": "Amiri-BoldItalic" }
+      ]
+    },
+    "amiriq": {
+      "name": "Amiri Quran",
+      "licence": [{ "source": "amiri", "path": "Amiri-1.003/OFL.txt" }],
+      "files": [
+        { "source": "amiri", "from": "Amiri-1.003/AmiriQuran.ttf", "to": "AmiriQuran-Regular" }
+      ]
+    },
+    "sawa": {
+      "name": "Sawa",
+      "licence": [{ "source": "amiri", "path": "Amiri-1.003/OFL.txt" }],
+      "files": [
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Regular.ttf", "to": "Sawa-Regular" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Bold.ttf", "to": "Sawa-Bold" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Italic.ttf", "to": "Sawa-Italic" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-BoldItalic.ttf", "to": "Sawa-BoldItalic" }
+      ]
+    },
+    "sch": {
+      "name": "Scheherazade New",
+      "licence": [{ "source": "scheherazade", "path": "ScheherazadeNew-4.500/OFL.txt" }],
+      "files": [
+        { "source": "scheherazade", "from": "ScheherazadeNew-4.500/ScheherazadeNew-Regular.ttf", "to": "ScheherazadeNew-Regular" },
+        { "source": "scheherazade", "from": "ScheherazadeNew-4.500/ScheherazadeNew-Bold.ttf", "to": "ScheherazadeNew-Bold" }
+      ]
+    },
+    "noto": {
+      "name": "Noto Naskh Arabic + Noto Serif",
+      "licence": [
+        { "source": "noto_naskh_arabic", "path": "OFL.txt" },
+        { "source": "noto_serif", "path": "OFL.txt" }
+      ],
+      "files": [
+        { "source": "noto_naskh_arabic", "from": "NotoNaskhArabic/hinted/ttf/NotoNaskhArabic-Regular.ttf", "to": "NotoNaskhArabic-Regular" },
+        { "source": "noto_naskh_arabic", "from": "NotoNaskhArabic/hinted/ttf/NotoNaskhArabic-Bold.ttf", "to": "NotoNaskhArabic-Bold" },
+        { "source": "noto_serif", "from": "NotoSerif/hinted/ttf/NotoSerif-Regular.ttf", "to": "NotoSerif-Regular" },
+        { "source": "noto_serif", "from": "NotoSerif/hinted/ttf/NotoSerif-Bold.ttf", "to": "NotoSerif-Bold" }
+      ]
+    },
+    "status": {
+      "name": "Source Sans 3",
+      "licence": [{ "source": "source_sans_licence" }],
+      "files": [
+        { "source": "source_sans", "from": "TTF/SourceSans3-Regular.ttf", "to": "SourceSans3-Regular" },
+        { "source": "source_sans", "from": "TTF/SourceSans3-Bold.ttf", "to": "SourceSans3-Bold" }
+      ]
+    }
+  }
+}
