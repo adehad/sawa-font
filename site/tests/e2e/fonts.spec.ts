@@ -2,14 +2,16 @@ import { expect, test } from "@playwright/test";
 import { localizedPath } from "../../src/i18n/paths";
 import { BASE_PATH } from "./config";
 
-test("the Specimen page's body is set in the sawa stack and the font loads", async ({ page }) => {
+test("the Specimen page's body is set in the Sawa Sans stack and the font loads", async ({
+  page,
+}) => {
   await page.goto(localizedPath(BASE_PATH, "en", "specimen"));
 
   const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
-  expect(fontFamily.replace(/^"/, "").toLowerCase().startsWith("sawa")).toBe(true);
+  expect(fontFamily.replace(/^"/, "").toLowerCase().startsWith("sawa-sans")).toBe(true);
 
   await page.evaluate(() => document.fonts.ready);
-  const loaded = await page.evaluate(() => document.fonts.check("16px sawa"));
+  const loaded = await page.evaluate(() => document.fonts.check('16px "sawa-sans"'));
   expect(loaded).toBe(true);
 });
 

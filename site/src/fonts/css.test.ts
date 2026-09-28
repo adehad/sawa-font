@@ -13,19 +13,35 @@ const FAMILY_INFO: FamilyInfo = {
   scripts: [],
   colr: null,
   cpal: null,
+  axes: [],
+  instances: [],
 };
 
 const FIXTURE: FontsData = {
   fonts: {
-    sawa: {
-      name: "Sawa",
-      stack: ["sawa"],
+    amiri: {
+      name: "Amiri",
+      stack: ["amiri"],
       generic: "serif",
       faces: [
-        { family: "sawa", weight: 400, style: "normal", file: "sawa/Sawa-Regular.woff2" },
-        { family: "sawa", weight: 700, style: "normal", file: "sawa/Sawa-Bold.woff2" },
+        { family: "amiri", weight: 400, style: "normal", file: "amiri/Amiri-Regular.woff2" },
+        { family: "amiri", weight: 700, style: "normal", file: "amiri/Amiri-Bold.woff2" },
       ],
-      families: { sawa: FAMILY_INFO },
+      families: { amiri: FAMILY_INFO },
+    },
+    "sawa-mono": {
+      name: "Sawa Mono",
+      stack: ["sawa-mono"],
+      generic: "monospace",
+      faces: [
+        {
+          family: "sawa-mono",
+          weight: [200, 700],
+          style: "normal",
+          file: "sawa-mono/SawaMono.woff2",
+        },
+      ],
+      families: { "sawa-mono": FAMILY_INFO },
     },
     status: {
       name: "Source Sans 3",
@@ -61,12 +77,12 @@ const FIXTURE: FontsData = {
 describe("fontFaceCss", () => {
   test("emits one @font-face rule per face across every font", () => {
     const css = fontFaceCss(FIXTURE, "/sawa-font/");
-    expect(css.match(/@font-face/g)).toHaveLength(4);
+    expect(css.match(/@font-face/g)).toHaveLength(5);
   });
 
   test("quotes the family name and includes font-display: swap", () => {
     const css = fontFaceCss(FIXTURE, "/sawa-font/");
-    expect(css).toContain('font-family: "sawa";');
+    expect(css).toContain('font-family: "amiri";');
     for (const rule of css.split("\n\n")) {
       expect(rule).toContain("font-display: swap;");
     }
@@ -74,12 +90,12 @@ describe("fontFaceCss", () => {
 
   test("joins a base URL with a trailing slash", () => {
     const css = fontFaceCss(FIXTURE, "/sawa-font/");
-    expect(css).toContain('url("/sawa-font/fonts/sawa/Sawa-Regular.woff2")');
+    expect(css).toContain('url("/sawa-font/fonts/amiri/Amiri-Regular.woff2")');
   });
 
   test("joins a base URL without a trailing slash", () => {
     const css = fontFaceCss(FIXTURE, "/sawa-font");
-    expect(css).toContain('url("/sawa-font/fonts/sawa/Sawa-Regular.woff2")');
+    expect(css).toContain('url("/sawa-font/fonts/amiri/Amiri-Regular.woff2")');
   });
 
   test("carries weight and style through to the rule", () => {
@@ -87,11 +103,20 @@ describe("fontFaceCss", () => {
     expect(css).toContain("font-weight: 700;");
     expect(css).toContain("font-style: normal;");
   });
+
+  test("writes a variable face's wght range as a two-value font-weight", () => {
+    const css = fontFaceCss(FIXTURE, "/sawa-font/");
+    expect(css).toContain("font-weight: 200 700;");
+  });
 });
 
 describe("fontStack", () => {
   test("ends a single-family stack with the serif fallback", () => {
-    expect(fontStack(FIXTURE, "sawa")).toBe('"sawa", serif');
+    expect(fontStack(FIXTURE, "amiri")).toBe('"amiri", serif');
+  });
+
+  test("ends a monospace font's stack with the monospace fallback", () => {
+    expect(fontStack(FIXTURE, "sawa-mono")).toBe('"sawa-mono", monospace');
   });
 
   test("ends status quo's stack with the sans-serif fallback", () => {

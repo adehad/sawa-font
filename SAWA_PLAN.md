@@ -8,18 +8,20 @@ Design reference: the "Sawa — specimen site" canvas (interactive mockup with E
 
 ## 1. What we are building
 
-**Sawa (سوا)** is a bilingual Arabic/English font family built on **Amiri** (SIL OFL 1.1, aliftype/amiri). Arabic is scaled to match the Latin's visual size, both scripts share one set of vertical metrics (so mixed lines don't change height), and tashkeel can be shown in black, gray, or coloured by mark group.
+**Sawa (سوا)** is a bilingual Arabic/English font family built from existing SIL OFL 1.1 fonts. Arabic is scaled to match the Latin's visual size, both scripts share one set of vertical metrics (so mixed lines don't change height), and tashkeel can be shown in black, gray, or coloured by mark group.
 
-Family members (names fixed):
+Family members, built by `sawa build fonts` from `data/sawa.json` (first review version):
 
-| Build | Purpose |
-|---|---|
-| Sawa | Proportional; default palette = monochrome |
-| Sawa Gray | Same font, default palette = marks in gray |
-| Sawa Harakat | Same font, default palette = mark-group colours |
-| Sawa Mono | Later: monospace sibling, Nerd Font patched |
+| Family | Sources (pinned in `data/upstream.json`) | Axes |
+|---|---|---|
+| Sawa Serif | Noto Naskh Arabic 2.021 + Noto Serif 2.015 (upright), Arabic scaled 1.064 (alef height to Latin cap height) | wght 400 to 700 |
+| Sawa Sans | Noto Sans Arabic 2.013 + Noto Sans 2.015, Arabic scale 1.000 | wght 100 to 900 |
+| Sawa Mono | Cascadia Mono 2407.24 (OFL, Reserved Font Name "Cascadia Code"), renamed | wght 200 to 700 |
+| Sawa Mono NF | Cascadia Mono NF 2407.24, renamed; TTF only, not on the site | wght 200 to 700 |
 
-This repo's first deliverable is the **specimen website plus the report pipeline**. Until the real Sawa build exists, CI uses Amiri Regular as a stand-in "Sawa" so the whole pipeline can be built and tested end to end.
+The mono, gray and mark-group palettes will later be COLR/CPAL palettes inside each family, not separate builds.
+
+This repo's first deliverable is the **specimen website plus the report pipeline**.
 
 ## 2. Decisions (do not re-open)
 
@@ -34,7 +36,7 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 9. **Controls:** sample presets + free text; size + waterfall; line height (font default or number); palette (mono / gray / groups) with legend; background light/dark; ss01 toggle + OpenType feature panel; metrics overlay.
 10. **Sample text:** Tanzil Uthmani (verbatim), CC0 project-written mixed sentences, hand-built stress set shared with CI.
 11. **Name:** Sawa (سوا).
-12. **Look:** neutral tool with a light manuscript touch — warm off-white, ink text, one deep-green accent, real dark mode. UI text set in Sawa (stand-in until it exists).
+12. **Look:** neutral tool with a light manuscript touch — warm off-white, ink text, one deep-green accent, real dark mode. UI text set in Sawa Sans, headings in Sawa Serif.
 13. **Build report:** Chromatic-style layered viewer; CI produces SVG layers + JSON; Fontbakery HTML hosted as a static page.
 14. **Report history:** latest on GitHub Pages; versioned history on **Read the Docs** using `build.commands` to run Astro in *report-only* mode against each release's bundle, downloaded from GitHub Releases.
 15. **Automation language:** Python, managed with **uv**, linted and formatted with **ruff**, type-checked with **ty**. No shell scripts: all automation lives in one package, `src/sawa_tools/`, behind a single `sawa` console entry point with argparse subcommands (`uv run sawa report shaping`, `uv run sawa check i18n`, `uv run sawa rtd base-path`). The same commands run on Windows, macOS and Linux. Tests use pytest. The font toolchain (fontmake etc.) sits in a uv dependency group `build`, so site-only checks don't install it. Bun is used only inside `site/`.
@@ -53,17 +55,20 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 │  ├─ strings/mixed.json     # CC0 mixed EN/AR sentences
 │  └─ shaping/               # HarfBuzz expectations
 ├─ data/
-│  ├─ upstream.json          # pinned roster font sources; consumed by `sawa build fonts`
+│  ├─ upstream.json          # pinned sources for the roster and the Sawa families
+│  ├─ sawa.json              # Sawa family build config: inputs, Arabic scale, wght, metrics, names
 │  ├─ tanzil/                # verbatim Tanzil text + its licence header, unmodified
 │  └─ mark-groups.json       # mark group → codepoints; single source for site legend + coverage.json
 ├─ src/sawa_tools/           # Python package; `sawa` CLI (see §2.15)
 │  ├─ cli.py                 # argparse entry point
-│  ├─ build/                 # `sawa build fonts`: fontmake/fontTools, CPAL palettes from mark-groups.json
+│  ├─ build/                 # `sawa build fonts`: fonts.py (fetch, woff2, fonts.json), families.py (config, stamps),
+│  │                         #   merge.py (Arabic + Latin merge), naming.py (names, STAT, fvar instances)
 │  ├─ report/                # shaping, render, diff, manifest/metrics/coverage writers
-│  ├─ checks/                # i18n.py (i18n parity), marks.py (`sawa check marks`: mark-group coverage)
+│  ├─ checks/                # i18n.py (i18n parity), marks.py (mark-group coverage), fonts.py (`sawa check fonts`)
 │  └─ rtd.py                 # fetch-bundle, base-path, copy-tree
 ├─ tests/python/             # pytest suite for sawa_tools
 ├─ .cache/                   # downloaded font archives, git-ignored
+├─ fonts/                    # built Sawa TTFs, woff2 and build stamps, git-ignored
 ├─ report/                   # generated by CI, git-ignored; see §7
 ├─ site/                     # Astro project
 │  ├─ src/i18n/en.json, ar.json          # flat message catalogs
@@ -124,7 +129,7 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 | `feat` | comma list of OpenType features, e.g. `ss01` | none |
 | `metrics` | `1` = overlay on | off |
 | `view` | `stacked` · `side` | `stacked` |
-| `fonts` | comma list of font ids, in order | `sawa,status` |
+| `fonts` | comma list of font ids, in order | `sawa-serif,sawa-sans,status` |
 | `ov` | per-pane overrides, e.g. `2:font=amiri;pal=gray` | none |
 
 Language switch links carry the current query string. Use `history.replaceState` while controls change; don't push a history entry for every slider tick.
@@ -146,13 +151,15 @@ Language switch links carry the current query string. Use `history.replaceState`
 
 | id | Font | Source | Notes |
 |---|---|---|---|
-| `sawa` | Sawa | `data/upstream.json` via `sawa build fonts` (amiri source), OFL | Stand-in: Amiri (all four styles) until the first real build |
+| `sawa-serif` | Sawa Serif | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 400 to 700; headings (`--font-display`) |
+| `sawa-sans` | Sawa Sans | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 100 to 900; UI text (`--font-ui`) |
+| `sawa-mono` | Sawa Mono | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 200 to 700; code and codepoints (`--font-mono`) |
 | `status` | Status quo | `data/upstream.json` via `sawa build fonts`, OFL, **no Arabic** | Must fall back to the system Arabic font; that's the point. Stays live, so each visitor sees their own fallback. Labelled "Your system's Arabic fallback"; the page does not try to detect which font that is. The Specimen page also shows one static image of the same paragraph on Windows, macOS and Android fallbacks, captured once by hand |
 | `amiri` | Amiri | `data/upstream.json` via `sawa build fonts`, OFL | upstream base. Pinned: aliftype/amiri release 1.003, `Amiri-1.003.zip`, SHA-256 `81af0aff7d2086d8af24cea7202f7546130997982534691373485cd96744d05e`, recorded in `data/upstream.json`. Not google/fonts: its Amiri is 1.002 with broken Latin kerning |
 | `amiriq` | Amiri Quran | `data/upstream.json` via `sawa build fonts` (amiri source), OFL | reference for fully vowelled text; upstream disables some stacking in it |
 | `sch` | Scheherazade New | `data/upstream.json` via `sawa build fonts`, OFL | |
-| `noto` | Noto Naskh Arabic + Noto Serif | `data/upstream.json` via `sawa build fonts`, OFL | |
-| `mono` | Kawkab Mono | self-hosted | **OPEN:** verify licence before shipping |
+| `noto` | Noto Naskh Arabic + Noto Serif | `data/upstream.json` via `sawa build fonts`, OFL | Sawa Serif's sources, unmerged |
+| `noto-sans` | Noto Sans Arabic + Noto Sans | `data/upstream.json` via `sawa build fonts`, OFL | Sawa Sans's sources, unmerged (static Regular and Bold) |
 | `local` | user file | `FontFace` from a file input | Loaded in the browser only; never uploaded. This is how fonts we may not redistribute (e.g. KFGQPC) get compared, so never add a download for them |
 
 Self-host every font (no third-party font CDN), with `font-display: swap`. Palettes are chosen with `@font-palette-values` + `font-palette`; ship light and dark palette variants.
@@ -223,7 +230,7 @@ Each `commands` entry runs in a fresh shell from the repo root, so a `cd` only l
 ## 9. CI workflow (`release.yml`, outline)
 
 1. On push to `main` and on tags `v*`.
-2. `uv run sawa build fonts` (downloads the pinned Amiri zip, checks its SHA-256 and copies Amiri Regular as the stand-in until the real build exists) → `fonts/`, then into `site/public/fonts/`.
+2. `uv run sawa build fonts` (downloads the pinned sources, checks their SHA-256, builds the Sawa families into `fonts/` and writes woff2 into `site/public/fonts/`), then `sawa check fonts` and `sawa check marks`.
 3. Run HarfBuzz shaping tests → `report/<version>/shaping.json` (`<version>` is the tag, or `main` for untagged builds).
 4. Render SVG layers and compute diffs against the baseline in §8.1.
 5. Run Fontbakery → HTML report.
@@ -232,7 +239,7 @@ Each `commands` entry runs in a fresh shell from the repo root, so a `cd` only l
 8. Build the Astro site with the report bundle and fonts → deploy to GitHub Pages.
 9. On tags: zip `report/<version>/` and attach it to the GitHub Release (Read the Docs picks it up from there).
 
-**Implemented so far:** step 7 (all Python checks plus `sawa check i18n`; the site's own `check`/`test`/`lint:css`/`test:e2e`), the site build half of step 8 (without the report bundle or fonts, since steps 2–6 don't exist yet), and the Pages deploy half of step 8. Steps 2–6 and 9 are still outline only. One-time manual step, not done by the workflow: set the repo's Pages source to "GitHub Actions" under Settings → Pages.
+**Implemented so far:** step 2, step 7 (all Python checks plus `sawa check i18n`; the site's own `check`/`test`/`lint:css`/`test:e2e`), the site build half of step 8 (without the report bundle, since steps 3 to 6 don't exist yet), and the Pages deploy half of step 8. Steps 3 to 6 and 9 are still outline only. One-time manual step, not done by the workflow: set the repo's Pages source to "GitHub Actions" under Settings → Pages.
 
 ## 10. Where the real site differs from the mockup
 
@@ -275,7 +282,7 @@ Testing split:
 - ✅ The status quo pairing visibly uses the system Arabic fallback.
 
 **M3 — Report pipeline**
-- CI produces the bundle (§8.1) with the Amiri stand-in; report page renders it; Fontbakery page hosted.
+- CI produces the bundle (§8.1) with the Sawa families; report page renders it; Fontbakery page hosted.
 - ✅ Toggling layers, onion, swipe and side-by-side works on every test.
 - ✅ SVG layers line up pixel-exactly when two identical fonts are stacked.
 
@@ -289,7 +296,13 @@ Testing split:
 
 ## 13. Open decisions (ask, don't decide)
 
+Resolved: Kawkab Mono is OFL (Reserved Font Name "Source", by Abdullah Arif) but is not used; Sawa Mono comes from Cascadia.
+
 - Simpler letter joins: Amiri's stacked joins (e.g. لمين, نجا) live in the required `rlig` feature and can't be turned off by feature settings. Decide whether Sawa edits those rules.
-- Kawkab Mono licence.
+- Sawa Sans's line box (2.11 em, from Noto Sans Arabic) makes Latin-only text set loosely.
+- Sawa Mono's vertical metrics (0.93/0.23 em, Cascadia's) differ from Serif's and Sans's.
+- Marks with no anchor in the source, so they sit unattached: Noto Naskh U+0610 to U+0614, U+0618, U+0619, U+08E0, U+08E1; Noto Sans Arabic U+0615 to U+0617, U+06D6 to U+06DC, U+06E8, U+08CC to U+08DF.
+- Sawa Mono lacks 25 Quranic marks, the open tanween U+08F0 to U+08F2 and U+02BE, U+02BF (all listed as `coverageGaps` in `data/sawa.json`).
+- Vendor ID, version and copyright holder in `data/sawa.json` are placeholders.
 - Whether older Amiri releases declared a Reserved Font Name (1.003 does not).
 - Trademark check on "Sawa" (UK IPO, WIPO) before public release.

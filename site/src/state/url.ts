@@ -37,7 +37,7 @@ const MAX_SIZE = 144;
 const DEFAULT_SIZE = 32;
 const MIN_LINE_HEIGHT = 0.8;
 const MAX_LINE_HEIGHT = 3;
-const DEFAULT_FONTS: readonly FontOrLocal[] = ["sawa", "status"];
+const DEFAULT_FONTS: readonly FontOrLocal[] = ["sawa-serif", "sawa-sans", "status"];
 
 const VALID_FONT_IDS = new Set<string>([...FONT_ROSTER, "local"]);
 

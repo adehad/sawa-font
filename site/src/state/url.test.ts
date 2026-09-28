@@ -22,7 +22,7 @@ describe("defaultState", () => {
       features: [],
       metrics: false,
       view: "stacked",
-      fonts: ["sawa", "status"],
+      fonts: ["sawa-serif", "sawa-sans", "status"],
       overrides: [],
     });
   });
@@ -265,8 +265,8 @@ describe("view", () => {
 });
 
 describe("fonts", () => {
-  it("defaults to sawa,status", () => {
-    expect(parseState("").fonts).toEqual(["sawa", "status"]);
+  it("defaults to sawa-serif,sawa-sans,status", () => {
+    expect(parseState("").fonts).toEqual(["sawa-serif", "sawa-sans", "status"]);
   });
 
   it("parses a comma list in order", () => {
@@ -274,24 +274,34 @@ describe("fonts", () => {
   });
 
   it("accepts local as a font id", () => {
-    expect(parseState("fonts=local,sawa").fonts).toEqual(["local", "sawa"]);
+    expect(parseState("fonts=local,sawa-serif").fonts).toEqual(["local", "sawa-serif"]);
   });
 
   it("drops unknown ids", () => {
-    expect(parseState("fonts=sawa,bogus,noto").fonts).toEqual(["sawa", "noto"]);
+    expect(parseState("fonts=sawa-serif,bogus,noto").fonts).toEqual(["sawa-serif", "noto"]);
   });
 
   it("drops duplicates, first wins", () => {
-    expect(parseState("fonts=sawa,noto,sawa").fonts).toEqual(["sawa", "noto"]);
+    expect(parseState("fonts=sawa-serif,noto,sawa-serif").fonts).toEqual(["sawa-serif", "noto"]);
   });
 
   it("falls back to the default when the result would be empty", () => {
-    expect(parseState("fonts=bogus,alsobogus").fonts).toEqual(["sawa", "status"]);
+    expect(parseState("fonts=bogus,alsobogus").fonts).toEqual([
+      "sawa-serif",
+      "sawa-sans",
+      "status",
+    ]);
+  });
+
+  it("drops the retired id sawa and falls back to the default", () => {
+    expect(parseState("fonts=sawa").fonts).toEqual(["sawa-serif", "sawa-sans", "status"]);
   });
 
   it("omits fonts when it equals the default list and order", () => {
-    expect(toSearch({ ...defaultState(), fonts: ["sawa", "status"] })).toBe("");
-    expect(toSearch({ ...defaultState(), fonts: ["status", "sawa"] })).toBe("?fonts=status,sawa");
+    expect(toSearch({ ...defaultState(), fonts: ["sawa-serif", "sawa-sans", "status"] })).toBe("");
+    expect(toSearch({ ...defaultState(), fonts: ["status", "sawa-serif"] })).toBe(
+      "?fonts=status,sawa-serif",
+    );
   });
 });
 
@@ -299,26 +309,29 @@ describe("sideColumns", () => {
   it("caps the fonts list at 4", () => {
     const state: PlaygroundState = {
       ...defaultState(),
-      fonts: ["sawa", "status", "amiri", "amiriq", "sch", "noto"],
+      fonts: ["sawa-serif", "status", "amiri", "amiriq", "sch", "noto"],
     };
-    expect(sideColumns(state)).toEqual(["sawa", "status", "amiri", "amiriq"]);
+    expect(sideColumns(state)).toEqual(["sawa-serif", "status", "amiri", "amiriq"]);
   });
 
   it("returns the whole list when it is 4 or fewer", () => {
-    const state: PlaygroundState = { ...defaultState(), fonts: ["sawa", "status"] };
-    expect(sideColumns(state)).toEqual(["sawa", "status"]);
+    const state: PlaygroundState = { ...defaultState(), fonts: ["sawa-serif", "status"] };
+    expect(sideColumns(state)).toEqual(["sawa-serif", "status"]);
   });
 });
 
 describe("overrides (ov)", () => {
-  const threeFonts: PlaygroundState = { ...defaultState(), fonts: ["sawa", "status", "amiriq"] };
+  const threeFonts: PlaygroundState = {
+    ...defaultState(),
+    fonts: ["sawa-serif", "status", "amiriq"],
+  };
 
   it("is empty by default", () => {
     expect(parseState("").overrides).toEqual([]);
   });
 
   it("parses the documented example", () => {
-    const state = parseState("fonts=sawa,status,amiriq&ov=2:font=amiri;pal=gray,3:pal=mono");
+    const state = parseState("fonts=sawa-serif,status,amiriq&ov=2:font=amiri;pal=gray,3:pal=mono");
     expect(state.overrides).toEqual([
       { pane: 2, font: "amiri", pal: "gray" },
       { pane: 3, pal: "mono" },
@@ -326,32 +339,32 @@ describe("overrides (ov)", () => {
   });
 
   it("drops overrides for panes beyond the fonts list", () => {
-    const state = parseState("fonts=sawa,status&ov=5:font=amiri");
+    const state = parseState("fonts=sawa-serif,status&ov=5:font=amiri");
     expect(state.overrides).toEqual([]);
   });
 
   it("drops an override equal to the pane's own font", () => {
-    const state = parseState("fonts=sawa,status,amiriq&ov=1:font=sawa");
+    const state = parseState("fonts=sawa-serif,status,amiriq&ov=1:font=sawa-serif");
     expect(state.overrides).toEqual([]);
   });
 
   it("drops an override equal to the shared palette", () => {
-    const state = parseState("pal=gray&fonts=sawa,status,amiriq&ov=2:pal=gray");
+    const state = parseState("pal=gray&fonts=sawa-serif,status,amiriq&ov=2:pal=gray");
     expect(state.overrides).toEqual([]);
   });
 
   it("drops unknown keys and invalid values but keeps the rest of the entry", () => {
-    const state = parseState("fonts=sawa,status,amiriq&ov=2:font=amiri;bogus=x;pal=notreal");
+    const state = parseState("fonts=sawa-serif,status,amiriq&ov=2:font=amiri;bogus=x;pal=notreal");
     expect(state.overrides).toEqual([{ pane: 2, font: "amiri" }]);
   });
 
   it("ignores entries with an invalid pane", () => {
-    const state = parseState("fonts=sawa,status,amiriq&ov=0:font=amiri,abc:font=noto");
+    const state = parseState("fonts=sawa-serif,status,amiriq&ov=0:font=amiri,abc:font=noto");
     expect(state.overrides).toEqual([]);
   });
 
   it("de-duplicates by pane, first wins", () => {
-    const state = parseState("fonts=sawa,status,amiriq&ov=2:font=amiri,2:font=noto");
+    const state = parseState("fonts=sawa-serif,status,amiriq&ov=2:font=amiri,2:font=noto");
     expect(state.overrides).toEqual([{ pane: 2, font: "amiri" }]);
   });
 
@@ -363,20 +376,22 @@ describe("overrides (ov)", () => {
         { pane: 2, font: "amiri", pal: "gray" },
       ],
     };
-    expect(toSearch(state)).toBe("?fonts=sawa,status,amiriq&ov=2:font=amiri;pal=gray,3:pal=mono");
+    expect(toSearch(state)).toBe(
+      "?fonts=sawa-serif,status,amiriq&ov=2:font=amiri;pal=gray,3:pal=mono",
+    );
   });
 });
 
 describe("paneValue", () => {
   const state: PlaygroundState = {
     ...defaultState(),
-    fonts: ["sawa", "status", "amiriq"],
+    fonts: ["sawa-serif", "status", "amiriq"],
     palette: "groups",
     overrides: [{ pane: 2, font: "amiri", pal: "gray" }],
   };
 
   it("resolves the shared value when there is no override", () => {
-    expect(paneValue(state, 1, "font")).toBe("sawa");
+    expect(paneValue(state, 1, "font")).toBe("sawa-serif");
     expect(paneValue(state, 1, "pal")).toBe("groups");
     expect(paneValue(state, 3, "font")).toBe("amiriq");
   });
@@ -396,7 +411,7 @@ describe("paneValue", () => {
 
   it("accepts a non-literal OverrideKey through the generic overload", () => {
     const key: "font" | "pal" = "font";
-    expect(paneValue(state, 1, key)).toBe("sawa");
+    expect(paneValue(state, 1, key)).toBe("sawa-serif");
   });
 });
 
@@ -439,8 +454,8 @@ describe("encoded and raw separators", () => {
   });
 
   it("parse ov identically whether the separators are raw or encoded", () => {
-    const raw = "fonts=sawa,status,amiriq&ov=2:font=amiri;pal=gray";
-    const encoded = "fonts=sawa,status,amiriq&ov=2%3Afont%3Damiri%3Bpal%3Dgray";
+    const raw = "fonts=sawa-serif,status,amiriq&ov=2:font=amiri;pal=gray";
+    const encoded = "fonts=sawa-serif,status,amiriq&ov=2%3Afont%3Damiri%3Bpal%3Dgray";
     expect(parseState(raw)).toEqual(parseState(encoded));
   });
 });
@@ -497,9 +512,9 @@ describe("round trip", () => {
 describe("idempotence", () => {
   const messyInputs = [
     "",
-    "size=999&preset=bogus&fonts=bogus,sawa,sawa,status,extra",
+    "size=999&preset=bogus&fonts=bogus,sawa-serif,sawa-serif,status,extra",
     "text=hello&preset=mixed&size=abc&lh=loose&pal=x&bg=x&view=x",
-    "fonts=sawa,status,amiriq&ov=2:font=amiri;pal=gray,3:pal=mono,2:font=noto",
+    "fonts=sawa-serif,status,amiriq&ov=2:font=amiri;pal=gray,3:pal=mono,2:font=noto",
     "feat=ss1,ss01,SS01,ss01&metrics=yes&wf=true",
     "?fonts=amiri%2Cnoto&ov=1%3Apal%3Dgray",
   ];
@@ -546,7 +561,7 @@ describe("trim policy", () => {
   });
 
   it("trims ov panes, keys and values", () => {
-    const state = parseState("fonts=sawa,status,amiriq&ov= 2 : font = amiri ; pal = gray ");
+    const state = parseState("fonts=sawa-serif,status,amiriq&ov= 2 : font = amiri ; pal = gray ");
     expect(state.overrides).toEqual([{ pane: 2, font: "amiri", pal: "gray" }]);
   });
 });
@@ -560,8 +575,8 @@ describe("toSearch normalises its input", () => {
   it("drops a redundant override passed directly", () => {
     const state: PlaygroundState = {
       ...defaultState(),
-      fonts: ["sawa", "status"],
-      overrides: [{ pane: 1, font: "sawa" }],
+      fonts: ["sawa-serif", "sawa-sans", "status"],
+      overrides: [{ pane: 1, font: "sawa-serif" }],
     };
     expect(toSearch(state)).toBe("");
   });
@@ -572,8 +587,11 @@ describe("toSearch normalises its input", () => {
   });
 
   it("de-duplicates a fonts list passed directly", () => {
-    const state: PlaygroundState = { ...defaultState(), fonts: ["sawa", "sawa", "amiri"] };
-    expect(toSearch(state)).toBe("?fonts=sawa,amiri");
+    const state: PlaygroundState = {
+      ...defaultState(),
+      fonts: ["sawa-serif", "sawa-serif", "amiri"],
+    };
+    expect(toSearch(state)).toBe("?fonts=sawa-serif,amiri");
   });
 });
 
@@ -599,7 +617,7 @@ describe("repeated params", () => {
   });
 
   it("first occurrence wins for fonts", () => {
-    expect(parseState("fonts=amiri,noto&fonts=sawa,status").fonts).toEqual(["amiri", "noto"]);
+    expect(parseState("fonts=amiri,noto&fonts=sawa-serif,status").fonts).toEqual(["amiri", "noto"]);
   });
 });
 
@@ -619,44 +637,44 @@ describe("setFonts", () => {
   it("keeps an override attached to its font when the list is reordered", () => {
     const state: PlaygroundState = {
       ...defaultState(),
-      fonts: ["sawa", "status", "amiriq"],
+      fonts: ["sawa-serif", "status", "amiriq"],
       overrides: [{ pane: 2, pal: "gray" }],
     };
-    const next = setFonts(state, ["status", "amiriq", "sawa"]);
-    expect(next.fonts).toEqual(["status", "amiriq", "sawa"]);
+    const next = setFonts(state, ["status", "amiriq", "sawa-serif"]);
+    expect(next.fonts).toEqual(["status", "amiriq", "sawa-serif"]);
     expect(next.overrides).toEqual([{ pane: 1, pal: "gray" }]);
   });
 
   it("drops an override whose font left the list", () => {
     const state: PlaygroundState = {
       ...defaultState(),
-      fonts: ["sawa", "status", "amiriq"],
+      fonts: ["sawa-serif", "status", "amiriq"],
       overrides: [{ pane: 3, font: "local" }],
     };
-    const next = setFonts(state, ["sawa", "status"]);
-    expect(next.fonts).toEqual(["sawa", "status"]);
+    const next = setFonts(state, ["sawa-serif", "status"]);
+    expect(next.fonts).toEqual(["sawa-serif", "status"]);
     expect(next.overrides).toEqual([]);
   });
 
   it("carries a font-substitution override to its base font's new position", () => {
     const state: PlaygroundState = {
       ...defaultState(),
-      fonts: ["sawa", "status"],
+      fonts: ["sawa-serif", "status"],
       overrides: [{ pane: 1, font: "amiri" }],
     };
-    const next = setFonts(state, ["status", "sawa"]);
+    const next = setFonts(state, ["status", "sawa-serif"]);
     expect(next.overrides).toEqual([{ pane: 2, font: "amiri" }]);
   });
 
   it("normalises the new fonts list the same way parseState does", () => {
     const state = defaultState();
-    const next = setFonts(state, ["sawa", "sawa", "bogus", "status"]);
-    expect(next.fonts).toEqual(["sawa", "status"]);
+    const next = setFonts(state, ["sawa-serif", "sawa-serif", "bogus", "status"]);
+    expect(next.fonts).toEqual(["sawa-serif", "status"]);
   });
 
   it("falls back to the default fonts list when the result would be empty", () => {
     const state = defaultState();
     const next = setFonts(state, ["bogus", "alsobogus"]);
-    expect(next.fonts).toEqual(["sawa", "status"]);
+    expect(next.fonts).toEqual(["sawa-serif", "sawa-sans", "status"]);
   });
 });

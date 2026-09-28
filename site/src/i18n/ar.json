@@ -21,8 +21,12 @@
   "about.body": "سوا كلمة عربية تعني \"معًا\"، وهي عائلة خطوط ثنائية اللغة مبنية على خط أميري مفتوح المصدر، وتصدر بموجب رخصة SIL Open Font License.",
   "footer.license": "الخطوط مرخصة بموجب SIL OFL 1.1",
   "footer.source": "المصدر على GitHub",
-  "font.sawa.name": "سوا",
-  "font.sawa.note": "بديل مؤقت: أميري إلى حين اكتمال أول إصدار من سوا",
+  "font.sawa-serif.name": "Sawa Serif",
+  "font.sawa-serif.note": "Noto Naskh Arabic وNoto Serif على محور وزن واحد",
+  "font.sawa-sans.name": "Sawa Sans",
+  "font.sawa-sans.note": "Noto Sans Arabic وNoto Sans على محور وزن واحد",
+  "font.sawa-mono.name": "Sawa Mono",
+  "font.sawa-mono.note": "خط ثابت العرض، مبني على Cascadia Mono",
   "font.status.name": "الوضع الراهن",
   "font.status.note": "Source Sans 3، بدون دعم عربي: يعرض بديل الخط العربي في نظامك",
   "font.amiri.name": "أميري",
@@ -32,5 +36,7 @@
   "font.sch.name": "Scheherazade New",
   "font.sch.note": "مرجع، برخصة OFL",
   "font.noto.name": "Noto Naskh Arabic",
-  "font.noto.note": "Noto Serif للاتينية، وNoto Naskh للعربية"
+  "font.noto.note": "Noto Serif للاتينية، وNoto Naskh للعربية",
+  "font.noto-sans.name": "Noto Sans Arabic",
+  "font.noto-sans.note": "Noto Sans للاتينية، وNoto Sans Arabic للعربية"
 }

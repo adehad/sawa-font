@@ -23,8 +23,12 @@ const navEntries: { name: PageName; labelKey: MessageKey }[] = PAGE_NAMES.map((n
 }));
 
 const fontsData = loadFontsData();
-const uiFontStack = fontStack(fontsData, "sawa-sans");
-const fontStyles = `${fontFaceCss(fontsData, base)}\n\n:root {\n  --font-ui: ${uiFontStack};\n}`;
+const rootTokens = [
+  `  --font-ui: ${fontStack(fontsData, "sawa-sans")};`,
+  `  --font-display: ${fontStack(fontsData, "sawa-serif")};`,
+  `  --font-mono: ${fontStack(fontsData, "sawa-mono")};`,
+].join("\n");
+const fontStyles = `${fontFaceCss(fontsData, base)}\n\n:root {\n${rootTokens}\n}`;
 
 const uiFace = fontsData.fonts["sawa-sans"]?.faces.find((face) => face.style === "normal");
 if (!uiFace) {

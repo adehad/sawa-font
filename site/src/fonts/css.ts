@@ -1,7 +1,11 @@
-import type { FontsData } from "./types";
+import type { FontWeight, FontsData } from "./types";
 
 function joinUrl(baseUrl: string, relative: string): string {
   return baseUrl.endsWith("/") ? `${baseUrl}${relative}` : `${baseUrl}/${relative}`;
+}
+
+function weightDescriptor(weight: FontWeight): string {
+  return typeof weight === "number" ? `${weight}` : `${weight[0]} ${weight[1]}`;
 }
 
 /** Builds one @font-face rule per face across the whole roster. */
@@ -15,7 +19,7 @@ export function fontFaceCss(data: FontsData, baseUrl: string): string {
           "@font-face {",
           `  font-family: "${face.family}";`,
           `  src: url("${url}") format("woff2");`,
-          `  font-weight: ${face.weight};`,
+          `  font-weight: ${weightDescriptor(face.weight)};`,
           `  font-style: ${face.style};`,
           "  font-display: swap;",
           "}",

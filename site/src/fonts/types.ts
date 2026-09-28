@@ -1,6 +1,7 @@
 /** Mirrors the fonts.json written by `sawa build fonts` (src/sawa_tools/build/fonts.py). */
 
-export type FontWeight = 400 | 700;
+/** A static face's weight, or a variable face's [min, max] wght range. */
+export type FontWeight = 400 | 700 | readonly [number, number];
 export type FontStyle = "normal" | "italic";
 
 export interface HheaMetrics {
@@ -36,6 +37,18 @@ export interface CpalInfo {
   types: PaletteType[];
 }
 
+export interface AxisInfo {
+  tag: string;
+  min: number;
+  default: number;
+  max: number;
+}
+
+export interface InstanceInfo {
+  name: string;
+  coords: Record<string, number>;
+}
+
 export interface FamilyInfo {
   unitsPerEm: number;
   hhea: HheaMetrics;
@@ -47,6 +60,8 @@ export interface FamilyInfo {
   scripts: string[];
   colr: ColrInfo | null;
   cpal: CpalInfo | null;
+  axes: AxisInfo[];
+  instances: InstanceInfo[];
 }
 
 export interface Face {
@@ -56,7 +71,7 @@ export interface Face {
   file: string;
 }
 
-export type GenericFamily = "serif" | "sans-serif";
+export type GenericFamily = "serif" | "sans-serif" | "monospace";
 
 export interface FontEntry {
   name: string;

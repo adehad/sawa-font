@@ -35,6 +35,19 @@ body {
   line-height: 1.5;
 }
 
+h1,
+h2,
+h3 {
+  font-family: var(--font-display, var(--font-serif));
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono, monospace);
+}
+
 a {
   color: var(--color-accent);
 }
