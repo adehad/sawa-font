@@ -73,6 +73,7 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 │  ├─ src/layouts/Base.astro             # lang/dir, header, nav, switcher, footer, @font-face
 │  ├─ src/styles/global.css              # colour tokens + dark mode
 │  ├─ src/fonts/types.ts, load.ts, css.ts, roster.ts  # fonts.json → @font-face + font-family CSS
+│  ├─ src/samples/index.ts               # typed `presets`: mixed, quran, stress sample text
 │  ├─ src/pages/index.astro              # `/` locale redirect
 │  ├─ src/pages/[lang]/index.astro        # Specimen
 │  ├─ src/pages/[lang]/compare.astro
