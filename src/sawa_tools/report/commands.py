@@ -37,6 +37,11 @@ def add_parsers(subparsers: argparse._SubParsersAction) -> None:
         default=DEFAULT_FONTS_DIR,
         help="Directory holding the built Sawa TTFs (default: %(default)s)",
     )
+    build.add_argument(
+        "--fontbakery",
+        action="store_true",
+        help="Also run Fontbakery's universal profile (a minute or two)",
+    )
     build.set_defaults(handler=run_build)
 
     shaping = subparsers.add_parser(
@@ -106,6 +111,7 @@ def run_build(args: argparse.Namespace) -> int:
         default_version,
     )
     from sawa_tools.report.catalogue import CatalogueError
+    from sawa_tools.report.fontbakery import FontbakeryError
     from sawa_tools.report.sources import SourcesError
 
     version = args.version or default_version()
@@ -117,10 +123,18 @@ def run_build(args: argparse.Namespace) -> int:
         out=args.out or Path("report") / version,
         fonts_dir=args.fonts_dir,
         baseline=args.baseline,
+        fontbakery=args.fontbakery,
     )
     try:
         build_bundle(options)
-    except (BundleError, CatalogueError, FamilyError, MarksError, SourcesError) as exc:
+    except (
+        BundleError,
+        CatalogueError,
+        FamilyError,
+        FontbakeryError,
+        MarksError,
+        SourcesError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(f"wrote {options.out}")

@@ -13,7 +13,9 @@ from typing import Any
 from sawa_tools.checks.marks import DEFAULT_GROUPS, load_groups
 from sawa_tools.report.catalogue import load_tests
 from sawa_tools.report.coverage import build_coverage
+from sawa_tools.report.fontbakery import run_fontbakery
 from sawa_tools.report.layers import Stacks, write_test
+from sawa_tools.report.manifest import build_manifest
 from sawa_tools.report.metrics import build_metrics
 from sawa_tools.report.shaping import run_shaping
 from sawa_tools.report.sources import report_families
@@ -33,6 +35,7 @@ class BundleOptions:
     baseline: Path | None = None
     snapshots: Path = DEFAULT_SNAPSHOTS
     groups: Path = DEFAULT_GROUPS
+    fontbakery: bool = False
 
 
 def default_version() -> str:
@@ -93,3 +96,24 @@ def build_bundle(options: BundleOptions) -> None:
         build_metrics({family.id: family.ttf for family in families}),
     )
     write_json(options.out / "coverage.json", build_coverage(families, groups))
+
+    if options.fontbakery:
+        fontbakery = run_fontbakery(
+            {family.id: family.ttf for family in families}, options.out / "fontbakery"
+        )
+        for family_id, summary in fontbakery.get("families", {}).items():
+            print(f"fontbakery {family_id}: {summary['counts']}")
+    else:
+        fontbakery = {"ran": False, "reason": "not requested (--fontbakery)"}
+
+    write_json(
+        options.out / "manifest.json",
+        build_manifest(
+            version_name=options.version,
+            families=families,
+            tests=tests,
+            baseline=options.baseline,
+            shaping=counts,
+            fontbakery=fontbakery,
+        ),
+    )
