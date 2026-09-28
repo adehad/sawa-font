@@ -128,6 +128,19 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 
 Language switch links carry the current query string. Use `history.replaceState` while controls change; don't push a history entry for every slider tick.
 
+**`ov` syntax:** entries joined by `,`; each entry is `<pane>:<key>=<value>[;<key>=<value>]`, where `<pane>` is the 1-based position of a font in `fonts`. The only allowed keys are `font` (a roster id or `local`) and `pal`. Example: `ov=2:font=amiri;pal=gray,3:pal=mono`.
+
+**Normalisation rules:**
+- `text` present with `preset` absent implies `preset=custom`. When `preset` is anything else, `text` is ignored and never serialised.
+- `size`: integer only; out of range clamps to 12–144; anything non-numeric falls back to the default.
+- `lh`: `default` or a number clamped to 0.8–3, serialised with at most 2 decimals and no trailing zeros.
+- `feat`: only tags matching `[A-Za-z0-9]{4}` are kept, de-duplicated, in first-seen order.
+- `fonts`: unknown ids and duplicates (keeping the first) are dropped; an empty result falls back to the default. The side view shows 2–4 columns but the state module doesn't enforce a maximum; `sideColumns()` caps a state's fonts list at 4 for that view.
+- `ov` entries for a pane beyond the `fonts` list, or a pane repeated more than once (first wins), or a key equal to that pane's own resolved value, are dropped.
+- `ov` panes are positional, not tied to a font: reordering or removing entries in `fonts` directly would silently reassign an override to a different font. The UI calls `setFonts()` to change the fonts list, which remaps each override to its font's new position and drops it if that font left.
+- Any invalid enum value falls back to its default. Unknown query params are ignored on parse and never re-emitted.
+- Serialisation is canonical: fixed param order as in the table above, every default omitted, so the default state serialises to an empty string.
+
 ## 7. Font roster and loading
 
 | id | Font | Source | Notes |
