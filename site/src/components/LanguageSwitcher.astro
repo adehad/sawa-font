@@ -1,0 +1,96 @@
+---
+import { LOCALES, LOCALE_INFO, type Locale } from "../i18n/locales";
+import { swapLocale } from "../i18n/paths";
+import { t } from "../i18n/t";
+
+interface Props {
+  currentLocale: Locale;
+}
+
+const { currentLocale } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const currentPath = Astro.url.pathname;
+---
+
+<details class="lang-switcher" data-lang-switcher>
+  <summary>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M3 12h18"></path>
+      <path d="M12 3c3 2.7 4.5 6 4.5 9s-1.5 6.3-4.5 9c-3-2.7-4.5-6-4.5-9s1.5-6.3 4.5-9z"></path>
+    </svg>
+    <span class="visually-hidden">{t(currentLocale, "lang.label")}</span>
+    <span>{LOCALE_INFO[currentLocale].autonym}</span>
+  </summary>
+  <ul>
+    {
+      LOCALES.map((locale) => (
+        <li>
+          <a
+            href={swapLocale(base, currentPath, locale)}
+            hreflang={locale}
+            lang={locale}
+            data-locale={locale}
+            aria-current={locale === currentLocale ? "true" : undefined}
+          >
+            {LOCALE_INFO[locale].autonym}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</details>
+
+<script>
+  import { LOCALE_STORAGE_KEY } from "../i18n/locales";
+
+  const root = document.querySelector<HTMLDetailsElement>("[data-lang-switcher]");
+  if (root) {
+    const links = root.querySelectorAll<HTMLAnchorElement>("a[data-locale]");
+    links.forEach((link) => {
+      link.addEventListener("click", (event) => {
+        try {
+          localStorage.setItem(LOCALE_STORAGE_KEY, link.dataset.locale ?? "");
+        } catch {
+          // localStorage can throw in private browsing or with storage blocked
+        }
+
+        const isPlainClick =
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          !event.altKey;
+        if (isPlainClick) {
+          // Read at click time: the playground rewrites the query with
+          // history.replaceState after load.
+          event.preventDefault();
+          location.assign(link.getAttribute("href") + location.search + location.hash);
+        }
+      });
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && root.open) {
+        root.open = false;
+        root.querySelector("summary")?.focus();
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      if (root.open && event.target instanceof Node && !root.contains(event.target)) {
+        root.open = false;
+      }
+    });
+  }
+</script>

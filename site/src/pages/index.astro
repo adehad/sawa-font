@@ -1,0 +1,65 @@
+---
+import "../styles/global.css";
+import { DEFAULT_LOCALE, LOCALES, LOCALE_INFO } from "../i18n/locales";
+import { localizedPath } from "../i18n/paths";
+import { t } from "../i18n/t";
+
+const base = import.meta.env.BASE_URL;
+const siteName = t(DEFAULT_LOCALE, "site.name");
+const links = LOCALES.map((locale) => ({
+  locale,
+  href: localizedPath(base, locale, "specimen"),
+  info: LOCALE_INFO[locale],
+}));
+---
+
+<!doctype html>
+<html lang={DEFAULT_LOCALE}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{siteName}</title>
+  </head>
+  <body>
+    <p>{siteName}</p>
+    <ul>
+      {
+        links.map((link) => (
+          <li>
+            <a href={link.href} hreflang={link.locale} lang={link.locale} dir={link.info.dir}>
+              {link.info.autonym}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    <script>
+      import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, isLocale, type Locale } from "../i18n/locales";
+      import { localizedPath } from "../i18n/paths";
+
+      function pickLocale(): Locale {
+        try {
+          const saved = localStorage.getItem(LOCALE_STORAGE_KEY);
+          if (saved && isLocale(saved)) {
+            return saved;
+          }
+        } catch {
+          // localStorage can throw in private browsing or with storage blocked
+        }
+
+        for (const tag of navigator.languages ?? [navigator.language]) {
+          const primary = tag.split("-")[0]?.toLowerCase() ?? "";
+          if (isLocale(primary)) {
+            return primary;
+          }
+        }
+
+        return DEFAULT_LOCALE;
+      }
+
+      const locale = pickLocale();
+      const target = localizedPath(import.meta.env.BASE_URL, locale, "specimen");
+      location.replace(target + location.search + location.hash);
+    </script>
+  </body>
+</html>

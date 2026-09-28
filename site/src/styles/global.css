@@ -1,0 +1,145 @@
+:root {
+  color-scheme: light dark;
+  --color-bg: #f7f4ee;
+  --color-ink: #1a1814;
+  --color-accent: #2f5d50;
+  --color-rule: #e3ddd1;
+  --color-muted: #4a453d;
+  --font-serif: Georgia, "Times New Roman", Cambria, serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #16181a;
+    --color-ink: #efe9df;
+    --color-accent: #6fbfa8;
+    --color-rule: #33372f;
+    --color-muted: #a9a297;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  line-height: 1.5;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+  padding-block: 1rem;
+  padding-inline: 1.5rem;
+  border-block-end: 1px solid var(--color-rule);
+}
+
+.site-header .brand {
+  font-weight: bold;
+  text-decoration: none;
+  color: var(--color-ink);
+}
+
+.site-header nav ul {
+  display: flex;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.site-header nav a {
+  text-decoration: none;
+  color: var(--color-muted);
+}
+
+.site-header nav a[aria-current="page"] {
+  color: var(--color-ink);
+  border-block-end: 2px solid var(--color-accent);
+}
+
+main {
+  padding-inline: 1.5rem;
+  padding-block: 2rem;
+  max-inline-size: 42rem;
+}
+
+.site-footer {
+  padding-inline: 1.5rem;
+  padding-block: 1.5rem;
+  border-block-start: 1px solid var(--color-rule);
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.lang-switcher {
+  position: relative;
+  margin-inline-start: auto;
+}
+
+.lang-switcher summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  list-style: none;
+  color: var(--color-muted);
+}
+
+.lang-switcher summary::-webkit-details-marker {
+  display: none;
+}
+
+.lang-switcher[open] summary {
+  color: var(--color-ink);
+}
+
+.lang-switcher ul {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: 100%;
+  margin-block-start: 0.4rem;
+  min-inline-size: 8rem;
+  list-style: none;
+  padding: 0.3rem;
+  margin-inline: 0;
+  background: var(--color-bg);
+  border: 1px solid var(--color-rule);
+}
+
+.lang-switcher a {
+  display: block;
+  padding-block: 0.3rem;
+  padding-inline: 0.5rem;
+  text-decoration: none;
+  color: var(--color-ink);
+}
+
+.lang-switcher a[aria-current="true"] {
+  color: var(--color-accent);
+  font-weight: bold;
+}

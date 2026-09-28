@@ -1,0 +1,71 @@
+---
+import "../styles/global.css";
+import LanguageSwitcher from "../components/LanguageSwitcher.astro";
+import { t, type MessageKey } from "../i18n/t";
+import { LOCALES, LOCALE_INFO, type Locale } from "../i18n/locales";
+import { localizedPath, PAGE_NAMES, type PageName } from "../i18n/paths";
+
+interface Props {
+  locale: Locale;
+  page: PageName;
+  title: string;
+}
+
+const { locale, page, title } = Astro.props;
+const dir = LOCALE_INFO[locale].dir;
+const base = import.meta.env.BASE_URL;
+
+const navEntries: { name: PageName; labelKey: MessageKey }[] = PAGE_NAMES.map((name) => ({
+  name,
+  labelKey: `nav.${name}` as MessageKey,
+}));
+---
+
+<!doctype html>
+<html lang={locale} dir={dir}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {
+      LOCALES.map((altLocale) => (
+        <link
+          rel="alternate"
+          hreflang={altLocale}
+          href={new URL(localizedPath(base, altLocale, page), Astro.site)}
+        />
+      ))
+    }
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href={localizedPath(base, locale, "specimen")}>
+        {t(locale, "site.name")}
+      </a>
+      <nav aria-label={t(locale, "nav.primary")}>
+        <ul>
+          {
+            navEntries.map((entry) => (
+              <li>
+                <a
+                  href={localizedPath(base, locale, entry.name)}
+                  aria-current={entry.name === page ? "page" : undefined}
+                >
+                  {t(locale, entry.labelKey)}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+      <LanguageSwitcher currentLocale={locale} />
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <p>{t(locale, "footer.license")}</p>
+      <p><a href="https://github.com/adehad/sawa-font">{t(locale, "footer.source")}</a></p>
+    </footer>
+  </body>
+</html>
