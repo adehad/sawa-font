@@ -1,0 +1,38 @@
+{
+  "licence": "CC0-1.0",
+  "note": "Written for the Sawa project.",
+  "sentences": [
+    {
+      "id": "sahara-etymology",
+      "text": "In English, the word \"sahara\" comes from the Arabic صَحْرَاء (ṣaḥrāʾ), meaning \"desert\"."
+    },
+    {
+      "id": "doctor-title",
+      "text": "Arabs use طَبِيب (ṭabīb) for \"doctor\", and طَبِيبَة (ṭabība) for a woman doctor."
+    },
+    {
+      "id": "eyesight-checkup",
+      "text": "The optician checked my نَظَر (naẓar), the Arabic word for \"eyesight\", before writing the prescription."
+    },
+    {
+      "id": "hospitality-guest",
+      "text": "Hospitality is central to Arab culture: a ضَيْف (ḍayf), or \"guest\", is treated with great respect."
+    },
+    {
+      "id": "arabic-identifier",
+      "text": "She proudly calls herself عَرَبِيَّة (ʿarabiyya), the feminine form of \"Arab\"."
+    },
+    {
+      "id": "daughters-name-and-date",
+      "text": "My daughter's name is نُور (Nūr), meaning \"light\"; she was born on 14 Ramadan 1446 (١٤ رمضان ١٤٤٦)."
+    },
+    {
+      "id": "coffee-shop-visit",
+      "text": "ذهبت إلى مقهى ستاربكس (Starbucks) لأشرب فنجان قهوة مع صديقي."
+    },
+    {
+      "id": "bookstore-receipt",
+      "text": "اشتريت ٣ كتب من مكتبة جرير (Jarir Bookstore) بسعر 45 SAR."
+    }
+  ]
+}

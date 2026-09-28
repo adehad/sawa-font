@@ -1,0 +1,128 @@
+{
+  "licence": "CC0-1.0",
+  "tests": [
+    {
+      "id": "shadda-kasra-default",
+      "text": "بِّ",
+      "purpose": {
+        "en": "Shadda directly above a kasra, in the font's default position.",
+        "ar": "الشدة فوق الكسرة، في الوضع الافتراضي للخط."
+      }
+    },
+    {
+      "id": "shadda-kasra-ss01",
+      "text": "بِّ",
+      "features": [
+        "ss01"
+      ],
+      "purpose": {
+        "en": "The same shadda-kasra combination with the ss01 stylistic set, which moves the kasra.",
+        "ar": "نفس تركيبة الشدة والكسرة مع المجموعة الأسلوبية ss01، التي تغيّر موضع الكسرة."
+      }
+    },
+    {
+      "id": "tanween-standard",
+      "text": "بً بٌ بٍ",
+      "purpose": {
+        "en": "The three standard tanween marks (fathatan, dammatan, kasratan).",
+        "ar": "علامات التنوين الثلاث القياسية (فتحتان، ضمتان، كسرتان)."
+      }
+    },
+    {
+      "id": "tanween-open",
+      "text": "بࣰ بࣱ بࣲ",
+      "purpose": {
+        "en": "The open (Quranic) tanween forms, never used by Tanzil's default output.",
+        "ar": "أشكال التنوين المفتوح (القرآنية)، غير المستخدمة في مخرجات تنزيل الافتراضية."
+      }
+    },
+    {
+      "id": "sukun-default-and-round",
+      "text": "بْ بۡ",
+      "purpose": {
+        "en": "The default sukun next to the round sukun variant.",
+        "ar": "السكون الافتراضي إلى جانب شكل السكون المستدير."
+      }
+    },
+    {
+      "id": "pause-marks",
+      "text": "اۖ اۗ اۘ اۙ اۚ اۛ اۜ",
+      "purpose": {
+        "en": "Every Quranic pause mark (U+06D6-U+06DC) above a base letter.",
+        "ar": "جميع علامات الوقف القرآنية (U+06D6-U+06DC) فوق حرف أساس."
+      }
+    },
+    {
+      "id": "madda",
+      "text": "آ",
+      "purpose": {
+        "en": "Combining madda above an alef, as a decomposed sequence rather than the precomposed letter.",
+        "ar": "المدة فوق الألف، كتسلسل مُفكَّك بدل الحرف المُركَّب مسبقا."
+      }
+    },
+    {
+      "id": "dagger-alef",
+      "text": "لَٰ",
+      "purpose": {
+        "en": "A dagger alef after a fatha, marking a long ā vowel not written with a full alef.",
+        "ar": "الألف الخنجرية بعد الفتحة، للدلالة على مد الألف غير المكتوبة بحرف كامل."
+      }
+    },
+    {
+      "id": "small-waw-yeh",
+      "text": "وۥ يۦ",
+      "purpose": {
+        "en": "The small waw and small yeh recitation marks after their full letters.",
+        "ar": "علامتا الواو الصغيرة والياء الصغيرة بعد حرفيهما الكاملين."
+      }
+    },
+    {
+      "id": "hamza-above-below",
+      "text": "ؤ إ",
+      "purpose": {
+        "en": "Combining hamza above and below, as decomposed sequences rather than the precomposed letters.",
+        "ar": "الهمزة فوق وتحت، كتسلسلين مُفكَّكين بدل الحرفين المُركَّبين مسبقا."
+      }
+    },
+    {
+      "id": "lam-alef-with-marks",
+      "text": "لَا",
+      "purpose": {
+        "en": "The mandatory lam-alef ligature with a mark on the lam.",
+        "ar": "لصق اللام والألف الإلزامي مع حركة على اللام."
+      }
+    },
+    {
+      "id": "stacked-join-lam-meem-yeh-noon",
+      "text": "عَٰلَمِينَ",
+      "purpose": {
+        "en": "“عَٰلَمِينَ” (worlds): Amiri's stacked lam-meem-yeh-noon join in rlig.",
+        "ar": "كلمة “عَٰلَمِينَ” (بمعنى العوالم): التراص لام-ميم-ياء-نون المكدّس في أميري ضمن rlig."
+      }
+    },
+    {
+      "id": "stacked-join-noon-jeem-alef",
+      "text": "بِنَجَاحٍ",
+      "purpose": {
+        "en": "“بِنَجَاحٍ” (with success): Amiri's stacked noon-jeem-alef join in rlig.",
+        "ar": "عبارة “بِنَجَاحٍ” (أي بنجاح): التراص نون-جيم-ألف المكدّس في أميري ضمن rlig."
+      }
+    },
+    {
+      "id": "mixed-script-line-height",
+      "text": "Ascenders and descenders: قِيَاس ارتفاع السّطر",
+      "purpose": {
+        "en": "A Latin line with ascenders and descenders next to Arabic with tashkeel, to check the shared line height.",
+        "ar": "سطر لاتيني بأحرف صاعدة ونازلة بجانب عربي مشكّل للتحقق من ارتفاع السطر المشترك."
+      }
+    },
+    {
+      "id": "mixed-digit-systems",
+      "text": "٠١٢٣٤٥٦٧٨٩ 0123456789",
+      "purpose": {
+        "en": "The ten Arabic-Indic digits next to their Western counterparts.",
+        "ar": "الأرقام الهندية العربية العشرة إلى جانب نظيراتها الغربية."
+      }
+    }
+  ]
+}
