@@ -223,12 +223,12 @@ function normalizeOverrides(
       result.push(override);
     }
   }
-  return result.sort((a, b) => a.pane - b.pane);
+  return result.toSorted((a, b) => a.pane - b.pane);
 }
 
 function serializeOverrides(overrides: readonly PaneOverride[]): string {
-  return [...overrides]
-    .sort((a, b) => a.pane - b.pane)
+  return overrides
+    .toSorted((a, b) => a.pane - b.pane)
     .map((override) => {
       const parts: string[] = [];
       if (override.font !== undefined) {

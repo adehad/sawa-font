@@ -27,5 +27,11 @@ export function t(
     formatter = new IntlMessageFormat(messages[locale][key], locale);
     formatterCache.set(cacheKey, formatter);
   }
-  return formatter.format(values) as string;
+  const formatted = formatter.format(values);
+  if (typeof formatted !== "string") {
+    // IntlMessageFormat#format returns a Part[] only when the message uses
+    // rich-text tags with custom formatters; our messages never do.
+    throw new Error(`message "${key}" formatted to a non-string result`);
+  }
+  return formatted;
 }

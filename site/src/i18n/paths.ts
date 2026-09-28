@@ -9,6 +9,9 @@ const PAGE_SEGMENTS = {
 
 export type PageName = keyof typeof PAGE_SEGMENTS;
 
+// TypeScript's Object.keys always returns string[], with no way to narrow it
+// to keyof typeof PAGE_SEGMENTS without an assertion (microsoft/TypeScript#12870).
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 export const PAGE_NAMES: readonly PageName[] = Object.keys(PAGE_SEGMENTS) as PageName[];
 
 function withTrailingSlash(path: string): string {

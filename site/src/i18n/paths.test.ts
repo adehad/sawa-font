@@ -47,6 +47,6 @@ describe("swapLocale", () => {
   });
 
   it("throws when the pathname is not under the base", () => {
-    expect(() => swapLocale("/sawa-font/", "/other/en/", "ar")).toThrow();
+    expect(() => swapLocale("/sawa-font/", "/other/en/", "ar")).toThrow(/not under base/);
   });
 });

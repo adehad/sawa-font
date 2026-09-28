@@ -61,6 +61,9 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('site/bun.lock') }}
       - run: bun install --frozen-lockfile
       - run: bun run check
+      - run: bun run check:ts
+      - run: bun run lint
+      - run: bun run fmt:check
       - run: bun run test
       - run: bun run lint:css
       - uses: actions/cache@v6

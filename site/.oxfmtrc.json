@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [
+    "dist/",
+    ".astro/",
+    "node_modules/",
+    "public/fonts/",
+    "playwright-report/",
+    "test-results/"
+  ]
+}

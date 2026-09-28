@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }]
+  },
+  "ignorePatterns": [
+    "dist/",
+    ".astro/",
+    "node_modules/",
+    "public/fonts/",
+    "playwright-report/",
+    "test-results/"
+  ],
+  "overrides": [
+    {
+      "files": ["**/*.test.ts"],
+      "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "vitest"],
+      "rules": {
+        "vitest/expect-expect": "warn"
+      }
+    },
+    {
+      "files": ["tests/e2e/**"],
+      "jsPlugins": [{ "name": "playwright", "specifier": "eslint-plugin-playwright" }],
+      "rules": {
+        "playwright/no-wait-for-timeout": "error",
+        "playwright/valid-expect": "error",
+        // Test scripts scan a handful of files or URLs per run; sequential
+        // awaits keep a failure's stack trace pointing at the one item that broke.
+        "no-await-in-loop": "off"
+      }
+    }
+  ]
+}
