@@ -1,6 +1,8 @@
 import argparse
 from collections.abc import Sequence
 
+from sawa_tools.checks import i18n
+
 GROUPS = {
     "build": "Build the font family",
     "report": "Produce the build report bundle",
@@ -14,7 +16,11 @@ def build_parser() -> argparse.ArgumentParser:
     groups = parser.add_subparsers(dest="group", metavar="<group>", required=True)
     for name, help_text in GROUPS.items():
         group = groups.add_parser(name, help=help_text, description=help_text)
-        group.add_subparsers(dest="command", metavar="<command>", required=True)
+        commands = group.add_subparsers(
+            dest="command", metavar="<command>", required=True
+        )
+        if name == "check":
+            i18n.add_parser(commands)
     return parser
 
 
