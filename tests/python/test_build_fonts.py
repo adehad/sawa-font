@@ -8,6 +8,7 @@ import pytest
 
 pytest.importorskip("fontTools")
 
+from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
@@ -20,8 +21,8 @@ LICENCE_TEXT = (
 OTHER_LICENCE_TEXT = "Copyright Other Authors.\nAlso the SIL OFL 1.1.\n"
 
 
-def _make_test_font_bytes(family: str = "Test Font") -> bytes:
-    """Builds a minimal real TTF with a couple of glyphs, in memory."""
+def _build_test_font(family: str = "Test Font", **os2_overrides: object) -> FontBuilder:
+    """Builds a minimal real TTF with a couple of glyphs, ready to extend or save."""
     builder = FontBuilder(unitsPerEm=1000, isTTF=True)
     builder.setupGlyphOrder([".notdef", "A"])
     builder.setupCharacterMap({65: "A"})
@@ -39,9 +40,62 @@ def _make_test_font_bytes(family: str = "Test Font") -> bytes:
     builder.setupHorizontalMetrics({".notdef": (500, 0), "A": (500, 0)})
     builder.setupHorizontalHeader(ascent=800, descent=-200)
     builder.setupNameTable({"familyName": family, "styleName": "Regular"})
-    builder.setupOS2()
+    builder.setupOS2(**os2_overrides)
     builder.setupPost()
+    return builder
 
+
+def _make_test_font_bytes(family: str = "Test Font") -> bytes:
+    builder = _build_test_font(family)
+    buf = io.BytesIO()
+    builder.font.save(buf)
+    return buf.getvalue()
+
+
+_MINIMAL_LIGA_FEATURE = """
+languagesystem DFLT dflt;
+languagesystem latn dflt;
+
+feature liga {
+    sub A by A;
+} liga;
+"""
+
+
+def _make_gsub_test_font_bytes(family: str = "Test Font") -> bytes:
+    """A minimal font with a real GSUB: script DFLT/latn, feature liga."""
+    builder = _build_test_font(family)
+    addOpenTypeFeaturesFromString(builder.font, _MINIMAL_LIGA_FEATURE)
+    buf = io.BytesIO()
+    builder.font.save(buf)
+    return buf.getvalue()
+
+
+def _make_color_test_font_bytes(family: str = "Test Font") -> bytes:
+    """A minimal font with a COLR v0 layer and a CPAL v1 light/dark palette pair."""
+    builder = _build_test_font(family)
+    builder.setupCOLR({"A": [("A", 0)]})
+    builder.setupCPAL(
+        [[(1, 0, 0, 1)], [(0, 0, 1, 1)]],
+        paletteTypes=[0x1, 0x2],
+    )
+    buf = io.BytesIO()
+    builder.font.save(buf)
+    return buf.getvalue()
+
+
+def _make_cpal_v0_test_font_bytes(family: str = "Test Font") -> bytes:
+    """A minimal font with a CPAL v0 table, which carries no paletteTypes."""
+    builder = _build_test_font(family)
+    builder.setupCPAL([[(1, 0, 0, 1)], [(0, 1, 0, 1)]])
+    buf = io.BytesIO()
+    builder.font.save(buf)
+    return buf.getvalue()
+
+
+def _make_use_typo_metrics_test_font_bytes(family: str = "Test Font") -> bytes:
+    """A minimal font with OS/2 fsSelection bit 7 (USE_TYPO_METRICS) set."""
+    builder = _build_test_font(family, fsSelection=0x80)
     buf = io.BytesIO()
     builder.font.save(buf)
     return buf.getvalue()
@@ -78,8 +132,17 @@ def _write_manifest(
                 "name": "Test Font",
                 "licence": [{"source": "testsrc", "path": "TestFont/OFL.txt"}],
                 "files": [
-                    {"source": "testsrc", "from": from_member, "to": "TestFont-Regular"}
+                    {
+                        "source": "testsrc",
+                        "from": from_member,
+                        "to": "TestFont-Regular",
+                        "family": "test",
+                        "weight": 400,
+                        "style": "normal",
+                    }
                 ],
+                "stack": ["test"],
+                "generic": "serif",
             }
         },
     }
@@ -147,8 +210,13 @@ def test_two_font_ids_from_the_same_bytes_are_byte_identical(tmp_path: Path) -> 
                         "source": "testsrc",
                         "from": "TestFont/TestFont-Regular.ttf",
                         "to": "One-Regular",
+                        "family": "one",
+                        "weight": 400,
+                        "style": "normal",
                     }
                 ],
+                "stack": ["one"],
+                "generic": "serif",
             },
             "two": {
                 "name": "Two",
@@ -158,8 +226,13 @@ def test_two_font_ids_from_the_same_bytes_are_byte_identical(tmp_path: Path) -> 
                         "source": "testsrc",
                         "from": "TestFont/TestFont-Regular.ttf",
                         "to": "Two-Regular",
+                        "family": "two",
+                        "weight": 400,
+                        "style": "normal",
                     }
                 ],
+                "stack": ["two"],
+                "generic": "serif",
             },
         },
     }
@@ -333,8 +406,13 @@ def test_plain_file_licence_source(tmp_path: Path) -> None:
                         "source": "testsrc",
                         "from": "TestFont/TestFont-Regular.ttf",
                         "to": "TestFont-Regular",
+                        "family": "test",
+                        "weight": 400,
+                        "style": "normal",
                     }
                 ],
+                "stack": ["test"],
+                "generic": "serif",
             }
         },
     }
@@ -386,13 +464,21 @@ def test_licence_combines_two_sources(tmp_path: Path) -> None:
                         "source": "a",
                         "from": "TestFont/TestFont-Regular.ttf",
                         "to": "Combined-Regular",
+                        "family": "combined",
+                        "weight": 400,
+                        "style": "normal",
                     },
                     {
                         "source": "b",
                         "from": "Other/Other-Regular.ttf",
                         "to": "Combined-Other",
+                        "family": "combined-other",
+                        "weight": 400,
+                        "style": "normal",
                     },
                 ],
+                "stack": ["combined", "combined-other"],
+                "generic": "serif",
             }
         },
     }
@@ -423,3 +509,276 @@ def test_output_directory_is_cleared_between_builds(tmp_path: Path) -> None:
 
     assert not stale.exists()
     assert (out_dir / "test" / "TestFont-Regular.woff2").exists()
+
+
+def _build_single_font_fonts_json(
+    tmp_path: Path,
+    font_bytes: bytes,
+    *,
+    family: str = "test",
+    weight: object = 400,
+    style: str = "normal",
+    generic: str = "serif",
+) -> dict:
+    """Builds one font from `font_bytes` and returns the parsed fonts.json."""
+    archive_path = tmp_path / "fixture.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("TestFont/TestFont-Regular.ttf", font_bytes)
+        archive.writestr("TestFont/OFL.txt", LICENCE_TEXT)
+    sha256 = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    (cache_dir / "testsrc").write_bytes(archive_path.read_bytes())
+
+    manifest = {
+        "sources": {
+            "testsrc": {
+                "kind": "zip",
+                "url": "https://example.invalid/fixture.zip",
+                "sha256": sha256,
+            }
+        },
+        "fonts": {
+            "test": {
+                "name": "Test Font",
+                "licence": [{"source": "testsrc", "path": "TestFont/OFL.txt"}],
+                "files": [
+                    {
+                        "source": "testsrc",
+                        "from": "TestFont/TestFont-Regular.ttf",
+                        "to": "TestFont-Regular",
+                        "family": family,
+                        "weight": weight,
+                        "style": style,
+                    }
+                ],
+                "stack": [family] if isinstance(family, str) else [],
+                "generic": generic,
+            }
+        },
+    }
+    manifest_path = tmp_path / "upstream.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    out_dir = tmp_path / "out"
+
+    fonts.build_fonts(manifest=manifest_path, out_dir=out_dir, cache_dir=cache_dir)
+
+    return json.loads((out_dir / "fonts.json").read_text(encoding="utf-8"))
+
+
+def test_fonts_json_records_metrics_and_empty_features_scripts(tmp_path: Path) -> None:
+    data = _build_single_font_fonts_json(tmp_path, _make_test_font_bytes())
+
+    entry = data["fonts"]["test"]
+    assert entry["name"] == "Test Font"
+    assert entry["stack"] == ["test"]
+    assert entry["generic"] == "serif"
+    assert entry["faces"] == [
+        {
+            "family": "test",
+            "weight": 400,
+            "style": "normal",
+            "file": "test/TestFont-Regular.woff2",
+        }
+    ]
+
+    family = entry["families"]["test"]
+    assert family["unitsPerEm"] == 1000
+    assert family["hhea"] == {"ascender": 800, "descender": -200, "lineGap": 0}
+    assert family["typo"] == {
+        "ascender": 0,
+        "descender": 0,
+        "lineGap": 0,
+        "useTypoMetrics": False,
+    }
+    assert family["win"] == {"ascent": 0, "descent": 0}
+    assert family["xHeight"] == 0
+    assert family["capHeight"] == 0
+    assert family["features"] == []
+    assert family["scripts"] == []
+    assert family["colr"] is None
+    assert family["cpal"] is None
+
+
+def test_fonts_json_records_gsub_features_and_scripts(tmp_path: Path) -> None:
+    data = _build_single_font_fonts_json(tmp_path, _make_gsub_test_font_bytes())
+
+    family = data["fonts"]["test"]["families"]["test"]
+    assert family["features"] == ["liga"]
+    assert family["scripts"] == ["DFLT", "latn"]
+
+
+def test_fonts_json_records_colr_and_cpal(tmp_path: Path) -> None:
+    data = _build_single_font_fonts_json(tmp_path, _make_color_test_font_bytes())
+
+    family = data["fonts"]["test"]["families"]["test"]
+    assert family["colr"] == {"version": 0}
+    assert family["cpal"] == {"palettes": 2, "types": ["light", "dark"]}
+
+
+def test_fonts_json_records_cpal_v0_as_untyped(tmp_path: Path) -> None:
+    data = _build_single_font_fonts_json(tmp_path, _make_cpal_v0_test_font_bytes())
+
+    family = data["fonts"]["test"]["families"]["test"]
+    assert family["colr"] is None
+    assert family["cpal"] == {"palettes": 2, "types": [None, None]}
+
+
+def test_fonts_json_records_use_typo_metrics(tmp_path: Path) -> None:
+    data = _build_single_font_fonts_json(
+        tmp_path, _make_use_typo_metrics_test_font_bytes()
+    )
+
+    family = data["fonts"]["test"]["families"]["test"]
+    assert family["typo"]["useTypoMetrics"] is True
+
+
+def test_fonts_json_is_deterministic_across_builds(tmp_path: Path) -> None:
+    archive_path, sha256 = _make_fixture_zip(tmp_path)
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    (cache_dir / "testsrc").write_bytes(archive_path.read_bytes())
+    manifest_path = _write_manifest(tmp_path, sha256)
+    out_dir = tmp_path / "out"
+
+    fonts.build_fonts(manifest=manifest_path, out_dir=out_dir, cache_dir=cache_dir)
+    first = (out_dir / "fonts.json").read_bytes()
+
+    fonts.build_fonts(manifest=manifest_path, out_dir=out_dir, cache_dir=cache_dir)
+    second = (out_dir / "fonts.json").read_bytes()
+
+    assert first == second
+    assert first.endswith(b"\n")
+
+
+@pytest.mark.parametrize("bad_weight", [300, "400", True])
+def test_invalid_weight_is_rejected(tmp_path: Path, bad_weight: object) -> None:
+    with pytest.raises(fonts.BuildError, match="weight"):
+        _build_single_font_fonts_json(
+            tmp_path, _make_test_font_bytes(), weight=bad_weight
+        )
+
+
+def test_invalid_style_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(fonts.BuildError, match="style"):
+        _build_single_font_fonts_json(
+            tmp_path, _make_test_font_bytes(), style="oblique"
+        )
+
+
+def test_missing_family_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(fonts.BuildError, match="family"):
+        _build_single_font_fonts_json(tmp_path, _make_test_font_bytes(), family="")
+
+
+@pytest.mark.parametrize("bad_family", ["Test Font", "test_font", "TEST", "tëst"])
+def test_family_must_match_css_identifier_pattern(
+    tmp_path: Path, bad_family: str
+) -> None:
+    with pytest.raises(fonts.BuildError, match="family"):
+        _build_single_font_fonts_json(
+            tmp_path, _make_test_font_bytes(), family=bad_family
+        )
+
+
+def test_invalid_generic_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(fonts.BuildError, match="generic"):
+        _build_single_font_fonts_json(
+            tmp_path, _make_test_font_bytes(), generic="cursive"
+        )
+
+
+def test_duplicate_face_is_rejected(tmp_path: Path) -> None:
+    archive_path, sha256 = _make_fixture_zip(tmp_path)
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    (cache_dir / "testsrc").write_bytes(archive_path.read_bytes())
+
+    manifest = {
+        "sources": {
+            "testsrc": {
+                "kind": "zip",
+                "url": "https://example.invalid/fixture-source.zip",
+                "sha256": sha256,
+            }
+        },
+        "fonts": {
+            "test": {
+                "name": "Test Font",
+                "licence": [{"source": "testsrc", "path": "TestFont/OFL.txt"}],
+                "files": [
+                    {
+                        "source": "testsrc",
+                        "from": "TestFont/TestFont-Regular.ttf",
+                        "to": "TestFont-Regular",
+                        "family": "test",
+                        "weight": 400,
+                        "style": "normal",
+                    },
+                    {
+                        "source": "testsrc",
+                        "from": "TestFont/TestFont-Regular.ttf",
+                        "to": "TestFont-Regular-Again",
+                        "family": "test",
+                        "weight": 400,
+                        "style": "normal",
+                    },
+                ],
+                "stack": ["test"],
+                "generic": "serif",
+            }
+        },
+    }
+    manifest_path = tmp_path / "upstream.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(fonts.BuildError, match="duplicate face"):
+        fonts.build_fonts(
+            manifest=manifest_path,
+            out_dir=tmp_path / "out",
+            cache_dir=cache_dir,
+        )
+
+
+def test_stack_missing_a_used_family_is_rejected(tmp_path: Path) -> None:
+    archive_path, sha256 = _make_fixture_zip(tmp_path)
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    (cache_dir / "testsrc").write_bytes(archive_path.read_bytes())
+
+    manifest = {
+        "sources": {
+            "testsrc": {
+                "kind": "zip",
+                "url": "https://example.invalid/fixture-source.zip",
+                "sha256": sha256,
+            }
+        },
+        "fonts": {
+            "test": {
+                "name": "Test Font",
+                "licence": [{"source": "testsrc", "path": "TestFont/OFL.txt"}],
+                "files": [
+                    {
+                        "source": "testsrc",
+                        "from": "TestFont/TestFont-Regular.ttf",
+                        "to": "TestFont-Regular",
+                        "family": "test",
+                        "weight": 400,
+                        "style": "normal",
+                    }
+                ],
+                "stack": ["nonexistent"],
+            }
+        },
+    }
+    manifest_path = tmp_path / "upstream.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(fonts.BuildError, match="stack"):
+        fonts.build_fonts(
+            manifest=manifest_path,
+            out_dir=tmp_path / "out",
+            cache_dir=cache_dir,
+        )

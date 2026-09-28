@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import io
 import json
+import re
 import shutil
 import sys
 import urllib.request
@@ -21,6 +22,22 @@ DEFAULT_CACHE = Path(".cache/downloads")
 DEFAULT_MANIFEST = Path("data/upstream.json")
 
 _UNSAFE_PATH_SUBSTRINGS = ("/", "\\", "..")
+
+# The site only ever loads Regular/Bold and their italics; anything else has
+# no CSS font-weight/font-style mapping to load it against.
+_VALID_WEIGHTS = (400, 700)
+_VALID_STYLES = ("normal", "italic")
+_VALID_GENERICS = ("serif", "sans-serif")
+
+# A family key is written straight into a <style> block as a CSS identifier
+# and a quoted font-family value; this rules out characters that would need
+# escaping there.
+_FAMILY_RE = re.compile(r"^[a-z0-9-]+$")
+
+# OpenType CPAL v1 palette type flags (spec section "CPAL (Color Palette
+# Table)"): bit 0 marks a palette usable on a light background, bit 1 on dark.
+_CPAL_USABLE_ON_LIGHT = 0x0001
+_CPAL_USABLE_ON_DARK = 0x0002
 
 
 class BuildError(Exception):
@@ -95,6 +112,8 @@ def build_fonts(*, manifest: Path, out_dir: Path, cache_dir: Path) -> None:
         for name, source in sources.items()
     }
 
+    fonts_manifest: dict[str, Any] = {}
+
     for font_id, font in fonts.items():
         _validate_path_component(font_id, what="font id")
         context = f"font '{font_id}'"
@@ -104,15 +123,41 @@ def build_fonts(*, manifest: Path, out_dir: Path, cache_dir: Path) -> None:
             shutil.rmtree(font_out)
         font_out.mkdir(parents=True)
 
+        faces: list[dict[str, Any]] = []
+        face_infos: dict[tuple[str, int, str], dict[str, Any]] = {}
+        seen_faces: set[tuple[str, int, str]] = set()
         for file_entry in _require(font, "files", context):
-            source_name = _require(file_entry, "source", f"{context} file entry")
-            member = _require(file_entry, "from", f"{context} file entry")
-            to_name = _require(file_entry, "to", f"{context} file entry")
+            entry_context = f"{context} file entry"
+            source_name = _require(file_entry, "source", entry_context)
+            member = _require(file_entry, "from", entry_context)
+            to_name = _require(file_entry, "to", entry_context)
+            family = _require(file_entry, "family", entry_context)
+            weight = _require(file_entry, "weight", entry_context)
+            style = _require(file_entry, "style", entry_context)
+            _validate_face(family, weight, style, context=entry_context)
             _validate_path_component(to_name, what=f"{context} output name")
+
+            face_key = (family, weight, style)
+            if face_key in seen_faces:
+                raise BuildError(
+                    f"{context}: duplicate face family={family!r} weight={weight!r} "
+                    f"style={style!r}"
+                )
+            seen_faces.add(face_key)
+
             dest = font_out / f"{to_name}.woff2"
-            _convert_member(
+            info = _convert_member(
                 source_name, member, dest, sources, cached_paths, context=context
             )
+            faces.append(
+                {
+                    "family": family,
+                    "weight": weight,
+                    "style": style,
+                    "file": f"{font_id}/{to_name}.woff2",
+                }
+            )
+            face_infos[face_key] = info
 
         licence_texts = [
             _read_source_bytes(
@@ -129,7 +174,78 @@ def build_fonts(*, manifest: Path, out_dir: Path, cache_dir: Path) -> None:
         (font_out / "OFL.txt").write_text(
             "\n\n".join(licence_texts) + "\n", encoding="utf-8"
         )
+
+        stack = _require(font, "stack", context)
+        _validate_stack(stack, faces, context=context)
+
+        generic = _require(font, "generic", context)
+        if generic not in _VALID_GENERICS:
+            raise BuildError(f"{context}: 'generic' must be one of {_VALID_GENERICS}")
+
+        fonts_manifest[font_id] = {
+            "name": _require(font, "name", context),
+            "stack": stack,
+            "generic": generic,
+            "faces": faces,
+            "families": _build_families(faces, face_infos),
+        }
+
         print(font_id)
+
+    (out_dir / "fonts.json").write_text(
+        json.dumps({"fonts": fonts_manifest}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _validate_face(family: Any, weight: Any, style: Any, *, context: str) -> None:
+    if not isinstance(family, str) or not _FAMILY_RE.match(family):
+        raise BuildError(
+            f"{context}: 'family' must match {_FAMILY_RE.pattern!r}, got {family!r}"
+        )
+    if weight not in _VALID_WEIGHTS:
+        raise BuildError(f"{context}: 'weight' must be one of {_VALID_WEIGHTS}")
+    if style not in _VALID_STYLES:
+        raise BuildError(f"{context}: 'style' must be one of {_VALID_STYLES}")
+
+
+def _validate_stack(stack: Any, faces: list[dict[str, Any]], *, context: str) -> None:
+    if (
+        not isinstance(stack, list)
+        or not stack
+        or not all(isinstance(family, str) for family in stack)
+    ):
+        raise BuildError(f"{context}: 'stack' must be a non-empty list of strings")
+    if len(set(stack)) != len(stack):
+        raise BuildError(f"{context}: 'stack' must not repeat a family")
+    face_families = {face["family"] for face in faces}
+    if set(stack) != face_families:
+        raise BuildError(
+            f"{context}: 'stack' {stack} must list exactly the families used by "
+            f"its files ({sorted(face_families)})"
+        )
+
+
+def _build_families(
+    faces: list[dict[str, Any]],
+    face_infos: dict[tuple[str, int, str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Picks each family's weight-400 normal face, falling back to its first face."""
+    families: dict[str, Any] = {}
+    for family in dict.fromkeys(face["family"] for face in faces):
+        candidates = [face for face in faces if face["family"] == family]
+        chosen = next(
+            (
+                face
+                for face in candidates
+                if face["weight"] == 400 and face["style"] == "normal"
+            ),
+            candidates[0],
+        )
+        families[family] = face_infos[
+            (chosen["family"], chosen["weight"], chosen["style"])
+        ]
+    return families
 
 
 def _require(mapping: Mapping[str, Any], key: str, context: str) -> Any:
@@ -221,7 +337,7 @@ def _convert_member(
     cached_paths: Mapping[str, Path],
     *,
     context: str,
-) -> None:
+) -> dict[str, Any]:
     # fontTools' woff2 flavor needs the `build` dependency group (brotli); a
     # plain checkout of this package must stay importable without it.
     from fontTools.ttLib import TTFont
@@ -232,6 +348,76 @@ def _convert_member(
     # recalcTimestamp=False keeps head.modified from being restamped to the
     # build time, so re-running produces byte-identical woff2 output.
     font = TTFont(io.BytesIO(data), recalcTimestamp=False)
+    # Metrics/features/palette info must come from the TTF tables; converting
+    # to woff2 first would mean re-parsing compressed table data for no gain.
+    info = _extract_font_info(font)
     font.flavor = "woff2"
     dest.parent.mkdir(parents=True, exist_ok=True)
     font.save(dest)
+    return info
+
+
+def _extract_font_info(font: Any) -> dict[str, Any]:
+    head = font["head"]
+    hhea = font["hhea"]
+    os2 = font["OS/2"]
+
+    features: set[str] = set()
+    scripts: set[str] = set()
+    for tag in ("GSUB", "GPOS"):
+        if tag not in font:
+            continue
+        table = font[tag].table
+        if table.FeatureList:
+            features.update(
+                record.FeatureTag for record in table.FeatureList.FeatureRecord
+            )
+        if table.ScriptList:
+            scripts.update(record.ScriptTag for record in table.ScriptList.ScriptRecord)
+
+    colr = {"version": font["COLR"].version} if "COLR" in font else None
+    cpal = _extract_cpal(font["CPAL"]) if "CPAL" in font else None
+
+    return {
+        "unitsPerEm": head.unitsPerEm,
+        "hhea": {
+            "ascender": hhea.ascent,
+            "descender": hhea.descent,
+            "lineGap": hhea.lineGap,
+        },
+        "typo": {
+            "ascender": os2.sTypoAscender,
+            "descender": os2.sTypoDescender,
+            "lineGap": os2.sTypoLineGap,
+            "useTypoMetrics": bool(os2.fsSelection & 0x80),
+        },
+        "win": {
+            "ascent": os2.usWinAscent,
+            "descent": os2.usWinDescent,
+        },
+        "xHeight": getattr(os2, "sxHeight", None),
+        "capHeight": getattr(os2, "sCapHeight", None),
+        "features": sorted(features),
+        "scripts": sorted(scripts),
+        "colr": colr,
+        "cpal": cpal,
+    }
+
+
+def _extract_cpal(cpal_table: Any) -> dict[str, Any]:
+    palette_count = len(cpal_table.palettes)
+    if cpal_table.version == 1:
+        types = [_cpal_palette_type(flags) for flags in cpal_table.paletteTypes]
+    else:
+        types = [None] * palette_count
+    return {"palettes": palette_count, "types": types}
+
+
+def _cpal_palette_type(flags: int) -> str | None:
+    light = bool(flags & _CPAL_USABLE_ON_LIGHT)
+    dark = bool(flags & _CPAL_USABLE_ON_DARK)
+    if light and not dark:
+        return "light"
+    if dark and not light:
+        return "dark"
+    return None

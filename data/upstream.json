@@ -49,36 +49,44 @@
       "name": "Amiri",
       "licence": [{ "source": "amiri", "path": "Amiri-1.003/OFL.txt" }],
       "files": [
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-Regular.ttf", "to": "Amiri-Regular" },
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-Bold.ttf", "to": "Amiri-Bold" },
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-Italic.ttf", "to": "Amiri-Italic" },
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-BoldItalic.ttf", "to": "Amiri-BoldItalic" }
-      ]
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Regular.ttf", "to": "Amiri-Regular", "family": "amiri", "weight": 400, "style": "normal" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Bold.ttf", "to": "Amiri-Bold", "family": "amiri", "weight": 700, "style": "normal" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Italic.ttf", "to": "Amiri-Italic", "family": "amiri", "weight": 400, "style": "italic" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-BoldItalic.ttf", "to": "Amiri-BoldItalic", "family": "amiri", "weight": 700, "style": "italic" }
+      ],
+      "stack": ["amiri"],
+      "generic": "serif"
     },
     "amiriq": {
       "name": "Amiri Quran",
       "licence": [{ "source": "amiri", "path": "Amiri-1.003/OFL.txt" }],
       "files": [
-        { "source": "amiri", "from": "Amiri-1.003/AmiriQuran.ttf", "to": "AmiriQuran-Regular" }
-      ]
+        { "source": "amiri", "from": "Amiri-1.003/AmiriQuran.ttf", "to": "AmiriQuran-Regular", "family": "amiri-quran", "weight": 400, "style": "normal" }
+      ],
+      "stack": ["amiri-quran"],
+      "generic": "serif"
     },
     "sawa": {
       "name": "Sawa",
       "licence": [{ "source": "amiri", "path": "Amiri-1.003/OFL.txt" }],
       "files": [
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-Regular.ttf", "to": "Sawa-Regular" },
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-Bold.ttf", "to": "Sawa-Bold" },
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-Italic.ttf", "to": "Sawa-Italic" },
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-BoldItalic.ttf", "to": "Sawa-BoldItalic" }
-      ]
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Regular.ttf", "to": "Sawa-Regular", "family": "sawa", "weight": 400, "style": "normal" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Bold.ttf", "to": "Sawa-Bold", "family": "sawa", "weight": 700, "style": "normal" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-Italic.ttf", "to": "Sawa-Italic", "family": "sawa", "weight": 400, "style": "italic" },
+        { "source": "amiri", "from": "Amiri-1.003/Amiri-BoldItalic.ttf", "to": "Sawa-BoldItalic", "family": "sawa", "weight": 700, "style": "italic" }
+      ],
+      "stack": ["sawa"],
+      "generic": "serif"
     },
     "sch": {
       "name": "Scheherazade New",
       "licence": [{ "source": "scheherazade", "path": "ScheherazadeNew-4.500/OFL.txt" }],
       "files": [
-        { "source": "scheherazade", "from": "ScheherazadeNew-4.500/ScheherazadeNew-Regular.ttf", "to": "ScheherazadeNew-Regular" },
-        { "source": "scheherazade", "from": "ScheherazadeNew-4.500/ScheherazadeNew-Bold.ttf", "to": "ScheherazadeNew-Bold" }
-      ]
+        { "source": "scheherazade", "from": "ScheherazadeNew-4.500/ScheherazadeNew-Regular.ttf", "to": "ScheherazadeNew-Regular", "family": "scheherazade", "weight": 400, "style": "normal" },
+        { "source": "scheherazade", "from": "ScheherazadeNew-4.500/ScheherazadeNew-Bold.ttf", "to": "ScheherazadeNew-Bold", "family": "scheherazade", "weight": 700, "style": "normal" }
+      ],
+      "stack": ["scheherazade"],
+      "generic": "serif"
     },
     "noto": {
       "name": "Noto Naskh Arabic + Noto Serif",
@@ -87,19 +95,23 @@
         { "source": "noto_serif", "path": "OFL.txt" }
       ],
       "files": [
-        { "source": "noto_naskh_arabic", "from": "NotoNaskhArabic/hinted/ttf/NotoNaskhArabic-Regular.ttf", "to": "NotoNaskhArabic-Regular" },
-        { "source": "noto_naskh_arabic", "from": "NotoNaskhArabic/hinted/ttf/NotoNaskhArabic-Bold.ttf", "to": "NotoNaskhArabic-Bold" },
-        { "source": "noto_serif", "from": "NotoSerif/hinted/ttf/NotoSerif-Regular.ttf", "to": "NotoSerif-Regular" },
-        { "source": "noto_serif", "from": "NotoSerif/hinted/ttf/NotoSerif-Bold.ttf", "to": "NotoSerif-Bold" }
-      ]
+        { "source": "noto_naskh_arabic", "from": "NotoNaskhArabic/hinted/ttf/NotoNaskhArabic-Regular.ttf", "to": "NotoNaskhArabic-Regular", "family": "noto-naskh", "weight": 400, "style": "normal" },
+        { "source": "noto_naskh_arabic", "from": "NotoNaskhArabic/hinted/ttf/NotoNaskhArabic-Bold.ttf", "to": "NotoNaskhArabic-Bold", "family": "noto-naskh", "weight": 700, "style": "normal" },
+        { "source": "noto_serif", "from": "NotoSerif/hinted/ttf/NotoSerif-Regular.ttf", "to": "NotoSerif-Regular", "family": "noto-serif", "weight": 400, "style": "normal" },
+        { "source": "noto_serif", "from": "NotoSerif/hinted/ttf/NotoSerif-Bold.ttf", "to": "NotoSerif-Bold", "family": "noto-serif", "weight": 700, "style": "normal" }
+      ],
+      "stack": ["noto-serif", "noto-naskh"],
+      "generic": "serif"
     },
     "status": {
       "name": "Source Sans 3",
       "licence": [{ "source": "source_sans_licence" }],
       "files": [
-        { "source": "source_sans", "from": "TTF/SourceSans3-Regular.ttf", "to": "SourceSans3-Regular" },
-        { "source": "source_sans", "from": "TTF/SourceSans3-Bold.ttf", "to": "SourceSans3-Bold" }
-      ]
+        { "source": "source_sans", "from": "TTF/SourceSans3-Regular.ttf", "to": "SourceSans3-Regular", "family": "source-sans", "weight": 400, "style": "normal" },
+        { "source": "source_sans", "from": "TTF/SourceSans3-Bold.ttf", "to": "SourceSans3-Bold", "family": "source-sans", "weight": 700, "style": "normal" }
+      ],
+      "stack": ["source-sans"],
+      "generic": "sans-serif"
     }
   }
 }
