@@ -19,7 +19,11 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 DEFAULT_GROUPS = Path("data/mark-groups.json")
-DEFAULT_FONT = Path("site/public/fonts/sawa/Sawa-Regular.woff2")
+DEFAULT_FONTS = (
+    Path("site/public/fonts/sawa-serif/SawaSerif.woff2"),
+    Path("site/public/fonts/sawa-sans/SawaSans.woff2"),
+    Path("site/public/fonts/sawa-mono/SawaMono.woff2"),
+)
 
 # The Arabic script's Unicode blocks: Arabic, Arabic Supplement, Arabic
 # Extended-A, Arabic Presentation Forms-A and -B.
@@ -59,28 +63,32 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--font",
         type=Path,
-        default=DEFAULT_FONT,
-        help="Path to the font to check cmap coverage against, relative to "
-        "the cwd (default: %(default)s)",
+        action="append",
+        dest="fonts",
+        help="Path to a font to check cmap coverage against, relative to the "
+        "cwd; repeat for several (default: the three Sawa site woff2 files)",
     )
     parser.set_defaults(handler=run)
 
 
 def run(args: argparse.Namespace) -> int:
-    try:
-        result = check_marks(groups_path=args.groups, font_path=args.font)
-    except MarksError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-    if result.errors:
+    failed = False
+    for font_path in args.fonts or DEFAULT_FONTS:
+        try:
+            result = check_marks(groups_path=args.groups, font_path=font_path)
+        except MarksError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         for error in result.errors:
             print(error, file=sys.stderr)
-        return 1
-    print(
-        f"OK: {result.group_count} group(s), {result.codepoint_count} "
-        "codepoint(s), font cmap fully covered"
-    )
-    return 0
+        if result.errors:
+            failed = True
+            continue
+        print(
+            f"OK: {font_path}: {result.group_count} group(s), "
+            f"{result.codepoint_count} codepoint(s), font cmap fully covered"
+        )
+    return 1 if failed else 0
 
 
 def _parse_codepoints(spec: str) -> Iterator[int]:

@@ -1,4 +1,8 @@
-"""Fetches the pinned roster fonts from data/upstream.json and converts to woff2."""
+"""Fetches the pinned roster fonts, builds the Sawa families and writes woff2.
+
+Reference fonts come from data/upstream.json; the Sawa families are built
+from its sources as data/sawa.json describes (see families.py).
+"""
 
 from __future__ import annotations
 
@@ -13,6 +17,15 @@ import urllib.request
 import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from sawa_tools.build.families import (
+    DEFAULT_FAMILIES,
+    DEFAULT_FONTS_DIR,
+    BuiltFamily,
+    FamilyError,
+    build_family,
+    load_config,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -69,26 +82,61 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Path to the upstream font manifest, relative to the cwd "
         "(default: %(default)s)",
     )
+    parser.add_argument(
+        "--families",
+        type=Path,
+        default=DEFAULT_FAMILIES,
+        help="Path to the Sawa family config, relative to the cwd "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--fonts-dir",
+        type=Path,
+        default=DEFAULT_FONTS_DIR,
+        help="Directory to write the built Sawa TTFs and build stamps into, "
+        "relative to the cwd (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Rebuild every Sawa family even when its build stamp matches",
+    )
     parser.set_defaults(handler=run)
 
 
 def run(args: argparse.Namespace) -> int:
     try:
-        build_fonts(manifest=args.manifest, out_dir=args.out, cache_dir=args.cache)
-    except BuildError as exc:
+        build_fonts(
+            manifest=args.manifest,
+            out_dir=args.out,
+            cache_dir=args.cache,
+            families=args.families,
+            fonts_dir=args.fonts_dir,
+            force=args.force,
+        )
+    except (BuildError, FamilyError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     return 0
 
 
-def build_fonts(*, manifest: Path, out_dir: Path, cache_dir: Path) -> None:
+def build_fonts(
+    *,
+    manifest: Path,
+    out_dir: Path,
+    cache_dir: Path,
+    families: Path | None = None,
+    fonts_dir: Path = DEFAULT_FONTS_DIR,
+    force: bool = False,
+) -> None:
     """Downloads, verifies and converts every font listed in `manifest`.
 
     Downloads are cached in `cache_dir` by source name and reused when their
     sha256 still matches the manifest. Writes `<out_dir>/<font-id>/<to>.woff2`
     and `<out_dir>/<font-id>/OFL.txt` for every font id, printing the id once
-    it is done. Raises BuildError on any failure, including a malformed
-    manifest.
+    it is done. With `families`, first builds each Sawa family into
+    `fonts_dir` and adds the ones shown on the site to `out_dir` the same way.
+    Raises BuildError on any failure, including a malformed manifest.
     """
     try:
         data = json.loads(manifest.read_text(encoding="utf-8"))
@@ -113,6 +161,33 @@ def build_fonts(*, manifest: Path, out_dir: Path, cache_dir: Path) -> None:
     }
 
     fonts_manifest: dict[str, Any] = {}
+
+    def read(name: str, path: str | None) -> bytes:
+        return _read_source_bytes(
+            name, path, sources, cached_paths, context=f"source '{name}'"
+        )
+
+    if families is not None:
+        config = load_config(families)
+        for family in config.families:
+            if family.id in fonts:
+                raise BuildError(
+                    f"family '{family.id}' is also a font id in {manifest}"
+                )
+            built = build_family(
+                family,
+                config,
+                sources=sources,
+                read=read,
+                fonts_dir=fonts_dir,
+                force=force,
+            )
+            state = "built" if built.rebuilt else "up to date"
+            print(f"{family.id}: {state}")
+            if built.woff2 is not None:
+                fonts_manifest[family.id] = _publish_family(
+                    built, out_dir, sources, cached_paths
+                )
 
     for font_id, font in fonts.items():
         _validate_path_component(font_id, what="font id")
@@ -159,20 +234,18 @@ def build_fonts(*, manifest: Path, out_dir: Path, cache_dir: Path) -> None:
             )
             face_infos[face_key] = info
 
-        licence_texts = [
-            _read_source_bytes(
-                _require(entry, "source", f"{context} licence entry"),
-                entry.get("path"),
-                sources,
-                cached_paths,
-                context=f"{context} licence",
-            )
-            .decode("utf-8")
-            .rstrip("\n")
-            for entry in _require(font, "licence", context)
-        ]
-        (font_out / "OFL.txt").write_text(
-            "\n\n".join(licence_texts) + "\n", encoding="utf-8"
+        _write_licence(
+            font_out / "OFL.txt",
+            [
+                (
+                    _require(entry, "source", f"{context} licence entry"),
+                    entry.get("path"),
+                )
+                for entry in _require(font, "licence", context)
+            ],
+            sources,
+            cached_paths,
+            context=f"{context} licence",
         )
 
         stack = _require(font, "stack", context)
@@ -196,6 +269,66 @@ def build_fonts(*, manifest: Path, out_dir: Path, cache_dir: Path) -> None:
         json.dumps({"fonts": fonts_manifest}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _publish_family(
+    built: BuiltFamily,
+    out_dir: Path,
+    sources: Mapping[str, Any],
+    cached_paths: Mapping[str, Path],
+) -> dict[str, Any]:
+    """Copies a built family's woff2 and licence into `out_dir`; returns its
+    fonts.json entry, with one face spanning the family's whole wght range.
+    """
+    from fontTools.ttLib import TTFont
+
+    family = built.family
+    if built.woff2 is None:
+        raise BuildError(f"family '{family.id}' has no woff2 to publish")
+    font_out = out_dir / family.id
+    if font_out.exists():
+        shutil.rmtree(font_out)
+    font_out.mkdir(parents=True)
+    shutil.copyfile(built.woff2, font_out / family.woff2_name)
+    _write_licence(
+        font_out / "OFL.txt",
+        [(member.source, member.path) for member in family.licence],
+        sources,
+        cached_paths,
+        context=f"family '{family.id}' licence",
+    )
+    info = _extract_font_info(TTFont(built.ttf, lazy=True))
+    return {
+        "name": family.name,
+        "stack": [family.id],
+        "generic": family.generic,
+        "faces": [
+            {
+                "family": family.id,
+                "weight": [int(family.wght.minimum), int(family.wght.maximum)],
+                "style": "normal",
+                "file": f"{family.id}/{family.woff2_name}",
+            }
+        ],
+        "families": {family.id: info},
+    }
+
+
+def _write_licence(
+    dest: Path,
+    entries: list[tuple[str, str | None]],
+    sources: Mapping[str, Any],
+    cached_paths: Mapping[str, Path],
+    *,
+    context: str,
+) -> None:
+    texts = [
+        _read_source_bytes(source, path, sources, cached_paths, context=context)
+        .decode("utf-8")
+        .rstrip("\n")
+        for source, path in entries
+    ]
+    dest.write_text("\n\n".join(texts) + "\n", encoding="utf-8")
 
 
 def _validate_face(family: Any, weight: Any, style: Any, *, context: str) -> None:
@@ -376,6 +509,7 @@ def _extract_font_info(font: Any) -> dict[str, Any]:
             scripts.update(record.ScriptTag for record in table.ScriptList.ScriptRecord)
 
     colr = {"version": font["COLR"].version} if "COLR" in font else None
+    axes, instances = _extract_axes(font)
     cpal = _extract_cpal(font["CPAL"]) if "CPAL" in font else None
 
     return {
@@ -401,7 +535,32 @@ def _extract_font_info(font: Any) -> dict[str, Any]:
         "scripts": sorted(scripts),
         "colr": colr,
         "cpal": cpal,
+        "axes": axes,
+        "instances": instances,
     }
+
+
+def _extract_axes(font: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if "fvar" not in font:
+        return [], []
+    fvar = font["fvar"]
+    axes = [
+        {
+            "tag": axis.axisTag,
+            "min": axis.minValue,
+            "default": axis.defaultValue,
+            "max": axis.maxValue,
+        }
+        for axis in fvar.axes
+    ]
+    instances = [
+        {
+            "name": font["name"].getDebugName(inst.subfamilyNameID),
+            "coords": dict(inst.coordinates),
+        }
+        for inst in fvar.instances
+    ]
+    return axes, instances
 
 
 def _extract_cpal(cpal_table: Any) -> dict[str, Any]:

@@ -23,16 +23,14 @@ const navEntries: { name: PageName; labelKey: MessageKey }[] = PAGE_NAMES.map((n
 }));
 
 const fontsData = loadFontsData();
-const uiFontStack = fontStack(fontsData, "sawa");
+const uiFontStack = fontStack(fontsData, "sawa-sans");
 const fontStyles = `${fontFaceCss(fontsData, base)}\n\n:root {\n  --font-ui: ${uiFontStack};\n}`;
 
-const sawaRegular = fontsData.fonts.sawa?.faces.find(
-  (face) => face.weight === 400 && face.style === "normal",
-);
-if (!sawaRegular) {
-  throw new Error("fonts.json: font 'sawa' has no weight-400 normal face to preload");
+const uiFace = fontsData.fonts["sawa-sans"]?.faces.find((face) => face.style === "normal");
+if (!uiFace) {
+  throw new Error("fonts.json: font 'sawa-sans' has no normal face to preload");
 }
-const sawaRegularHref = `${base}fonts/${sawaRegular.file}`;
+const uiFaceHref = `${base}fonts/${uiFace.file}`;
 ---
 
 <!doctype html>
@@ -45,7 +43,7 @@ const sawaRegularHref = `${base}fonts/${sawaRegular.file}`;
       rel="preload"
       as="font"
       type="font/woff2"
-      href={sawaRegularHref}
+      href={uiFaceHref}
       crossorigin="anonymous"
     />
     <style is:global set:html={fontStyles}></style>

@@ -46,9 +46,19 @@ jobs:
         with:
           path: .cache/downloads
           key: font-downloads-${{ hashFiles('data/upstream.json') }}
-      - name: Fetch roster fonts
+      # The Sawa families take minutes to build; the stamps in fonts/ let a
+      # restored cache skip them.
+      - uses: actions/cache@v6
+        with:
+          path: fonts
+          key: sawa-fonts-${{ hashFiles('data/upstream.json', 'data/sawa.json', 'uv.lock', 'src/sawa_tools/build/**') }}
+          restore-keys: sawa-fonts-
+      - name: Build Sawa and fetch roster fonts
         working-directory: .
         run: uv run --locked --group build sawa build fonts
+      - name: Check the Sawa families
+        working-directory: .
+        run: uv run --locked --group build sawa check fonts
       - name: Check mark-group coverage
         working-directory: .
         run: uv run --locked --group build sawa check marks

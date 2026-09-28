@@ -19,6 +19,7 @@ dev = [
 ]
 build = [
     "fonttools[woff]",
+    "uharfbuzz>=0.56.2",
 ]
 
 [build-system]

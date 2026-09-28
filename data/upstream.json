@@ -28,6 +28,35 @@
       "url": "https://github.com/notofonts/latin-greek-cyrillic/releases/download/NotoSerif-v2.015/NotoSerif-v2.015.zip",
       "sha256": "0e9a43c8a4b94ac76f55069ed1d7385bbcaf6b99527a94deb5619e032b7e76c1"
     },
+    "noto_sans_arabic": {
+      "kind": "zip",
+      "name": "Noto Sans Arabic",
+      "version": "2.013",
+      "url": "https://github.com/notofonts/arabic/releases/download/NotoSansArabic-v2.013/NotoSansArabic-v2.013.zip",
+      "sha256": "1301aceaea84c501cf2e6dcfb3182e2328c8eae5725817fcb239672bda7154f1"
+    },
+    "noto_sans": {
+      "kind": "zip",
+      "name": "Noto Sans",
+      "version": "2.015",
+      "url": "https://github.com/notofonts/latin-greek-cyrillic/releases/download/NotoSans-v2.015/NotoSans-v2.015.zip",
+      "sha256": "0c34df072a3fa7efbb7cbf34950e1f971a4447cffe365d3a359e2d4089b958f5"
+    },
+    "cascadia": {
+      "kind": "zip",
+      "name": "Cascadia Mono",
+      "version": "2407.24",
+      "url": "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip",
+      "sha256": "e67a68ee3386db63f48b9054bd196ea752bc6a4ebb4df35adce6733da50c8474"
+    },
+    "cascadia_licence": {
+      "kind": "file",
+      "name": "Cascadia Code licence",
+      "version": "2407.24",
+      "comment": "Release zips carry no licence file; raw.githubusercontent.com pinned to the tag's resolved commit, not the tag name, since a tag ref can move.",
+      "url": "https://raw.githubusercontent.com/microsoft/cascadia-code/56bcca3f2c1e4cb19458954f0e2bb4635960df91/LICENSE",
+      "sha256": "51882cd3cdba4e16f220f44ddb08a635c38c44ea6e0975db2574f4be6f958238"
+    },
     "source_sans": {
       "kind": "zip",
       "name": "Source Sans 3",
@@ -66,18 +95,6 @@
       "stack": ["amiri-quran"],
       "generic": "serif"
     },
-    "sawa": {
-      "name": "Sawa",
-      "licence": [{ "source": "amiri", "path": "Amiri-1.003/OFL.txt" }],
-      "files": [
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-Regular.ttf", "to": "Sawa-Regular", "family": "sawa", "weight": 400, "style": "normal" },
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-Bold.ttf", "to": "Sawa-Bold", "family": "sawa", "weight": 700, "style": "normal" },
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-Italic.ttf", "to": "Sawa-Italic", "family": "sawa", "weight": 400, "style": "italic" },
-        { "source": "amiri", "from": "Amiri-1.003/Amiri-BoldItalic.ttf", "to": "Sawa-BoldItalic", "family": "sawa", "weight": 700, "style": "italic" }
-      ],
-      "stack": ["sawa"],
-      "generic": "serif"
-    },
     "sch": {
       "name": "Scheherazade New",
       "licence": [{ "source": "scheherazade", "path": "ScheherazadeNew-4.500/OFL.txt" }],
@@ -102,6 +119,21 @@
       ],
       "stack": ["noto-serif", "noto-naskh"],
       "generic": "serif"
+    },
+    "noto-sans": {
+      "name": "Noto Sans Arabic + Noto Sans",
+      "licence": [
+        { "source": "noto_sans_arabic", "path": "OFL.txt" },
+        { "source": "noto_sans", "path": "OFL.txt" }
+      ],
+      "files": [
+        { "source": "noto_sans_arabic", "from": "NotoSansArabic/hinted/ttf/NotoSansArabic-Regular.ttf", "to": "NotoSansArabic-Regular", "family": "noto-sans-arabic", "weight": 400, "style": "normal" },
+        { "source": "noto_sans_arabic", "from": "NotoSansArabic/hinted/ttf/NotoSansArabic-Bold.ttf", "to": "NotoSansArabic-Bold", "family": "noto-sans-arabic", "weight": 700, "style": "normal" },
+        { "source": "noto_sans", "from": "NotoSans/hinted/ttf/NotoSans-Regular.ttf", "to": "NotoSans-Regular", "family": "noto-sans", "weight": 400, "style": "normal" },
+        { "source": "noto_sans", "from": "NotoSans/hinted/ttf/NotoSans-Bold.ttf", "to": "NotoSans-Bold", "family": "noto-sans", "weight": 700, "style": "normal" }
+      ],
+      "stack": ["noto-sans", "noto-sans-arabic"],
+      "generic": "sans-serif"
     },
     "status": {
       "name": "Source Sans 3",

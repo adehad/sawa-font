@@ -2,6 +2,7 @@ import argparse
 from collections.abc import Sequence
 
 from sawa_tools.build import fonts
+from sawa_tools.checks import fonts as fonts_check
 from sawa_tools.checks import i18n, marks
 
 GROUPS = {
@@ -23,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "build":
             fonts.add_parser(commands)
         if name == "check":
+            fonts_check.add_parser(commands)
             i18n.add_parser(commands)
             marks.add_parser(commands)
     return parser

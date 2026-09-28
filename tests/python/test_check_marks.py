@@ -9,7 +9,6 @@ from sawa_tools.cli import main
 
 REPO_ROOT = Path(__file__).parents[2]
 REAL_GROUPS = REPO_ROOT / "data" / "mark-groups.json"
-REAL_FONT = REPO_ROOT / "site" / "public" / "fonts" / "sawa" / "Sawa-Regular.woff2"
 
 
 def write_groups(path: Path, groups: list[dict]) -> Path:
@@ -188,10 +187,10 @@ def test_cli_exits_0_on_full_coverage(tmp_path: Path) -> None:
     assert exit_code == 0
 
 
-@pytest.mark.skipif(
-    not REAL_FONT.exists(),
-    reason="font not built; run `uv run --group build sawa build fonts` first",
-)
-def test_real_sawa_stand_in_has_full_mark_coverage() -> None:
-    result = marks.check_marks(groups_path=REAL_GROUPS, font_path=REAL_FONT)
+@pytest.mark.parametrize("font", marks.DEFAULT_FONTS, ids=lambda p: p.stem)
+def test_real_sawa_family_has_full_mark_coverage(font: Path) -> None:
+    font_path = REPO_ROOT / font
+    if not font_path.exists():
+        pytest.skip("font not built; run `uv run --group build sawa build fonts` first")
+    result = marks.check_marks(groups_path=REAL_GROUPS, font_path=font_path)
     assert result.errors == []
