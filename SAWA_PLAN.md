@@ -211,6 +211,8 @@ Each `commands` entry runs in a fresh shell from the repo root, so a `cd` only l
 8. Build the Astro site with the report bundle and fonts → deploy to GitHub Pages.
 9. On tags: zip `report/<version>/` and attach it to the GitHub Release (Read the Docs picks it up from there).
 
+**Implemented so far:** step 7 (all Python checks plus `sawa check i18n`; the site's own `check`/`test`/`lint:css`/`test:e2e`), the site build half of step 8 (without the report bundle or fonts, since steps 2–6 don't exist yet), and the Pages deploy half of step 8. Steps 2–6 and 9 are still outline only. One-time manual step, not done by the workflow: set the repo's Pages source to "GitHub Actions" under Settings → Pages.
+
 ## 10. Where the real site differs from the mockup
 
 - The mockup simulates Sawa (Literata + Amiri Quran at 130% inside a fixed line height). The real site loads the real font; no per-script span tricks.
