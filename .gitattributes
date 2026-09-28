@@ -3,3 +3,4 @@
 *.otf binary
 *.woff binary
 *.woff2 binary
+*.gz binary
