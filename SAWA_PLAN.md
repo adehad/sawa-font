@@ -37,7 +37,7 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 12. **Look:** neutral tool with a light manuscript touch — warm off-white, ink text, one deep-green accent, real dark mode. UI text set in Sawa (stand-in until it exists).
 13. **Build report:** Chromatic-style layered viewer; CI produces SVG layers + JSON; Fontbakery HTML hosted as a static page.
 14. **Report history:** latest on GitHub Pages; versioned history on **Read the Docs** using `build.commands` to run Astro in *report-only* mode against each release's bundle, downloaded from GitHub Releases.
-15. **Automation language:** Python, managed with **uv**, linted and formatted with **ruff**, type-checked with **ty**. No shell scripts: all automation lives in one package, `src/sawa_tools/`, behind a single `sawa` console entry point with argparse subcommands (`uv run sawa report shaping`, `uv run sawa check i18n`, `uv run sawa rtd base-path`). The same commands run on Windows, macOS and Linux. Tests use pytest. The font toolchain (fontmake etc.) sits in a uv dependency group `build`, so site-only checks don't install it. Node is used only inside `site/`.
+15. **Automation language:** Python, managed with **uv**, linted and formatted with **ruff**, type-checked with **ty**. No shell scripts: all automation lives in one package, `src/sawa_tools/`, behind a single `sawa` console entry point with argparse subcommands (`uv run sawa report shaping`, `uv run sawa check i18n`, `uv run sawa rtd base-path`). The same commands run on Windows, macOS and Linux. Tests use pytest. The font toolchain (fontmake etc.) sits in a uv dependency group `build`, so site-only checks don't install it. Bun is used only inside `site/`.
 16. **Latin:** start from Amiri's own Latin (four styles, same design origin as the Arabic); revisit only if it loses to other faces in the Compare view. Coverage target, checked by Fontbakery's `glyphsets` checks and reported per set in `coverage.json`:
     - required at launch: GF Latin Core + Arabic romanisation (ALA-LC / DIN 31635: ḥ ṣ ḍ ṭ ẓ ʿ ʾ ā ī ū ḏ ṯ ẖ ġ š ž č ǧ). A release fails CI if either regresses. Amiri 1.003 has the romanisation set; whether it passes GF Latin Core is unverified until the first Fontbakery run.
     - next: GF Latin Plus.
@@ -205,13 +205,15 @@ build:
     python: "3.13"
   commands:
     - pip install uv
+    - npm install -g bun@1.4.0
     - uv run sawa rtd fetch-bundle --version "$READTHEDOCS_VERSION" --out report/current
-    - cd site && npm ci
-    - cd site && REPORT_ONLY=1 REPORT_DIR=../report/current BASE_PATH="$(uv run sawa rtd base-path)" npm run build
+    - cd site && bun install --frozen-lockfile
+    - cd site && REPORT_ONLY=1 REPORT_DIR=../report/current BASE_PATH="$(uv run sawa rtd base-path)" bun run build
     - uv run sawa rtd copy-tree site/dist "$READTHEDOCS_OUTPUT/html"
 ```
 
 Each `commands` entry runs in a fresh shell from the repo root, so a `cd` only lasts for its own line. Read the Docs builds run on Linux; the `sawa` CLI keeps the same steps runnable locally on Windows.
+`npm install -g bun` bootstraps bun from the image's existing Node.js tool, landing on npm's global bin, which is already on `PATH` for every later `commands` line; a curl install would need its own `PATH` export repeated on each line since every line is a fresh shell.
 
 - `REPORT_ONLY=1` builds just the report page (both locales) plus minimal layout.
 - `BASE_PATH` is derived from `READTHEDOCS_CANONICAL_URL`, because pages are served under `/<lang>/<version>/`. Read the Docs' `<lang>` is the project language, not the site locale, so a real URL looks like `/en/v1.0/ar/report/`. That double prefix is expected; don't "fix" it.
@@ -257,7 +259,7 @@ Testing split:
 - **Playwright** end-to-end tests in `site/tests/e2e/`, run in CI against the built `dist/` served under `/sawa-font/` (this also catches hard-coded links). Each ✅ below has a named test: the language-switch check in Playwright, key parity in pytest, the stylelint rule in Vitest.
 - **Vitest** for `t()` and the URL-state parser/serialiser (`ov` syntax, out-of-range `size`, unknown font ids).
 - **pytest** for `sawa_tools`, including `sawa check i18n`.
-- Local commands: repo root `uv run pytest`, `uv run sawa check i18n`, `uv run ruff check`, `uv run ty check`; in `site/` `npm run check`, `npm test`, `npm run lint:css`, `npm run test:e2e` (builds first).
+- Local commands: repo root `uv run pytest`, `uv run sawa check i18n`, `uv run ruff check`, `uv run ty check`; in `site/` `bun run check`, `bun run test`, `bun run lint:css`, `bun run test:e2e` (builds first).
 - No screenshot diffs of the site; glyph rendering is covered by the report pipeline.
 
 **M1 — Skeleton**

@@ -11,7 +11,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     // Builds fresh so dist/ and its baked-in BASE_PATH can't be stale, then serves it.
-    command: `npm run build && npm run preview -- --port ${PORT}`,
+    command: `bun run build && bun run preview -- --port ${PORT}`,
     // The preview server has no route at bare "/"; only the base path resolves.
     url: `${BASE_URL}${BASE_PATH}`,
     // Always run the command above; reusing a leftover server would skip the
