@@ -1,16 +1,188 @@
 ---
 import Base from "../../layouts/Base.astro";
-import { t } from "../../i18n/t";
+import SampleControls from "../../components/compare/SampleControls.astro";
+import TypeControls from "../../components/compare/TypeControls.astro";
+import FontRoster from "../../components/compare/FontRoster.astro";
+import LocalFont from "../../components/compare/LocalFont.astro";
+import Stage from "../../components/compare/Stage.astro";
+import { CLIENT_KEYS, messagesJson, type ClientMessages } from "../../components/compare/messages";
+import { rawMessage, t } from "../../i18n/t";
 import { LOCALES, type Locale } from "../../i18n/locales";
+import { loadFontsData } from "../../fonts/load";
+import { paletteCss } from "../../fonts/specimen";
 
 export function getStaticPaths() {
   return LOCALES.map((lang) => ({ params: { lang } }));
 }
 
 const locale = Astro.params.lang as Locale;
+const clientMessages = Object.fromEntries(
+  CLIENT_KEYS.map((key) => [key, rawMessage(locale, key)]),
+) as ClientMessages;
+const pageCss = paletteCss(loadFontsData());
 ---
 
-<Base locale={locale} page="compare" title={t(locale, "compare.title")}>
-  <h1>{t(locale, "compare.h1")}</h1>
-  <p>{t(locale, "compare.body")}</p>
+<Base locale={locale} page="compare" title={t(locale, "compare.title")} wide>
+  <style is:global set:html={pageCss}></style>
+  <script type="application/json" data-compare-messages set:html={messagesJson(clientMessages)}
+  ></script>
+  <div class="compare">
+    <header class="compare-intro">
+      <h1>{t(locale, "compare.h1")}</h1>
+      <p>{t(locale, "compare.body")}</p>
+    </header>
+    <div class="compare-controls" role="group" aria-label={t(locale, "compare.controls")}>
+      <SampleControls locale={locale} />
+      <TypeControls locale={locale} />
+      <FontRoster locale={locale} />
+      <LocalFont locale={locale} />
+    </div>
+    <Stage locale={locale} />
+  </div>
 </Base>
+
+<script>
+  import { COMPARE_WEIGHT } from "../../fonts/compare";
+  import { storedWeight } from "../../fonts/specimen";
+  import { commit, readState } from "../../state/store";
+
+  const loaded = readState();
+  const weight = storedWeight(loaded.weight, COMPARE_WEIGHT);
+  if (weight !== loaded.weight) {
+    commit({ ...loaded, weight });
+  }
+</script>
+
+<style is:global>
+  .compare {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .compare-intro h1 {
+    margin-block: 0 0.5rem;
+  }
+
+  .compare-intro p {
+    margin: 0;
+    max-inline-size: 46rem;
+    color: var(--color-muted);
+  }
+
+  .compare-controls {
+    display: grid;
+    align-content: start;
+    gap: 1.25rem;
+    min-inline-size: 0;
+    padding: 1.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+  }
+
+  @media (width >= 64rem) {
+    .compare {
+      grid-template-columns: minmax(17rem, 21rem) minmax(0, 1fr);
+      align-items: start;
+    }
+
+    .compare-intro {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .compare .control {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .compare .control legend,
+  .compare .control > label,
+  .compare .control-head label,
+  .compare .control-title {
+    padding: 0;
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .compare .control legend {
+    margin-block-end: 0.5rem;
+  }
+
+  .compare .control-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+
+  .compare .control-head output {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+  }
+
+  .compare .control-note {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+
+  .compare .control-note:empty {
+    display: none;
+  }
+
+  .compare input[type="range"] {
+    inline-size: 100%;
+    min-block-size: 44px;
+    margin: 0;
+    accent-color: var(--color-accent);
+  }
+
+  .compare select,
+  .compare textarea {
+    inline-size: 100%;
+    border: 1px solid var(--color-rule);
+    border-radius: 0.4rem;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font: inherit;
+  }
+
+  .compare .control > select {
+    min-block-size: 44px;
+    padding-inline: 0.5rem;
+  }
+
+  .compare textarea {
+    padding: 0.6rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    resize: vertical;
+  }
+
+  .compare .check {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-block-size: 44px;
+  }
+
+  .compare .check input {
+    flex: none;
+    inline-size: 1.3rem;
+    block-size: 1.3rem;
+    margin: 0;
+    accent-color: var(--color-accent);
+  }
+
+  .compare .check label {
+    cursor: pointer;
+  }
+</style>

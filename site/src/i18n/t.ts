@@ -35,3 +35,8 @@ export function t(
   }
   return formatted;
 }
+
+/** The unformatted ICU message, for pages that format a few messages in the browser. */
+export function rawMessage(locale: Locale, key: MessageKey): string {
+  return messages[locale][key];
+}

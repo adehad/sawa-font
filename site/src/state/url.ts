@@ -49,15 +49,15 @@ const DEFAULT_FONTS: readonly FontOrLocal[] = ["sawa-serif", "sawa-sans", "statu
 
 const VALID_FONT_IDS = new Set<string>([...FONT_ROSTER, "local"]);
 
-function isPreset(value: string): value is Preset {
+export function isPreset(value: string): value is Preset {
   return (PRESETS as readonly string[]).includes(value);
 }
 
-function isPalette(value: string): value is Palette {
+export function isPalette(value: string): value is Palette {
   return (PALETTES as readonly string[]).includes(value);
 }
 
-function isBackground(value: string): value is Background {
+export function isBackground(value: string): value is Background {
   return (BACKGROUNDS as readonly string[]).includes(value);
 }
 
@@ -65,7 +65,7 @@ function isSpecimenFamily(value: string): value is SpecimenFamily {
   return (SPECIMEN_FAMILIES as readonly string[]).includes(value);
 }
 
-function isFontOrLocal(value: string): value is FontOrLocal {
+export function isFontOrLocal(value: string): value is FontOrLocal {
   return VALID_FONT_IDS.has(value);
 }
 
@@ -490,4 +490,92 @@ export function setFonts(state: PlaygroundState, fonts: readonly string[]): Play
     fonts: nextFonts,
     overrides: normalizeOverrides(remapped, nextFonts, state.palette),
   };
+}
+
+/** Adds `id` to the end of the fonts list, or removes it if it's already there. */
+export function toggleFont(state: PlaygroundState, id: FontOrLocal): PlaygroundState {
+  const next = state.fonts.includes(id)
+    ? state.fonts.filter((font) => font !== id)
+    : [...state.fonts, id];
+  return next.length === 0 ? state : setFonts(state, next);
+}
+
+/** Moves the font at 0-based `index` by `delta` places; out-of-range moves are no-ops. */
+export function moveFont(state: PlaygroundState, index: number, delta: number): PlaygroundState {
+  const target = index + delta;
+  if (index < 0 || index >= state.fonts.length || target < 0 || target >= state.fonts.length) {
+    return state;
+  }
+  const next = [...state.fonts];
+  const [moved] = next.splice(index, 1);
+  if (moved === undefined) {
+    return state;
+  }
+  next.splice(target, 0, moved);
+  return setFonts(state, next);
+}
+
+/**
+ * Sets one key of a 1-based pane's override. A value equal to the pane's
+ * shared value clears that key, and an override left with no keys is dropped.
+ */
+export function setOverride(
+  state: PlaygroundState,
+  pane: number,
+  key: "font",
+  value: FontOrLocal,
+): PlaygroundState;
+export function setOverride(
+  state: PlaygroundState,
+  pane: number,
+  key: "pal",
+  value: Palette,
+): PlaygroundState;
+export function setOverride(
+  state: PlaygroundState,
+  pane: number,
+  key: OverrideKey,
+  value: FontOrLocal | Palette,
+): PlaygroundState {
+  const raw: RawOverride[] = state.overrides.map((override) => ({ ...override }));
+  let entry = raw.find((override) => override.pane === pane);
+  if (!entry) {
+    entry = { pane };
+    raw.push(entry);
+  }
+  if (key === "font" && isFontOrLocal(value)) {
+    entry.font = value;
+  } else if (key === "pal" && isPalette(value)) {
+    entry.pal = value;
+  }
+  return { ...state, overrides: normalizeOverrides(raw, state.fonts, state.palette) };
+}
+
+/** Adds `tag` to the feature list, or removes it if it's already there. */
+export function toggleFeature(state: PlaygroundState, tag: string): PlaygroundState {
+  const features = state.features.includes(tag)
+    ? state.features.filter((feature) => feature !== tag)
+    : parseFeatures([...state.features, tag].join(","));
+  return { ...state, features };
+}
+
+/** One pane on screen: its 1-based position and the font and palette it resolves to. */
+export interface VisiblePane {
+  readonly pane: number;
+  readonly font: FontOrLocal;
+  readonly palette: Palette;
+}
+
+/**
+ * The panes the current view shows, each with its palette override applied.
+ * Side by side caps the list with `sideColumns` and applies font overrides
+ * too; stacked shows every font as listed.
+ */
+export function visiblePanes(state: PlaygroundState): VisiblePane[] {
+  const fonts = state.view === "side" ? sideColumns(state) : state.fonts;
+  return fonts.map((font, index) => ({
+    pane: index + 1,
+    font: state.view === "side" ? (paneValue(state, index + 1, "font") ?? font) : font,
+    palette: paneValue(state, index + 1, "pal"),
+  }));
 }

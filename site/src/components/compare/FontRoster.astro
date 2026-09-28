@@ -1,0 +1,223 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { fontNameKey } from "./messages";
+import { FONT_ROSTER } from "../../fonts/roster";
+import { defaultState } from "../../state/url";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const initial = defaultState();
+const choices = [...FONT_ROSTER, "local" as const].map((id) => ({
+  id,
+  label: t(locale, fontNameKey(id)),
+}));
+---
+
+<div class="font-roster" data-font-roster>
+  <fieldset class="control">
+    <legend>{t(locale, "compare.fonts")}</legend>
+    <p class="control-note">{t(locale, "compare.fontsNote")}</p>
+    <div class="chips">
+      {
+        choices.map((choice) => (
+          <button
+            type="button"
+            class="chip-button"
+            data-font-toggle={choice.id}
+            aria-pressed={(initial.fonts as readonly string[]).includes(choice.id) ? "true" : "false"}
+          >
+            {choice.label}
+          </button>
+        ))
+      }
+    </div>
+  </fieldset>
+
+  <div class="control">
+    <h2 class="control-title" id="compare-order-title">{t(locale, "compare.order")}</h2>
+    <ol class="font-order" aria-labelledby="compare-order-title" data-font-order></ol>
+  </div>
+</div>
+
+<script>
+  import { clientFormat, fontNameKey } from "./messages";
+  import { commit, readState, subscribe } from "../../state/store";
+  import { isFontOrLocal, moveFont, toggleFont, type FontOrLocal } from "../../state/url";
+
+  function arrowIcon(direction: "up" | "down"): SVGSVGElement {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", direction === "up" ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6");
+    svg.append(path);
+    return svg;
+  }
+
+  const root = document.querySelector<HTMLElement>("[data-font-roster]");
+  const list = root?.querySelector<HTMLOListElement>("[data-font-order]");
+  if (root && list) {
+    const format = clientFormat();
+    const numbers = new Intl.NumberFormat(document.documentElement.lang);
+    const toggles = root.querySelectorAll<HTMLButtonElement>("[data-font-toggle]");
+
+    function fontName(id: FontOrLocal): string {
+      return format(fontNameKey(id));
+    }
+
+    function moveButton(id: FontOrLocal, index: number, count: number, delta: -1 | 1) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "order-button";
+      button.dataset.move = delta < 0 ? "up" : "down";
+      button.dataset.moveFont = id;
+      button.setAttribute(
+        "aria-label",
+        format(delta < 0 ? "compare.moveUp" : "compare.moveDown", { font: fontName(id) }),
+      );
+      // aria-disabled rather than disabled keeps focus on the button after it
+      // moves its font to the end of the list.
+      const atEnd = delta < 0 ? index === 0 : index === count - 1;
+      button.setAttribute("aria-disabled", String(atEnd));
+      button.append(arrowIcon(delta < 0 ? "up" : "down"));
+      return button;
+    }
+
+    function render(fonts: readonly FontOrLocal[]): void {
+      const focused = document.activeElement;
+      const refocus =
+        focused instanceof HTMLElement && list?.contains(focused)
+          ? { font: focused.dataset.moveFont, move: focused.dataset.move }
+          : undefined;
+      const items = fonts.map((id, index) => {
+        const item = document.createElement("li");
+        item.dataset.orderFont = id;
+        const position = document.createElement("span");
+        position.className = "order-position";
+        position.textContent = numbers.format(index + 1);
+        const name = document.createElement("span");
+        name.className = "order-name";
+        name.textContent = fontName(id);
+        item.append(
+          position,
+          name,
+          moveButton(id, index, fonts.length, -1),
+          moveButton(id, index, fonts.length, 1),
+        );
+        return item;
+      });
+      list?.replaceChildren(...items);
+      if (refocus?.font && refocus.move) {
+        list
+          ?.querySelector<HTMLButtonElement>(
+            `[data-move-font="${refocus.font}"][data-move="${refocus.move}"]`,
+          )
+          ?.focus();
+      }
+    }
+
+    subscribe((state) => {
+      toggles.forEach((toggle) => {
+        const id = toggle.dataset.fontToggle ?? "";
+        toggle.setAttribute("aria-pressed", String(isFontOrLocal(id) && state.fonts.includes(id)));
+      });
+      render(state.fonts);
+    });
+
+    toggles.forEach((toggle) => {
+      toggle.addEventListener("click", () => {
+        const id = toggle.dataset.fontToggle ?? "";
+        if (isFontOrLocal(id)) {
+          commit(toggleFont(readState(), id));
+        }
+      });
+    });
+
+    list.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      const button = event.target.closest<HTMLButtonElement>("[data-move]");
+      if (!button || button.getAttribute("aria-disabled") === "true") {
+        return;
+      }
+      const state = readState();
+      const id = button.dataset.moveFont ?? "";
+      const index = state.fonts.findIndex((font) => font === id);
+      commit(moveFont(state, index, button.dataset.move === "up" ? -1 : 1));
+    });
+  }
+</script>
+
+<style>
+  .font-roster {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .font-order {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .font-order :global(li) {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding-inline-start: 0.6rem;
+    border: 1px solid var(--color-rule);
+    border-radius: 0.4rem;
+    background: var(--color-bg);
+  }
+
+  .font-order :global(.order-name) {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .font-order :global(.order-position) {
+    min-inline-size: 1.5ch;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--color-muted);
+  }
+
+  .font-order :global(.order-button) {
+    display: grid;
+    place-items: center;
+    flex: none;
+    inline-size: 44px;
+    block-size: 44px;
+    padding: 0;
+    border: 0;
+    border-inline-start: 1px solid var(--color-rule);
+    background: transparent;
+    color: var(--color-ink);
+    cursor: pointer;
+  }
+
+  .font-order :global(.order-button[aria-disabled="true"]) {
+    color: var(--color-muted);
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .font-order :global(.order-button svg) {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+</style>

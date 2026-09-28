@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   clampSize,
+  moveFont,
   defaultState,
   paneValue,
   parseState,
   setFonts,
+  setOverride,
   sideColumns,
   toSearch,
+  toggleFeature,
+  toggleFont,
+  visiblePanes,
   type PlaygroundState,
 } from "./url";
 
@@ -745,5 +750,101 @@ describe("clampSize", () => {
     expect(clampSize(8)).toBe(12);
     expect(clampSize(200)).toBe(144);
     expect(clampSize(47.6)).toBe(48);
+  });
+});
+
+describe("toggleFont", () => {
+  it("appends a font that isn't selected", () => {
+    expect(toggleFont(defaultState(), "amiri").fonts).toEqual([
+      "sawa-serif",
+      "sawa-sans",
+      "status",
+      "amiri",
+    ]);
+  });
+
+  it("removes a selected font and drops its override", () => {
+    const state = parseState("ov=2:pal=gray,3:pal=mono");
+    const next = toggleFont(state, "sawa-sans");
+    expect(next.fonts).toEqual(["sawa-serif", "status"]);
+    expect(next.overrides).toEqual([{ pane: 2, pal: "mono" }]);
+  });
+
+  it("never empties the list", () => {
+    const state = parseState("fonts=amiri");
+    expect(toggleFont(state, "amiri")).toBe(state);
+  });
+});
+
+describe("moveFont", () => {
+  it("moves a font down and its override with it", () => {
+    const next = moveFont(parseState("ov=1:pal=gray"), 0, 1);
+    expect(next.fonts).toEqual(["sawa-sans", "sawa-serif", "status"]);
+    expect(next.overrides).toEqual([{ pane: 2, pal: "gray" }]);
+  });
+
+  it("moves a font up", () => {
+    expect(moveFont(defaultState(), 2, -1).fonts).toEqual(["sawa-serif", "status", "sawa-sans"]);
+  });
+
+  it("ignores a move past either end", () => {
+    const state = defaultState();
+    expect(moveFont(state, 0, -1)).toBe(state);
+    expect(moveFont(state, 2, 1)).toBe(state);
+    expect(moveFont(state, 5, -1)).toBe(state);
+  });
+});
+
+describe("setOverride", () => {
+  it("adds a font override for a pane", () => {
+    expect(toSearch(setOverride(defaultState(), 2, "font", "amiri"))).toBe("?ov=2:font=amiri");
+  });
+
+  it("merges keys into an existing override", () => {
+    const state = setOverride(parseState("ov=2:font=amiri"), 2, "pal", "gray");
+    expect(state.overrides).toEqual([{ pane: 2, font: "amiri", pal: "gray" }]);
+  });
+
+  it("clears a key set back to the pane's own value", () => {
+    const state = setOverride(parseState("ov=2:font=amiri;pal=gray"), 2, "font", "sawa-sans");
+    expect(state.overrides).toEqual([{ pane: 2, pal: "gray" }]);
+    expect(setOverride(state, 2, "pal", "groups").overrides).toEqual([]);
+  });
+
+  it("ignores a pane past the fonts list", () => {
+    expect(setOverride(defaultState(), 4, "pal", "gray").overrides).toEqual([]);
+  });
+});
+
+describe("toggleFeature", () => {
+  it("adds and removes a tag", () => {
+    const on = toggleFeature(defaultState(), "ss01");
+    expect(on.features).toEqual(["ss01"]);
+    expect(toggleFeature(on, "ss01").features).toEqual([]);
+  });
+
+  it("drops a tag that isn't four letters or digits", () => {
+    expect(toggleFeature(defaultState(), "ss-1").features).toEqual([]);
+  });
+});
+
+describe("visiblePanes", () => {
+  it("shows every font when stacked, applying palette but not font overrides", () => {
+    const state = parseState(
+      "pal=gray&fonts=amiri,sch,noto,sawa-mono,status&ov=2:font=local,3:pal=mono",
+    );
+    const panes = visiblePanes(state);
+    expect(panes).toHaveLength(5);
+    expect(panes[1]).toEqual({ pane: 2, font: "sch", palette: "gray" });
+    expect(panes[2]).toEqual({ pane: 3, font: "noto", palette: "mono" });
+  });
+
+  it("caps side by side at four panes and applies overrides", () => {
+    const state = parseState(
+      "view=side&fonts=amiri,sch,noto,sawa-mono,status&ov=2:font=local;pal=mono",
+    );
+    const panes = visiblePanes(state);
+    expect(panes.map((pane) => pane.font)).toEqual(["amiri", "local", "noto", "sawa-mono"]);
+    expect(panes[1]?.palette).toBe("mono");
   });
 });

@@ -130,3 +130,37 @@ export const specimenStrings = {
     "}",
   ].join("\n"),
 } as const;
+
+/** One run of specimen text on the Compare page, with a caption for stress tests. */
+export interface SampleBlock {
+  readonly text: string;
+  readonly caption?: StressTest["purpose"];
+}
+
+/**
+ * The Compare page's specimen text for a preset: every mixed sentence or
+ * Fatiha verse on its own line in one block, one block per stress test with
+ * its purpose as the caption, or the custom text as it is.
+ */
+export function compareBlocks(preset: Preset, customText: string): readonly SampleBlock[] {
+  if (preset === "custom") {
+    return [{ text: customText }];
+  }
+  if (preset === "quran") {
+    return [{ text: presets.quran.join("\n") }];
+  }
+  if (preset === "stress") {
+    return presets.stress.map((stressTest) => ({
+      text: stressTest.text,
+      caption: stressTest.purpose,
+    }));
+  }
+  return [{ text: presets.mixed }];
+}
+
+/** The text the Compare sample box shows for a preset, one block per line. */
+export function compareSample(preset: Preset, customText: string): string {
+  return compareBlocks(preset, customText)
+    .map((block) => block.text)
+    .join("\n");
+}

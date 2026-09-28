@@ -1,45 +1,35 @@
 :root {
   color-scheme: light dark;
-  --color-bg: #f7f4ee;
-  --color-ink: #1a1814;
-  --color-accent: #2f5d50;
-  --color-rule: #e3ddd1;
-  --color-muted: #4a453d;
-  --color-surface: #fffdf9;
-  --color-on-accent: #ffffff;
-  --grid-band: rgb(47 93 80 / 0.08);
-  --grid-rule: rgb(47 93 80 / 0.55);
-  --mark-short: #0072b2;
-  --mark-tanween: #c0510a;
-  --mark-sukun: #8e8a82;
-  --mark-shadda: #a8467f;
-  --mark-madd: #00785a;
-  --mark-hamza: #9a6a00;
-  --mark-waqf: #5f5a50;
-  --mark-other: #7a7466;
+  --color-bg: light-dark(#f7f4ee, #16181a);
+  --color-ink: light-dark(#1a1814, #efe9df);
+  --color-accent: light-dark(#2f5d50, #6fbfa8);
+  --color-rule: light-dark(#e3ddd1, #33372f);
+  --color-muted: light-dark(#4a453d, #a9a297);
+  --color-surface: light-dark(#fffdf9, #1e2123);
+  --color-on-accent: light-dark(#ffffff, #10201b);
+  --grid-band: light-dark(rgb(47 93 80 / 0.08), rgb(111 191 168 / 0.1));
+  --grid-rule: light-dark(rgb(47 93 80 / 0.55), rgb(111 191 168 / 0.6));
+  --mark-short: light-dark(#0072b2, #56b4e9);
+  --mark-tanween: light-dark(#c0510a, #f0883e);
+  --mark-sukun: light-dark(#8e8a82, #7a766f);
+  --mark-shadda: light-dark(#a8467f, #e58fc4);
+  --mark-madd: light-dark(#00785a, #3fc79b);
+  --mark-hamza: light-dark(#9a6a00, #e0b440);
+  --mark-waqf: light-dark(#5f5a50, #b8b0a1);
+  --mark-other: light-dark(#7a7466, #948d80);
   --font-serif: Georgia, "Times New Roman", Cambria, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #16181a;
-    --color-ink: #efe9df;
-    --color-accent: #6fbfa8;
-    --color-rule: #33372f;
-    --color-muted: #a9a297;
-    --color-surface: #1e2123;
-    --color-on-accent: #10201b;
-    --grid-band: rgb(111 191 168 / 0.1);
-    --grid-rule: rgb(111 191 168 / 0.6);
-    --mark-short: #56b4e9;
-    --mark-tanween: #f0883e;
-    --mark-sukun: #7a766f;
-    --mark-shadda: #e58fc4;
-    --mark-madd: #3fc79b;
-    --mark-hamza: #e0b440;
-    --mark-waqf: #b8b0a1;
-    --mark-other: #948d80;
-  }
+/*
+ * The tokens resolve through light-dark(), so an element that sets its own
+ * color-scheme gets the matching palette for everything inside it.
+ */
+[data-bg="light"] {
+  color-scheme: light;
+}
+
+[data-bg="dark"] {
+  color-scheme: dark;
 }
 
 * {

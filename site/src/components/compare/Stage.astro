@@ -1,0 +1,226 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+---
+
+<section class="stage" aria-labelledby="compare-specimens-title" data-stage>
+  <h2 id="compare-specimens-title" class="visually-hidden">{t(locale, "compare.specimens")}</h2>
+  <p class="stage-note" data-tanzil-credit hidden>
+    {t(locale, "compare.tanzilCredit")}{" "}
+    <a href="https://tanzil.net" dir="ltr" data-tanzil-link>{t(locale, "tashkeel.creditLink")}</a>
+  </p>
+  <p class="stage-note" data-side-limit hidden>{t(locale, "compare.sideLimit")}</p>
+  <p class="stage-note" data-side-too-few hidden>{t(locale, "compare.sideTooFew")}</p>
+  <p class="stage-note" data-font-overrides-note hidden>{t(locale, "compare.fontOverridesSide")}</p>
+  <p class="stage-note stage-narrow-note" data-side-narrow>{t(locale, "compare.sideNarrow")}</p>
+  <div class="panes" data-panes data-view="stacked"></div>
+</section>
+
+<script>
+  import { mountStage } from "./stage";
+
+  const stage = document.querySelector<HTMLElement>("[data-stage]");
+  const panes = stage?.querySelector<HTMLElement>("[data-panes]");
+  if (stage && panes) {
+    mountStage(stage, panes);
+  }
+</script>
+
+<style>
+  .stage {
+    display: grid;
+    align-content: start;
+    gap: 0.75rem;
+    min-inline-size: 0;
+    padding: 1rem;
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+    background: var(--color-bg);
+    color: var(--color-ink);
+  }
+
+  .stage-note {
+    margin: 0;
+    padding-block: 0.5rem;
+    padding-inline: 0.75rem;
+    border-inline-start: 3px solid var(--color-accent);
+    background: var(--color-surface);
+    font-size: 0.9rem;
+  }
+
+  .stage-note[hidden],
+  .stage-narrow-note {
+    display: none;
+  }
+
+  .stage-note a {
+    display: inline-block;
+    min-block-size: 44px;
+    line-height: 44px;
+  }
+
+  .panes {
+    display: grid;
+    gap: 1rem;
+    min-inline-size: 0;
+  }
+
+  .panes[data-view="side"] {
+    grid-template-columns: repeat(var(--columns, 2), minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .panes :global(.pane) {
+    display: grid;
+    align-content: start;
+    gap: 0.75rem;
+    min-inline-size: 0;
+    padding: 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+  }
+
+  .panes :global(.pane-head) {
+    display: grid;
+    gap: 0.2rem;
+  }
+
+  .panes :global(.pane-name) {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 1.05rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .panes :global(.pane-note),
+  .panes :global(.pane-meta) {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+
+  .panes :global(.pane-overrides) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-block-start: 0.4rem;
+  }
+
+  .panes :global(.pane-override) {
+    display: grid;
+    flex: 1 1 8rem;
+    gap: 0.15rem;
+    min-inline-size: 0;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+  }
+
+  .panes :global(.pane-override select) {
+    inline-size: 100%;
+    min-block-size: 44px;
+    border: 1px solid var(--color-rule);
+    border-radius: 0.4rem;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 0.9rem;
+  }
+
+  .panes :global(.pane-body) {
+    display: grid;
+    gap: 1rem;
+    min-inline-size: 0;
+    font-synthesis: none;
+  }
+
+  .panes[data-view="side"] :global(.pane-body) {
+    max-block-size: min(70vh, 44rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .panes :global(.pane-body[data-pal="mono"]) {
+    font-palette: --sawa-mono;
+  }
+
+  .panes :global(.pane-body[data-pal="gray"]) {
+    font-palette: --sawa-gray;
+  }
+
+  .panes :global(.pane-body[data-pal="groups"]) {
+    font-palette: --sawa-groups;
+  }
+
+  .panes :global(.sample) {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0;
+  }
+
+  .panes :global(.sample-row) {
+    display: grid;
+    gap: 0.1rem;
+  }
+
+  .panes :global(.sample-size) {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--color-muted);
+  }
+
+  .panes :global(.sample-wrap) {
+    position: relative;
+  }
+
+  .panes :global(.sample-text) {
+    margin: 0;
+    font-size: var(--row-size, var(--sample-size, 32px));
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+
+  .panes :global(.sample-caption) {
+    font-family: var(--font-ui);
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: var(--color-muted);
+    line-height: 1.5;
+  }
+
+  .panes :global(.pane-meta:empty) {
+    display: none;
+  }
+
+  .panes :global(.pane-placeholder) {
+    margin: 0;
+    padding: 1rem;
+    border: 1px dashed var(--color-rule);
+    border-radius: 0.4rem;
+    font-family: var(--font-ui);
+    color: var(--color-muted);
+  }
+
+  @media (width < 720px) {
+    .panes[data-view="side"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .panes[data-view="side"] :global(.pane-body) {
+      max-block-size: none;
+      overflow-y: visible;
+    }
+
+    .stage[data-view="side"] .stage-narrow-note {
+      display: block;
+    }
+  }
+</style>

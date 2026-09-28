@@ -1,0 +1,73 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { compareSample } from "../../samples";
+import { defaultState } from "../../state/url";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const initial = defaultState();
+const PRESET_OPTIONS = ["mixed", "quran", "stress", "custom"] as const;
+---
+
+<div class="control" data-sample-controls>
+  <label for="compare-preset">{t(locale, "compare.preset")}</label>
+  <select id="compare-preset" data-preset>
+    {
+      PRESET_OPTIONS.map((preset) => (
+        <option value={preset} selected={preset === initial.preset}>
+          {t(locale, `compare.preset.${preset}`)}
+        </option>
+      ))
+    }
+  </select>
+  <label for="compare-text">{t(locale, "compare.sample")}</label>
+  <textarea
+    id="compare-text"
+    dir="auto"
+    rows="4"
+    spellcheck="false"
+    aria-describedby="compare-text-note"
+    data-sample-input>{compareSample(initial.preset, initial.text)}</textarea
+  >
+  <p id="compare-text-note" class="control-note">{t(locale, "compare.sampleNote")}</p>
+</div>
+
+<script>
+  import { compareSample } from "../../samples";
+  import { commit, readState, subscribe } from "../../state/store";
+  import { isPreset } from "../../state/url";
+
+  const root = document.querySelector<HTMLElement>("[data-sample-controls]");
+  const select = root?.querySelector<HTMLSelectElement>("[data-preset]");
+  const textarea = root?.querySelector<HTMLTextAreaElement>("[data-sample-input]");
+  if (select && textarea) {
+    subscribe((state) => {
+      select.value = state.preset;
+      const text = compareSample(state.preset, state.text);
+      if (textarea.value !== text && document.activeElement !== textarea) {
+        textarea.value = text;
+      }
+    });
+
+    select.addEventListener("change", () => {
+      const preset = select.value;
+      if (!isPreset(preset)) {
+        return;
+      }
+      const state = readState();
+      if (preset === "custom") {
+        commit({ ...state, preset, text: textarea.value });
+      } else {
+        commit({ ...state, preset, text: "" });
+      }
+    });
+
+    textarea.addEventListener("input", () => {
+      commit({ ...readState(), preset: "custom", text: textarea.value });
+    });
+  }
+</script>

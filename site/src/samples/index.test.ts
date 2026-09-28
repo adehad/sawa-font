@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { langRuns, mixedSentences, presets, specimenSample, specimenStrings } from "./index";
+import {
+  compareBlocks,
+  compareSample,
+  langRuns,
+  mixedSentences,
+  presets,
+  specimenSample,
+  specimenStrings,
+} from "./index";
 import uthmaniFatihaRaw from "../../../data/tanzil/uthmani-fatiha.txt?raw";
 
 describe("presets", () => {
@@ -69,5 +77,29 @@ describe("langRuns", () => {
 
   test("tags Arabic letters with their marks as one run", () => {
     expect(langRuns("صَحْرَاء")).toEqual([{ lang: "ar", text: "صَحْرَاء" }]);
+  });
+});
+
+describe("compareBlocks", () => {
+  test("mixed is one block of every sentence, one per line", () => {
+    expect(compareBlocks("mixed", "")).toEqual([{ text: mixedSentences.join("\n") }]);
+  });
+
+  test("quran is the verses verbatim, one per line", () => {
+    expect(compareBlocks("quran", "")).toEqual([{ text: presets.quran.join("\n") }]);
+  });
+
+  test("stress is one block per test, captioned with its purpose", () => {
+    const blocks = compareBlocks("stress", "");
+    expect(blocks).toHaveLength(presets.stress.length);
+    expect(blocks[0]).toEqual({
+      text: presets.stress[0]?.text,
+      caption: presets.stress[0]?.purpose,
+    });
+  });
+
+  test("custom is the text as it is", () => {
+    expect(compareBlocks("custom", "a\nب")).toEqual([{ text: "a\nب" }]);
+    expect(compareSample("custom", "a\nب")).toBe("a\nب");
   });
 });

@@ -1,0 +1,207 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { COMPARE_WEIGHT } from "../../fonts/compare";
+import { MAX_SIZE, MIN_SIZE, defaultState } from "../../state/url";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const initial = defaultState();
+const numbers = new Intl.NumberFormat(locale);
+const DEFAULT_LINE_HEIGHT = 1.5;
+const BACKGROUNDS = ["system", "light", "dark"] as const;
+const VIEWS = ["stacked", "side"] as const;
+---
+
+<div class="type-controls" data-type-controls>
+  <div class="control">
+    <div class="control-head">
+      <label for="compare-size">{t(locale, "compare.size")}</label>
+      <output for="compare-size" data-size-output>{numbers.format(initial.size)}</output>
+    </div>
+    <input
+      id="compare-size"
+      type="range"
+      min={MIN_SIZE}
+      max={MAX_SIZE}
+      step="1"
+      value={initial.size}
+      data-size
+    />
+    <div class="check">
+      <input id="compare-waterfall" type="checkbox" data-waterfall />
+      <label for="compare-waterfall">{t(locale, "compare.waterfall")}</label>
+    </div>
+  </div>
+
+  <div class="control">
+    <div class="control-head">
+      <label for="compare-lh">{t(locale, "compare.lineHeight")}</label>
+      <output for="compare-lh" data-lh-output></output>
+    </div>
+    <input
+      id="compare-lh"
+      type="range"
+      min="0.8"
+      max="3"
+      step="0.05"
+      value={DEFAULT_LINE_HEIGHT}
+      disabled
+      data-lh
+    />
+    <div class="check">
+      <input id="compare-lh-default" type="checkbox" checked data-lh-default />
+      <label for="compare-lh-default">{t(locale, "compare.lineHeightDefault")}</label>
+    </div>
+  </div>
+
+  <div class="control">
+    <div class="control-head">
+      <label for="compare-weight">{t(locale, "compare.weight")}</label>
+      <output for="compare-weight" data-weight-output>{t(locale, "compare.weightDefault")}</output>
+    </div>
+    <input
+      id="compare-weight"
+      type="range"
+      min={COMPARE_WEIGHT.min}
+      max={COMPARE_WEIGHT.max}
+      step="1"
+      value={COMPARE_WEIGHT.default}
+      aria-describedby="compare-weight-note"
+      data-weight
+    />
+    <p id="compare-weight-note" class="control-note">{t(locale, "compare.weightNote")}</p>
+  </div>
+
+  <fieldset class="control">
+    <legend>{t(locale, "compare.background")}</legend>
+    <div class="segmented">
+      {
+        BACKGROUNDS.map((bg) => (
+          <button type="button" data-bg-button={bg} aria-pressed={bg === "system" ? "true" : "false"}>
+            {t(locale, `compare.bg.${bg}`)}
+          </button>
+        ))
+      }
+    </div>
+  </fieldset>
+
+  <fieldset class="control">
+    <legend>{t(locale, "compare.view")}</legend>
+    <div class="segmented">
+      {
+        VIEWS.map((view) => (
+          <button
+            type="button"
+            data-view-button={view}
+            aria-pressed={view === initial.view ? "true" : "false"}
+          >
+            {t(locale, `compare.view.${view}`)}
+          </button>
+        ))
+      }
+    </div>
+  </fieldset>
+</div>
+
+<script>
+  import { clientFormat } from "./messages";
+  import { COMPARE_WEIGHT } from "../../fonts/compare";
+  import { storedWeight } from "../../fonts/specimen";
+  import { commit, readState, subscribe } from "../../state/store";
+  import { clampSize, isBackground } from "../../state/url";
+
+  const root = document.querySelector<HTMLElement>("[data-type-controls]");
+  if (root) {
+    const format = clientFormat();
+    const numbers = new Intl.NumberFormat(document.documentElement.lang);
+    const lhFormat = new Intl.NumberFormat(document.documentElement.lang, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const query = <T extends Element>(selector: string): T | null =>
+      root.querySelector<T>(selector);
+    const size = query<HTMLInputElement>("[data-size]");
+    const sizeOutput = query<HTMLOutputElement>("[data-size-output]");
+    const waterfall = query<HTMLInputElement>("[data-waterfall]");
+    const lh = query<HTMLInputElement>("[data-lh]");
+    const lhOutput = query<HTMLOutputElement>("[data-lh-output]");
+    const lhDefault = query<HTMLInputElement>("[data-lh-default]");
+    const weight = query<HTMLInputElement>("[data-weight]");
+    const weightOutput = query<HTMLOutputElement>("[data-weight-output]");
+    const bgButtons = root.querySelectorAll<HTMLButtonElement>("[data-bg-button]");
+    const viewButtons = root.querySelectorAll<HTMLButtonElement>("[data-view-button]");
+
+    subscribe((state) => {
+      const shownSize = clampSize(state.size);
+      if (size && sizeOutput) {
+        size.value = String(shownSize);
+        sizeOutput.value = numbers.format(shownSize);
+      }
+      if (waterfall) {
+        waterfall.checked = state.waterfall;
+      }
+      if (lh && lhOutput && lhDefault) {
+        const isDefault = state.lineHeight === "default";
+        lhDefault.checked = isDefault;
+        lh.disabled = isDefault;
+        if (!isDefault) {
+          lh.value = String(state.lineHeight);
+        }
+        lhOutput.value = isDefault ? "" : lhFormat.format(Number(lh.value));
+      }
+      if (weight && weightOutput) {
+        weight.value = String(state.weight ?? COMPARE_WEIGHT.default);
+        const text =
+          state.weight === undefined
+            ? format("compare.weightDefault")
+            : numbers.format(state.weight);
+        weightOutput.value = text;
+        weight.setAttribute("aria-valuetext", text);
+      }
+      bgButtons.forEach((button) => {
+        const pressed = (state.background ?? "system") === button.dataset.bgButton;
+        button.setAttribute("aria-pressed", String(pressed));
+      });
+      viewButtons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.viewButton === state.view));
+      });
+    });
+
+    size?.addEventListener("input", () => commit({ ...readState(), size: size.valueAsNumber }));
+    waterfall?.addEventListener("change", () =>
+      commit({ ...readState(), waterfall: waterfall.checked }),
+    );
+    lh?.addEventListener("input", () => commit({ ...readState(), lineHeight: lh.valueAsNumber }));
+    lhDefault?.addEventListener("change", () => {
+      commit({
+        ...readState(),
+        lineHeight: lhDefault.checked || !lh ? "default" : lh.valueAsNumber,
+      });
+    });
+    weight?.addEventListener("input", () => {
+      commit({ ...readState(), weight: storedWeight(weight.valueAsNumber, COMPARE_WEIGHT) });
+    });
+    bgButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const bg = button.dataset.bgButton ?? "";
+        commit({ ...readState(), background: isBackground(bg) ? bg : undefined });
+      });
+    });
+    viewButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        commit({ ...readState(), view: button.dataset.viewButton === "side" ? "side" : "stacked" });
+      });
+    });
+  }
+</script>
+
+<style>
+  .type-controls {
+    display: grid;
+    gap: 1.25rem;
+  }
+</style>
