@@ -297,7 +297,7 @@ def _publish_family(
         cached_paths,
         context=f"family '{family.id}' licence",
     )
-    info = _extract_font_info(TTFont(built.ttf, lazy=True))
+    info = extract_font_info(TTFont(built.ttf, lazy=True))
     return {
         "name": family.name,
         "stack": [family.id],
@@ -483,14 +483,14 @@ def _convert_member(
     font = TTFont(io.BytesIO(data), recalcTimestamp=False)
     # Metrics/features/palette info must come from the TTF tables; converting
     # to woff2 first would mean re-parsing compressed table data for no gain.
-    info = _extract_font_info(font)
+    info = extract_font_info(font)
     font.flavor = "woff2"
     dest.parent.mkdir(parents=True, exist_ok=True)
     font.save(dest)
     return info
 
 
-def _extract_font_info(font: Any) -> dict[str, Any]:
+def extract_font_info(font: Any) -> dict[str, Any]:
     head = font["head"]
     hhea = font["hhea"]
     os2 = font["OS/2"]
