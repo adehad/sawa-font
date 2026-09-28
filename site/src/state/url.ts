@@ -6,6 +6,7 @@ export type Background = "light" | "dark";
 export type ViewMode = "stacked" | "side";
 export type FontOrLocal = FontId | "local";
 export type OverrideKey = "font" | "pal";
+export type SpecimenFamily = "sawa-serif" | "sawa-sans" | "sawa-mono";
 
 export interface PaneOverride {
   readonly pane: number;
@@ -16,6 +17,9 @@ export interface PaneOverride {
 export interface PlaygroundState {
   readonly text: string;
   readonly preset: Preset;
+  readonly family: SpecimenFamily;
+  /** The Specimen's wght; undefined means the family's own default. The page clamps it to the axis. */
+  readonly weight: number | undefined;
   readonly size: number;
   readonly waterfall: boolean;
   readonly lineHeight: "default" | number;
@@ -31,10 +35,14 @@ export interface PlaygroundState {
 const PRESETS = ["mixed", "quran", "stress", "custom"] as const;
 const PALETTES = ["mono", "gray", "groups"] as const;
 const BACKGROUNDS = ["light", "dark"] as const;
+export const SPECIMEN_FAMILIES = ["sawa-serif", "sawa-sans", "sawa-mono"] as const;
 
-const MIN_SIZE = 12;
-const MAX_SIZE = 144;
+export const MIN_SIZE = 12;
+export const MAX_SIZE = 144;
 const DEFAULT_SIZE = 32;
+const DEFAULT_FAMILY: SpecimenFamily = "sawa-serif";
+const MIN_WEIGHT = 1;
+const MAX_WEIGHT = 1000;
 const MIN_LINE_HEIGHT = 0.8;
 const MAX_LINE_HEIGHT = 3;
 const DEFAULT_FONTS: readonly FontOrLocal[] = ["sawa-serif", "sawa-sans", "status"];
@@ -53,12 +61,21 @@ function isBackground(value: string): value is Background {
   return (BACKGROUNDS as readonly string[]).includes(value);
 }
 
+function isSpecimenFamily(value: string): value is SpecimenFamily {
+  return (SPECIMEN_FAMILIES as readonly string[]).includes(value);
+}
+
 function isFontOrLocal(value: string): value is FontOrLocal {
   return VALID_FONT_IDS.has(value);
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/** A font size in px, rounded to a whole pixel inside the schema's 12-144 range. */
+export function clampSize(size: number): number {
+  return clamp(Math.round(size), MIN_SIZE, MAX_SIZE);
 }
 
 function roundTo2(value: number): number {
@@ -74,6 +91,8 @@ export function defaultState(): PlaygroundState {
   return {
     text: "",
     preset: "mixed",
+    family: DEFAULT_FAMILY,
+    weight: undefined,
     size: DEFAULT_SIZE,
     waterfall: false,
     lineHeight: "default",
@@ -95,7 +114,18 @@ function parseSize(raw: string | null): number {
   if (!/^-?\d+$/.test(value)) {
     return DEFAULT_SIZE;
   }
-  return clamp(Number(value), MIN_SIZE, MAX_SIZE);
+  return clampSize(Number(value));
+}
+
+function parseWeight(raw: string | null): number | undefined {
+  if (raw === null) {
+    return undefined;
+  }
+  const value = raw.trim();
+  if (!/^-?\d+$/.test(value)) {
+    return undefined;
+  }
+  return clamp(Number(value), MIN_WEIGHT, MAX_WEIGHT);
 }
 
 function parseLineHeight(raw: string | null): "default" | number {
@@ -262,6 +292,9 @@ export function parseState(search: string | URLSearchParams): PlaygroundState {
   // via a URLSearchParams built by the caller rather than parsed from a string.
   const text = preset === "custom" ? (params.get("text") ?? "").toWellFormed() : "";
 
+  const famRaw = trimmed(params.get("fam"));
+  const family = famRaw !== null && isSpecimenFamily(famRaw) ? famRaw : DEFAULT_FAMILY;
+  const weight = parseWeight(params.get("wght"));
   const size = parseSize(params.get("size"));
   const waterfall = trimmed(params.get("wf")) === "1";
   const lineHeight = parseLineHeight(params.get("lh"));
@@ -278,6 +311,8 @@ export function parseState(search: string | URLSearchParams): PlaygroundState {
   return {
     text,
     preset,
+    family,
+    weight,
     size,
     waterfall,
     lineHeight,
@@ -301,7 +336,12 @@ function isDefaultFonts(fonts: readonly FontOrLocal[]): boolean {
  * the state it's given.
  */
 function normalizeState(state: PlaygroundState): PlaygroundState {
-  const size = clamp(Math.round(state.size), MIN_SIZE, MAX_SIZE);
+  const size = clampSize(state.size);
+  const family = isSpecimenFamily(state.family) ? state.family : DEFAULT_FAMILY;
+  const weight =
+    state.weight === undefined || !Number.isFinite(state.weight)
+      ? undefined
+      : clamp(Math.round(state.weight), MIN_WEIGHT, MAX_WEIGHT);
   const lineHeight =
     state.lineHeight === "default"
       ? "default"
@@ -315,7 +355,7 @@ function normalizeState(state: PlaygroundState): PlaygroundState {
   }));
   const overrides = normalizeOverrides(rawOverrides, fonts, state.palette);
 
-  return { ...state, text, size, lineHeight, fonts, overrides };
+  return { ...state, text, family, weight, size, lineHeight, fonts, overrides };
 }
 
 const READABLE_KEYS = new Set(["fonts", "feat", "ov"]);
@@ -347,6 +387,12 @@ export function toSearch(rawState: PlaygroundState): string {
   }
   if (state.preset !== "mixed") {
     pairs.push(["preset", state.preset]);
+  }
+  if (state.family !== DEFAULT_FAMILY) {
+    pairs.push(["fam", state.family]);
+  }
+  if (state.weight !== undefined) {
+    pairs.push(["wght", String(state.weight)]);
   }
   if (state.size !== DEFAULT_SIZE) {
     pairs.push(["size", String(state.size)]);

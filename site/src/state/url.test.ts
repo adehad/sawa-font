@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  clampSize,
   defaultState,
   paneValue,
   parseState,
@@ -14,6 +15,8 @@ describe("defaultState", () => {
     expect(defaultState()).toEqual({
       text: "",
       preset: "mixed",
+      family: "sawa-serif",
+      weight: undefined,
       size: 32,
       waterfall: false,
       lineHeight: "default",
@@ -420,6 +423,8 @@ describe("canonical order", () => {
     const state: PlaygroundState = {
       text: "hi",
       preset: "custom",
+      family: "sawa-mono",
+      weight: 300,
       size: 40,
       waterfall: true,
       lineHeight: 1.4,
@@ -432,7 +437,7 @@ describe("canonical order", () => {
       overrides: [{ pane: 1, pal: "gray" }],
     };
     expect(toSearch(state)).toBe(
-      "?text=hi&preset=custom&size=40&wf=1&lh=1.4&pal=mono&bg=dark&feat=liga&metrics=1" +
+      "?text=hi&preset=custom&fam=sawa-mono&wght=300&size=40&wf=1&lh=1.4&pal=mono&bg=dark&feat=liga&metrics=1" +
         "&view=side&fonts=amiri,noto&ov=1:pal=gray",
     );
   });
@@ -676,5 +681,69 @@ describe("setFonts", () => {
     const state = defaultState();
     const next = setFonts(state, ["bogus", "alsobogus"]);
     expect(next.fonts).toEqual(["sawa-serif", "sawa-sans", "status"]);
+  });
+});
+
+describe("fam and wght", () => {
+  it("parses each specimen family", () => {
+    expect(parseState("fam=sawa-sans").family).toBe("sawa-sans");
+    expect(parseState("fam=sawa-mono").family).toBe("sawa-mono");
+  });
+
+  it("falls back to sawa-serif for an unknown or non-Sawa family", () => {
+    expect(parseState("fam=bogus").family).toBe("sawa-serif");
+    expect(parseState("fam=amiri").family).toBe("sawa-serif");
+  });
+
+  it("omits the default family", () => {
+    expect(toSearch({ ...defaultState(), family: "sawa-serif" })).toBe("");
+  });
+
+  it("parses an integer weight", () => {
+    expect(parseState("wght=650").weight).toBe(650);
+  });
+
+  it("leaves weight undefined when absent or non-numeric", () => {
+    expect(parseState("").weight).toBeUndefined();
+    expect(parseState("wght=bold").weight).toBeUndefined();
+    expect(parseState("wght=450.5").weight).toBeUndefined();
+  });
+
+  it("clamps weight to the CSS font-weight range", () => {
+    expect(parseState("wght=0").weight).toBe(1);
+    expect(parseState("wght=5000").weight).toBe(1000);
+  });
+
+  it("rounds a fractional weight passed directly", () => {
+    expect(toSearch({ ...defaultState(), weight: 612.4 })).toBe("?wght=612");
+  });
+
+  it("drops a non-finite weight passed directly", () => {
+    expect(toSearch({ ...defaultState(), weight: Number.NaN })).toBe("");
+  });
+
+  it("serialises fam and wght after preset and before size", () => {
+    const state: PlaygroundState = {
+      ...defaultState(),
+      preset: "custom",
+      text: "hi",
+      family: "sawa-sans",
+      weight: 700,
+      size: 48,
+    };
+    expect(toSearch(state)).toBe("?text=hi&preset=custom&fam=sawa-sans&wght=700&size=48");
+  });
+
+  it("round-trips family and weight", () => {
+    const state: PlaygroundState = { ...defaultState(), family: "sawa-mono", weight: 300 };
+    expect(parseState(toSearch(state))).toEqual(state);
+  });
+});
+
+describe("clampSize", () => {
+  it("rounds and clamps to 12-144", () => {
+    expect(clampSize(8)).toBe(12);
+    expect(clampSize(200)).toBe(144);
+    expect(clampSize(47.6)).toBe(48);
   });
 });
