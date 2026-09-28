@@ -43,3 +43,6 @@ select = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
+
+[tool.ty.environment]
+python = "./.venv"
