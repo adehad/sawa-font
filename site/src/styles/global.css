@@ -31,7 +31,7 @@ body {
 body {
   background: var(--color-bg);
   color: var(--color-ink);
-  font-family: var(--font-serif);
+  font-family: var(--font-ui, var(--font-serif));
   line-height: 1.5;
 }
 

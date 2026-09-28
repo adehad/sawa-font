@@ -20,5 +20,17 @@
   "about.h1": "About Sawa",
   "about.body": "Sawa (سوا), meaning \"together\" in Arabic, is a bilingual type family built on the open-source Amiri typeface and released under the SIL Open Font License.",
   "footer.license": "Fonts under SIL OFL 1.1",
-  "footer.source": "Source on GitHub"
+  "footer.source": "Source on GitHub",
+  "font.sawa.name": "Sawa",
+  "font.sawa.note": "Stand-in: Amiri until the first Sawa build",
+  "font.status.name": "Status quo",
+  "font.status.note": "Source Sans 3, no Arabic: your system's Arabic fallback",
+  "font.amiri.name": "Amiri",
+  "font.amiri.note": "Upstream base, OFL",
+  "font.amiriq.name": "Amiri Quran",
+  "font.amiriq.note": "Reference for fully vowelled text",
+  "font.sch.name": "Scheherazade New",
+  "font.sch.note": "Reference, OFL",
+  "font.noto.name": "Noto Naskh Arabic",
+  "font.noto.note": "Noto Serif for Latin, Noto Naskh for Arabic"
 }

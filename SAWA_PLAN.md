@@ -70,8 +70,9 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 │  ├─ src/i18n/t.ts                      # typed t() over intl-messageformat
 │  ├─ src/i18n/locales.ts                # locale ids, autonyms, dir, storage key
 │  ├─ src/i18n/paths.ts                  # page list + base-aware URL helpers
-│  ├─ src/layouts/Base.astro             # lang/dir, header, nav, switcher, footer
+│  ├─ src/layouts/Base.astro             # lang/dir, header, nav, switcher, footer, @font-face
 │  ├─ src/styles/global.css              # colour tokens + dark mode
+│  ├─ src/fonts/types.ts, load.ts, css.ts, roster.ts  # fonts.json → @font-face + font-family CSS
 │  ├─ src/pages/index.astro              # `/` locale redirect
 │  ├─ src/pages/[lang]/index.astro        # Specimen
 │  ├─ src/pages/[lang]/compare.astro
@@ -141,6 +142,8 @@ Language switch links carry the current query string. Use `history.replaceState`
 | `local` | user file | `FontFace` from a file input | Loaded in the browser only; never uploaded. This is how fonts we may not redistribute (e.g. KFGQPC) get compared, so never add a download for them |
 
 Self-host every font (no third-party font CDN), with `font-display: swap`. Palettes are chosen with `@font-palette-values` + `font-palette`; ship light and dark palette variants.
+
+`sawa build fonts` also writes `<out>/fonts.json`, read from each TTF before its woff2 conversion: per font id, its CSS family stack and, per family, its faces (family/weight/style/file) and real metrics (`unitsPerEm`, hhea/typo/win, x-height, cap-height), GSUB/GPOS feature and script tags, and COLR/CPAL info. The site loads this at build time (`site/src/fonts/`) to write the `@font-face` rules and the `--font-ui` stack, and will later drive the feature panel, metrics overlay and palette control from it. The site never fakes any of this: a font with no CPAL table reports `cpal: null`, and the palette control must say the font has no colour palettes rather than showing an empty or default one.
 
 ## 8. Build report
 

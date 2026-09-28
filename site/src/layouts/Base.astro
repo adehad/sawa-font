@@ -4,6 +4,8 @@ import LanguageSwitcher from "../components/LanguageSwitcher.astro";
 import { t, type MessageKey } from "../i18n/t";
 import { LOCALES, LOCALE_INFO, type Locale } from "../i18n/locales";
 import { localizedPath, PAGE_NAMES, type PageName } from "../i18n/paths";
+import { loadFontsData } from "../fonts/load";
+import { fontFaceCss, fontStack } from "../fonts/css";
 
 interface Props {
   locale: Locale;
@@ -19,6 +21,18 @@ const navEntries: { name: PageName; labelKey: MessageKey }[] = PAGE_NAMES.map((n
   name,
   labelKey: `nav.${name}` as MessageKey,
 }));
+
+const fontsData = loadFontsData();
+const uiFontStack = fontStack(fontsData, "sawa");
+const fontStyles = `${fontFaceCss(fontsData, base)}\n\n:root {\n  --font-ui: ${uiFontStack};\n}`;
+
+const sawaRegular = fontsData.fonts.sawa?.faces.find(
+  (face) => face.weight === 400 && face.style === "normal",
+);
+if (!sawaRegular) {
+  throw new Error("fonts.json: font 'sawa' has no weight-400 normal face to preload");
+}
+const sawaRegularHref = `${base}fonts/${sawaRegular.file}`;
 ---
 
 <!doctype html>
@@ -27,6 +41,14 @@ const navEntries: { name: PageName; labelKey: MessageKey }[] = PAGE_NAMES.map((n
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href={sawaRegularHref}
+      crossorigin="anonymous"
+    />
+    <style is:global set:html={fontStyles}></style>
     {
       LOCALES.map((altLocale) => (
         <link
