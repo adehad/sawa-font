@@ -244,6 +244,8 @@ Each `commands` entry runs in a fresh shell from the repo root, so a `cd` only l
 ## 11. Licence obligations
 
 - **Tanzil:** text is used verbatim, never altered. Copy the exact licence wording from Tanzil's own terms page into `data/tanzil/` and quote it from there; don't paraphrase it as a Creative Commons licence name in the site or canvas. Credit Tanzil.net with a link to http://tanzil.net wherever the text appears (footer + preset menu). Keep Tanzil's copyright notice in the data files. For "no tashkeel" views, use Tanzil's own variant; never strip marks yourself.
+  - `data/tanzil/uthmani-fatiha.txt` and `simple-clean-fatiha.txt` hold a committed excerpt (Al-Fatiha 1:1-7), copied byte-exact from a full download, followed by that download's complete copyright block, also byte-exact. `data/tanzil/README.md` records the source URLs (with their exact query params), fetch date, and the sha256 of each full download. These files must never be edited by hand; a pytest pins each excerpt's verse lines and copyright block by sha256 so an accidental edit fails CI.
+  - Tanzil's default Uthmani output never uses U+06E1 (round sukun) or U+08F0-08F2 (open tanween). The "different tanween shapes" option adds U+06ED (small low meem) after tanween marks, for the me_quran font (99 occurrences in the default text, 4807 with the option). We use the default output; `tests/strings/stress.json` supplies U+06E1 and U+08F0-08F2 directly.
 - **OFL fonts:** ship each font's `OFL.txt`. Amiri 1.003 declares no Reserved Font Name (its licence header names only the copyright holders). Still keep "Amiri" out of Sawa's family names.
 - **Mixed sentences:** written for the project, CC0; say so on the About page.
 - No English Quran translations (common ones are under copyright).
@@ -288,4 +290,3 @@ Testing split:
 - Kawkab Mono licence.
 - Whether older Amiri releases declared a Reserved Font Name (1.003 does not).
 - Trademark check on "Sawa" (UK IPO, WIPO) before public release.
-- Whether Tanzil's "different tanween shapes" option produces codepoints Amiri renders; otherwise use the default output.
