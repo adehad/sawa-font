@@ -142,6 +142,14 @@ describe("readSfnt", () => {
     expect(await readSfnt(bytes.buffer)).toEqual({ kind: "woff2" });
   });
 
+  it("reports a truncated table directory as unreadable without throwing", async () => {
+    const whole = new Uint8Array(sfnt({ head, hhea, "OS/2": os2(false) }));
+    expect(await readSfnt(whole.slice(0, 20).buffer)).toEqual({ kind: "unreadable" });
+    const lying = new DataView(whole.slice(0, 12).buffer);
+    lying.setUint16(4, 40);
+    expect(await readSfnt(lying.buffer)).toEqual({ kind: "unreadable" });
+  });
+
   it("reports anything else as unreadable", async () => {
     expect(await readSfnt(new TextEncoder().encode("not a font at all").buffer)).toEqual({
       kind: "unreadable",

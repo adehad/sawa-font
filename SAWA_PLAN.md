@@ -143,7 +143,7 @@ Language switch links carry the current query string. Use `history.replaceState`
 - `size`: integer only; out of range clamps to 12–144; anything non-numeric falls back to the default.
 - `wght`: integer only, clamped to 1–1000 by the state module; anything non-numeric falls back to the default. The state module doesn't know axis ranges, so the page clamps it to the selected family's `wght` axis from `fonts.json` and drops it when it equals that axis's default.
 - `lh`: `default` or a number clamped to 0.8–3, serialised with at most 2 decimals and no trailing zeros.
-- `feat`: only tags matching `[A-Za-z0-9]{4}` are kept, de-duplicated, in first-seen order.
+- `feat`: only tags matching `[A-Za-z0-9]{4}` are kept, de-duplicated, in first-seen order. It lists the features toggled away from their default: an off-by-default feature (`ss01`, `onum`) listed is on, and a default-on one (`liga`, `clig`, `calt`, `kern`) listed is off. Required shaping features (`rlig`, `ccmp`, `init`, ...) are shown read-only.
 - `fonts`: unknown ids and duplicates (keeping the first) are dropped; an empty result falls back to the default. The side view shows 2–4 columns but the state module doesn't enforce a maximum; `sideColumns()` caps a state's fonts list at 4 for that view.
 - `ov` entries for a pane beyond the `fonts` list, or a pane repeated more than once (first wins), or a key equal to that pane's own resolved value, are dropped.
 - `ov` panes are positional, not tied to a font: reordering or removing entries in `fonts` directly would silently reassign an override to a different font. The UI calls `setFonts()` to change the fonts list, which remaps each override to its font's new position and drops it if that font left.
@@ -279,10 +279,11 @@ Testing split:
 - ✅ Stylelint fails on a physical `margin-left` outside the allow-list.
 
 **M2 — Specimen + Compare**
-- Font loading, roster toggles, both layouts, all controls, URL state, palettes with legend, local font loading.
-- ✅ Every control round-trips through the URL (reload restores the exact view).
-- ✅ In the Arabic UI, side-by-side panes run right to left; specimen text direction is unchanged.
-- ✅ The status quo pairing visibly uses the system Arabic fallback.
+- Done: font loading, roster toggles, both layouts, all controls, URL state, local font loading (TTF/OTF/WOFF metrics and features read in the browser; WOFF2 loads but reports its metrics as unavailable), OpenType feature panel, metrics overlay.
+- Remaining: palettes. No Sawa family has a CPAL table yet, so the palette controls only say so; the legend on the Specimen page shows the planned grouping. The palette switch and per-pane palette selects need re-checking once COLR/CPAL palettes land.
+- ✅ Every control round-trips through the URL (reload restores the exact view): `compare.spec.ts` "every control round-trips through the URL" and "the shared and per-pane palettes round-trip through the URL"; Specimen controls in `specimen.spec.ts`.
+- ✅ In the Arabic UI, side-by-side panes run right to left; specimen text direction is unchanged: `compare.spec.ts` "in the Arabic UI the side-by-side columns run right to left".
+- ✅ The status quo pairing visibly uses the system Arabic fallback: `compare.spec.ts` "the status quo pane uses Source Sans with the system's own Arabic" (its stack has no Arabic web font, and alef's width changes with the fallback after Source Sans while Latin's doesn't).
 
 **M3 — Report pipeline**
 - CI produces the bundle (§8.1) with the Sawa families; report page renders it; Fontbakery page hosted.
