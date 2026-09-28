@@ -1,0 +1,47 @@
+{
+  "groups": [
+    {
+      "id": "short",
+      "codepoints": ["U+064E..U+0650"]
+    },
+    {
+      "id": "tanween",
+      "codepoints": ["U+064B..U+064D", "U+08F0..U+08F2"]
+    },
+    {
+      "id": "sukun",
+      "codepoints": ["U+0652", "U+06E1"]
+    },
+    {
+      "id": "shadda",
+      "codepoints": ["U+0651"]
+    },
+    {
+      "id": "madd",
+      "codepoints": ["U+0653", "U+0670", "U+06E5", "U+06E6", "U+0656"]
+    },
+    {
+      "id": "hamza",
+      "codepoints": ["U+0654", "U+0655"]
+    },
+    {
+      "id": "waqf",
+      "codepoints": ["U+06D6..U+06DC"]
+    },
+    {
+      "id": "other",
+      "codepoints": [
+        "U+0610..U+061A",
+        "U+0657..U+065F",
+        "U+06DF..U+06E0",
+        "U+06E2..U+06E4",
+        "U+06E7..U+06E8",
+        "U+06EA..U+06ED",
+        "U+08D1",
+        "U+08D3..U+08E1",
+        "U+08E3..U+08EF",
+        "U+08F3..U+08FF"
+      ]
+    }
+  ]
+}

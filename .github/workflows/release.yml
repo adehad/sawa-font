@@ -49,6 +49,9 @@ jobs:
       - name: Fetch roster fonts
         working-directory: .
         run: uv run --locked --group build sawa build fonts
+      - name: Check mark-group coverage
+        working-directory: .
+        run: uv run --locked --group build sawa check marks
       - uses: actions/setup-node@v7
         with:
           node-version: "22"

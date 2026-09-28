@@ -60,7 +60,7 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 │  ├─ cli.py                 # argparse entry point
 │  ├─ build/                 # `sawa build fonts`: fontmake/fontTools, CPAL palettes from mark-groups.json
 │  ├─ report/                # shaping, render, diff, manifest/metrics/coverage writers
-│  ├─ checks/                # i18n parity, mark-group coverage
+│  ├─ checks/                # i18n.py (i18n parity), marks.py (`sawa check marks`: mark-group coverage)
 │  └─ rtd.py                 # fetch-bundle, base-path, copy-tree
 ├─ tests/python/             # pytest suite for sawa_tools
 ├─ .cache/                   # downloaded font archives, git-ignored
@@ -182,7 +182,7 @@ report/<version>/
 - Diff regions: rasterise the current and previous releases' layers, diff them, and store bounding boxes. The site draws boxes; it never computes diffs.
 - Baseline for the diff: on a tag, the previous tag's bundle; on `main`, the latest tag's bundle. With no earlier release, diff against the upstream Amiri layer and mark `diffBaseline: "upstream"` in `test.json`.
 - Test strings come from `tests/strings/stress.json` — the same file the site's "Mark stress test" preset reads.
-- Mark groups come from `data/mark-groups.json`. CI fails if two groups share a codepoint, or if a combining mark the font supports (Unicode category `Mn` in the Arabic blocks) is in no group. Known gaps today: `U+06DD` (end of ayah) and `U+0657–065F`.
+- Mark groups come from `data/mark-groups.json`, checked by `uv run sawa check marks`: it fails if two groups share a codepoint, if a codepoint is malformed, or if a combining mark the font's cmap supports (Unicode category `Mn` in the Arabic blocks) is in no group.
 
 ### 8.2 Viewer (report page)
 
