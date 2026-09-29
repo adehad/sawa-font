@@ -43,12 +43,32 @@
       "kind": "rename",
       "input": { "source": "cascadia", "path": "ttf/CascadiaMono.ttf" },
       "renameFrom": "Cascadia Mono",
-      "notice": "Sawa Mono is derived from Cascadia Mono (OFL 1.1, Copyright (c) 2019 - Present, Microsoft Corporation, with Reserved Font Name Cascadia Code).",
+      "notice": "Sawa Mono is derived from Cascadia Mono (OFL 1.1, Copyright (c) 2019 - Present, Microsoft Corporation, with Reserved Font Name Cascadia Code), with Quranic marks from Noto Sans Arabic and U+02BE, U+02BF from Noto Sans (OFL 1.1, Copyright 2022 The Noto Project Authors).",
       "wght": { "min": 200, "default": 400, "max": 700 },
       "metrics": { "policy": "source", "ascender": 1900, "descender": -480, "lineGap": 0, "winAscent": 2226, "winDescent": 480 },
       "cellWidth": 1200,
-      "coverageGaps": ["U+02BE..U+02BF", "U+0657", "U+0659", "U+065C..U+065E", "U+06D6..U+06DC", "U+06DF..U+06E1", "U+06E3..U+06E7", "U+06E9..U+06ED", "U+08F0..U+08F2"],
-      "licence": [{ "source": "cascadia_licence" }],
+      "markClearance": 0.03,
+      "borrow": [
+        {
+          "source": "noto_sans_arabic",
+          "path": "NotoSansArabic/unhinted/variable-ttf/NotoSansArabic[wdth,wght].ttf",
+          "codepoints": ["U+0657", "U+0659", "U+065C..U+065E", "U+06D6..U+06DC", "U+06DF..U+06E1", "U+06E3..U+06E7", "U+06E9..U+06ED", "U+08F0..U+08F2"],
+          "scaleFrom": ["U+064E", "U+064F"],
+          "pinnedAxes": { "wdth": 100 }
+        },
+        {
+          "source": "noto_sans",
+          "path": "NotoSans/unhinted/variable-ttf/NotoSans[wdth,wght].ttf",
+          "codepoints": ["U+02BE..U+02BF"],
+          "scaleFrom": ["U+02BC"],
+          "pinnedAxes": { "wdth": 100 }
+        }
+      ],
+      "licence": [
+        { "source": "cascadia_licence" },
+        { "source": "noto_sans_arabic", "path": "OFL.txt" },
+        { "source": "noto_sans", "path": "OFL.txt" }
+      ],
       "site": { "generic": "monospace" }
     },
     "sawa-mono-nf": {
@@ -56,12 +76,32 @@
       "kind": "rename",
       "input": { "source": "cascadia", "path": "ttf/CascadiaMonoNF.ttf" },
       "renameFrom": "Cascadia Mono NF",
-      "notice": "Sawa Mono NF is derived from Cascadia Mono NF (OFL 1.1, Copyright (c) 2019 - Present, Microsoft Corporation, with Reserved Font Name Cascadia Code).",
+      "notice": "Sawa Mono NF is derived from Cascadia Mono NF (OFL 1.1, Copyright (c) 2019 - Present, Microsoft Corporation, with Reserved Font Name Cascadia Code), with Quranic marks from Noto Sans Arabic and U+02BE, U+02BF from Noto Sans (OFL 1.1, Copyright 2022 The Noto Project Authors).",
       "wght": { "min": 200, "default": 400, "max": 700 },
       "metrics": { "policy": "source", "ascender": 1900, "descender": -480, "lineGap": 0, "winAscent": 2226, "winDescent": 480 },
       "cellWidth": 1200,
-      "coverageGaps": ["U+02BE..U+02BF", "U+0657", "U+0659", "U+065C..U+065E", "U+06D6..U+06DC", "U+06DF..U+06E1", "U+06E3..U+06E7", "U+06E9..U+06ED", "U+08F0..U+08F2"],
-      "licence": [{ "source": "cascadia_licence" }],
+      "markClearance": 0.03,
+      "borrow": [
+        {
+          "source": "noto_sans_arabic",
+          "path": "NotoSansArabic/unhinted/variable-ttf/NotoSansArabic[wdth,wght].ttf",
+          "codepoints": ["U+0657", "U+0659", "U+065C..U+065E", "U+06D6..U+06DC", "U+06DF..U+06E1", "U+06E3..U+06E7", "U+06E9..U+06ED", "U+08F0..U+08F2"],
+          "scaleFrom": ["U+064E", "U+064F"],
+          "pinnedAxes": { "wdth": 100 }
+        },
+        {
+          "source": "noto_sans",
+          "path": "NotoSans/unhinted/variable-ttf/NotoSans[wdth,wght].ttf",
+          "codepoints": ["U+02BE..U+02BF"],
+          "scaleFrom": ["U+02BC"],
+          "pinnedAxes": { "wdth": 100 }
+        }
+      ],
+      "licence": [
+        { "source": "cascadia_licence" },
+        { "source": "noto_sans_arabic", "path": "OFL.txt" },
+        { "source": "noto_sans", "path": "OFL.txt" }
+      ],
       "site": null
     }
   }

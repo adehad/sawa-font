@@ -255,16 +255,24 @@ def apply_metrics(font: TTFont, metrics: LineMetrics, latin_os2: Any) -> None:
         os2.version = 4
 
 
-def build_variable(masters: Mapping[float, TTFont], wght: WghtRange) -> TTFont:
+def build_variable(
+    masters: Mapping[float, TTFont],
+    wght: WghtRange,
+    user_to_design: list[tuple[float, float]] | None = None,
+) -> TTFont:
+    """The variable font of `masters`, keyed by user-space wght; with
+    `user_to_design`, its avar maps user to design space that way.
+    """
     doc = DesignSpaceDocument()
     axis = AxisDescriptor()
     axis.tag, axis.name = "wght", "Weight"
     axis.minimum, axis.default, axis.maximum = wght.minimum, wght.default, wght.maximum
+    axis.map = list(user_to_design or [])
     doc.addAxis(axis)
     for location, master in sorted(masters.items()):
         source = SourceDescriptor()
         source.font = master
-        source.location = {"Weight": location}
+        source.location = {"Weight": axis.map_forward(location)}
         source.styleName = f"w{location:g}"
         doc.addSource(source)
     font, _, _ = varlib_build(doc, optimize=True)

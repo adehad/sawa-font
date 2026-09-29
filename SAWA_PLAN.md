@@ -16,10 +16,12 @@ Family members, built by `sawa build fonts` from `data/sawa.json` (first review 
 |---|---|---|
 | Sawa Serif | Noto Naskh Arabic 2.021 + Noto Serif 2.015 (upright), Arabic scaled 1.064 (alef height to Latin cap height) | wght 400 to 700 |
 | Sawa Sans | Noto Sans Arabic 2.013 + Noto Sans 2.015, Arabic scale 1.000 | wght 100 to 900 |
-| Sawa Mono | Cascadia Mono 2407.24 (OFL, Reserved Font Name "Cascadia Code"), renamed | wght 200 to 700 |
-| Sawa Mono NF | Cascadia Mono NF 2407.24, renamed; TTF only, not on the site | wght 200 to 700 |
+| Sawa Mono | Cascadia Mono 2407.24 (OFL, Reserved Font Name "Cascadia Code"), renamed, plus 30 marks and letters from Noto Sans Arabic 2.013 and Noto Sans 2.015 (below) | wght 200 to 700 |
+| Sawa Mono NF | Cascadia Mono NF 2407.24, renamed, with the same additions; TTF only, not on the site | wght 200 to 700 |
 
 Every family attaches every combining Arabic mark to its letter (`build/anchors.py`, run on each static master before varLib): a mark no fatha or kasra subtable positions joins that side's classes with an anchor derived from its ink; a letter glyph those subtables lack gets anchors from its ink; every mark-to-mark anchor is set from its mark's ink, so a stacked mark sits clear of the mark under it; and where a mark, or a mark stacked on it, still lands on a letter's ink, a contextual adjustment after the mark-to-mark lookups moves the stack clear of that ink. Both keep the family's `markClearance` (0.03 em) in `data/sawa.json`. The anchored masters are cached in `.cache/masters/` (`build/masters.py`), keyed on the inputs, the master-shaping config and the code that builds them. Mark outlines are never scaled down.
+
+Sawa Mono borrows U+0657, U+0659, U+065C to U+065E, U+06D6 to U+06DC, U+06DF to U+06E1, U+06E3 to U+06E7, U+06E9 to U+06ED and U+08F0 to U+08F2 from Noto Sans Arabic, and U+02BE, U+02BF from Noto Sans (both OFL 1.1, Copyright 2022 The Noto Project Authors), instanced at each Cascadia master (wght 200, 400, 700), scaled to Cascadia's own glyphs (2.070, i.e. 2048/1000 times 1.011, from fatha and damma heights; 3.061 for U+02BE, U+02BF, from U+02BC) and rebuilt with varLib; spacing ones (U+02BE, U+02BF, U+06E5, U+06E6, U+06E9) take the cell width, centred. Name IDs 0 and 5 and the family's OFL.txt credit Noto.
 
 The mono, gray and mark-group palettes will later be COLR/CPAL palettes inside each family, not separate builds.
 
@@ -176,7 +178,7 @@ Language switch links carry the current query string. Use `history.replaceState`
 |---|---|---|---|
 | `sawa-serif` | Sawa Serif | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 400 to 700; headings (`--font-display`) |
 | `sawa-sans` | Sawa Sans | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 100 to 900; UI text (`--font-ui`) |
-| `sawa-mono` | Sawa Mono | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 200 to 700; code and codepoints (`--font-mono`) |
+| `sawa-mono` | Sawa Mono | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 200 to 700; code and codepoints (`--font-mono`). Its Quranic marks missing from Cascadia come from Noto Sans Arabic, U+02BE, U+02BF from Noto Sans (§1); its OFL.txt carries both Noto licences after Cascadia's. The borrowed glyphs carry no TrueType hinting instructions; Cascadia's own glyphs keep theirs |
 | `status` | Status quo | `data/upstream.json` via `sawa build fonts`, OFL, **no Arabic** | Must fall back to the system Arabic font; that's the point. Stays live, so each visitor sees their own fallback. Labelled "Your system's Arabic fallback"; the page does not try to detect which font that is. The Specimen page also shows one static image of the same paragraph on Windows, macOS and Android fallbacks, captured once by hand |
 | `amiri` | Amiri | `data/upstream.json` via `sawa build fonts`, OFL | upstream base. Pinned: aliftype/amiri release 1.003, `Amiri-1.003.zip`, SHA-256 `81af0aff7d2086d8af24cea7202f7546130997982534691373485cd96744d05e`, recorded in `data/upstream.json`. Not google/fonts: its Amiri is 1.002 with broken Latin kerning |
 | `amiriq` | Amiri Quran | `data/upstream.json` via `sawa build fonts` (amiri source), OFL | reference for fully vowelled text; upstream disables some stacking in it |
@@ -320,7 +322,7 @@ Testing split:
 
 **M3 — Report pipeline**
 - CI produces the bundle (§8.1) with the Sawa families; report page renders it; Fontbakery page hosted.
-- Done: the bundle (`sawa report build`, §8.1), committed shaping snapshots for the current fonts (all pass), the CI build, the `report` artifact and the release asset. Sawa Serif differs from its upstream layer in every test, from its 1.064 Arabic scale; Sawa Sans where its marks now attach, stack or clear their letters differently; Sawa Mono renders identically to its upstream layer (no diff regions).
+- Done: the bundle (`sawa report build`, §8.1), committed shaping snapshots for the current fonts (all pass), the CI build, the `report` artifact and the release asset. Sawa Serif differs from its upstream layer in every test, from its 1.064 Arabic scale; Sawa Sans and Sawa Mono where their marks now attach, stack or clear their letters differently, Sawa Mono also where it draws the borrowed marks.
 - Done: the report page (`site/src/pages/[lang]/report.astro`): summary tiles, test list and cards, and the layer viewer (`site/src/components/report/overlay/`) with onion skin, swipe and side by side, all in the URL (§6); the Fontbakery pages are served from `<base>/report-bundle/fontbakery/`.
 - Remaining: `REPORT_ONLY=1` for the Read the Docs build (M4).
 - ✅ Toggling layers, onion, swipe and side-by-side works on every test: `report.spec.ts` "toggling each layer changes its visibility", "onion skin opacity sets the upstream layer's computed opacity", "the swipe divider clips the Sawa layer by pointer and by keyboard", "side by side shows the Sawa and upstream layers in two panes"; every test's layers share one viewBox: "every test's SVG layers share its viewBox".
@@ -352,7 +354,7 @@ Resolved: Kawkab Mono is OFL (Reserved Font Name "Source", by Abdullah Arif) but
   - Options: Quran-safe metrics everywhere (loose Latin); tight metrics and Quran users set a larger line-height; or two builds per family that differ only in vertical metrics. Win metrics stay at the full bounding box in every option so nothing clips.
 - TODO: the clearance lookup from `build/anchors.py` (per-letter contextual moves) is interim; the mark-compaction port replaces it by folding clearance into anchor derivation.
 - Sawa Mono's vertical metrics (0.93/0.23 em, Cascadia's) differ from Serif's and Sans's.
-- Sawa Mono lacks 25 Quranic marks, the open tanween U+08F0 to U+08F2 and U+02BE, U+02BF (all listed as `coverageGaps` in `data/sawa.json`).
+- Sawa Mono's ink reaches +1.33/-0.77 em (tall Quranic marks over tall letters, marks under descenders) against winAscent 1.087 and winDescent 0.234 em, so GDI clips it; settle with the line-box decision above.
 - Vendor ID, version and copyright holder in `data/sawa.json` are placeholders.
 - Whether older Amiri releases declared a Reserved Font Name (1.003 does not).
 - Trademark check on "Sawa" (UK IPO, WIPO) before public release.

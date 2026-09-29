@@ -31,6 +31,7 @@ _KINDS = {"merge": "shared", "rename": "source"}
 _GENERICS = ("serif", "sans-serif", "monospace")
 _CODE_MODULES = (
     "anchors.py",
+    "borrow.py",
     "families.py",
     "harfbuzz.py",
     "ink.py",
@@ -51,6 +52,16 @@ class Member:
 
 
 @dataclass(frozen=True)
+class Borrow:
+    """Glyphs a rename family takes from another variable font (borrow.py)."""
+
+    member: Member
+    codepoints: list[int]
+    scale_from: list[int]
+    pinned_axes: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class Family:
     id: str
     name: str
@@ -67,6 +78,7 @@ class Family:
     notice: str | None = None
     cell_width: int | None = None
     coverage_gaps: list[str] = field(default_factory=list)
+    borrow: list[Borrow] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -100,6 +112,24 @@ def _member(raw: Any, context: str) -> Member:
     return Member(_get(raw, "source", context), raw.get("path"))
 
 
+def _codepoint_list(specs: Any, context: str) -> list[int]:
+    from sawa_tools.checks.marks import MarksError, _parse_codepoints
+
+    try:
+        return [cp for spec in specs for cp in _parse_codepoints(spec)]
+    except MarksError as exc:
+        raise FamilyError(f"{context}: {exc}") from exc
+
+
+def _parse_borrow(raw: Any, context: str) -> Borrow:
+    return Borrow(
+        member=_member(raw, context),
+        codepoints=_codepoint_list(_get(raw, "codepoints", context), context),
+        scale_from=_codepoint_list(_get(raw, "scaleFrom", context), context),
+        pinned_axes={k: float(v) for k, v in raw.get("pinnedAxes", {}).items()},
+    )
+
+
 def _parse_family(family_id: str, raw: Any) -> Family:
     from sawa_tools.build.merge import LineMetrics, WghtRange
 
@@ -125,6 +155,11 @@ def _parse_family(family_id: str, raw: Any) -> Family:
         }
     else:
         inputs = {"input": _member(_get(raw, "input", context), f"{context} input")}
+    borrow = [
+        _parse_borrow(entry, f"{context} borrow") for entry in raw.get("borrow", [])
+    ]
+    for entry in borrow:
+        inputs[f"borrow:{entry.member.source}"] = entry.member
     return Family(
         id=family_id,
         name=_get(raw, "name", context),
@@ -156,6 +191,7 @@ def _parse_family(family_id: str, raw: Any) -> Family:
         notice=_get(raw, "notice", context) if kind == "rename" else None,
         cell_width=raw.get("cellWidth"),
         coverage_gaps=list(raw.get("coverageGaps", [])),
+        borrow=borrow,
         raw=raw,
     )
 
@@ -348,13 +384,37 @@ def _build_rename(
             f"input's {_source_metrics(font)}"
         )
     assert family.rename_from is not None and family.notice is not None
+    derived_from = _describe(sources, member, family.rename_from)
+    lenders = []
+    if family.borrow:
+        from sawa_tools.build.borrow import Borrowed, borrow_glyphs
+
+        borrowed = []
+        for entry in family.borrow:
+            lender = _open(read(entry.member.source, entry.member.path))
+            lenders.append(lender)
+            borrowed.append(
+                Borrowed(lender, entry.codepoints, entry.scale_from, entry.pinned_axes)
+            )
+        font = borrow_glyphs(
+            font,
+            borrowed,
+            family.wght,
+            family.cell_width,
+            _clearance(family),
+            masters_cache,
+        )
+        derived_from += ", with marks from " + " and ".join(
+            _describe(sources, entry.member) for entry in family.borrow
+        )
     rename_family(
         font,
         old_family=family.rename_from,
         new_family=family.name,
         release=release,
         notice=family.notice,
-        derived_from=_describe(sources, member, family.rename_from),
+        derived_from=derived_from,
+        borrowed_copyrights=[_copyright(lender) for lender in lenders],
     )
     # A digital signature over the upstream bytes no longer matches.
     if "DSIG" in font:

@@ -212,13 +212,18 @@ def rename_family(
     release: Release,
     notice: str,
     derived_from: str,
+    borrowed_copyrights: Iterable[str] = (),
 ) -> None:
-    """Renames a single-source family, keeping its fvar instances and STAT."""
+    """Renames a single-source family, keeping its fvar instances and STAT.
+
+    `borrowed_copyrights` are the notices of fonts it took glyphs from.
+    """
     name = font["name"]
     for record in list(name.names):
         if record.nameID in FAMILY_NAME_IDS:
             record.string = rename_text(record.toUnicode(), old_family, new_family)
     copyrights = [r.toUnicode() for r in name.names if r.nameID == 0][:1]
+    copyrights += [f"{line}." for line in merge_copyrights(borrowed_copyrights)]
     name.removeNames(nameID=0)
     # The upstream trademark notice names the upstream family, which this
     # font no longer carries.

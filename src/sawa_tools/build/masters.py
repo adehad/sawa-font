@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
 # The modules whose code decides a master's glyphs, anchors and lookups.
-MASTER_MODULES = ("anchors.py", "harfbuzz.py", "ink.py", "merge.py")
+MASTER_MODULES = ("anchors.py", "borrow.py", "harfbuzz.py", "ink.py", "merge.py")
 
 # Family config keys that change only naming, licensing or publishing.
 _NAMING_KEYS = ("name", "renameFrom", "notice", "licence", "site", "coverageGaps")
