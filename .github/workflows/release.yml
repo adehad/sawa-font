@@ -38,7 +38,10 @@ jobs:
       run:
         working-directory: site
     steps:
+      # Full history and tags, so the report can find the previous release.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
@@ -59,6 +62,31 @@ jobs:
       - name: Check the Sawa families
         working-directory: .
         run: uv run --locked --group build sawa check fonts
+      - name: Fetch the previous release's report
+        id: baseline
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: uv run --locked sawa report baseline --tag "$TAG" --out report/baseline
+      - name: Build the report bundle
+        working-directory: .
+        env:
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+          BASELINE: ${{ steps.baseline.outputs.dir }}
+          # Fontbakery adds a few minutes; pull requests skip it.
+          FONTBAKERY: ${{ github.event_name != 'pull_request' }}
+        run: |
+          args=(--version "$VERSION" --out report/current)
+          if [ -n "$BASELINE" ]; then args+=(--baseline "$BASELINE"); fi
+          if [ "$FONTBAKERY" = true ]; then args+=(--fontbakery); fi
+          uv run --locked --group build --group report sawa report build "${args[@]}"
+      - name: Upload the report bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: report
+          path: report/current
+          retention-days: 30
       - name: Check mark-group coverage
         working-directory: .
         run: uv run --locked --group build sawa check marks
@@ -92,12 +120,40 @@ jobs:
           retention-days: 7
       - name: Build for Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          REPORT_DIR: ../report/current
         run: bun run build
       - name: Upload Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v5
         with:
           path: site/dist
+
+  release:
+    name: Attach the report to the release
+    if: github.ref_type == 'tag'
+    needs: [python, site]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: report
+          path: report
+      - name: Zip the report bundle
+        working-directory: report
+        run: zip -qr "../sawa-report-${GITHUB_REF_NAME}.zip" .
+      # Read the Docs fetches each release's bundle from this asset (§8.3).
+      - name: Upload it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes ""
+          fi
+          gh release upload "$GITHUB_REF_NAME" "sawa-report-${GITHUB_REF_NAME}.zip" --clobber
 
   deploy:
     name: Deploy to GitHub Pages

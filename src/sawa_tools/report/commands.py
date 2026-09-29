@@ -66,6 +66,30 @@ def add_parsers(subparsers: argparse._SubParsersAction) -> None:
     )
     shaping.set_defaults(handler=run_shaping_command)
 
+    baseline = subparsers.add_parser(
+        "baseline",
+        help="Download the previous release's report bundle to diff against",
+    )
+    baseline.add_argument(
+        "--tag",
+        help="The tag being built; its predecessor is the baseline (default: "
+        "the latest tag reachable from HEAD)",
+    )
+    baseline.add_argument(
+        "--out",
+        type=Path,
+        default=Path("report/baseline"),
+        help="Directory to extract the bundle into (default: %(default)s)",
+    )
+    baseline.set_defaults(handler=run_baseline)
+
+
+def run_baseline(args: argparse.Namespace) -> int:
+    from sawa_tools.report.baseline import fetch_baseline
+
+    fetch_baseline(args.tag or None, args.out)
+    return 0
+
 
 def run_shaping_command(args: argparse.Namespace) -> int:
     from sawa_tools.build.families import FamilyError

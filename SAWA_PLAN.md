@@ -244,15 +244,12 @@ Each `commands` entry runs in a fresh shell from the repo root, so a `cd` only l
 
 1. On push to `main` and on tags `v*`.
 2. `uv run sawa build fonts` (downloads the pinned sources, checks their SHA-256, builds the Sawa families into `fonts/` and writes woff2 into `site/public/fonts/`), then `sawa check fonts` and `sawa check marks`.
-3. Run HarfBuzz shaping tests → `report/<version>/shaping.json` (`<version>` is the tag, or `main` for untagged builds).
-4. Render SVG layers and compute diffs against the baseline in §8.1.
-5. Run Fontbakery → HTML report.
-6. Write `manifest.json`, `metrics.json`, `coverage.json`.
+3. to 6. `uv run sawa report baseline` downloads the baseline bundle (the previous tag's `sawa-report-<tag>.zip` release asset on a tag, the latest tag's elsewhere; none means diff against upstream), then one `sawa report build --out report/current` writes the whole §8.1 bundle (with `--fontbakery` on pushes, tags and manual runs; pull requests skip it): shaping, SVG layers and diff regions, Fontbakery, manifest, metrics and coverage. `--version` is the tag, or the commit sha for untagged builds. `report/current` is uploaded as the `report` workflow artifact on every run.
 7. i18n key-parity check, CSS logical-properties lint, `ruff check`, `ruff format --check`, `ty check`.
 8. Build the Astro site with the report bundle and fonts → deploy to GitHub Pages.
-9. On tags: zip `report/<version>/` and attach it to the GitHub Release (Read the Docs picks it up from there).
+9. On tags: the `release` job (`contents: write`) zips the `report` artifact as `sawa-report-<tag>.zip` and attaches it to the GitHub Release, creating the release if missing (Read the Docs picks it up from there).
 
-**Implemented so far:** step 2, step 7 (all Python checks plus `sawa check i18n`; the site's own `check`/`test`/`lint:css`/`test:e2e`), the site build half of step 8 (without the report bundle, since steps 3 to 6 don't exist yet), and the Pages deploy half of step 8. Steps 3 to 6 and 9 are still outline only. One-time manual step, not done by the workflow: set the repo's Pages source to "GitHub Actions" under Settings → Pages.
+**Implemented so far:** steps 2 to 7 and 9, the Pages deploy half of step 8, and the site build half of step 8, which gets `REPORT_DIR=../report/current` but does not read it yet. One-time manual step, not done by the workflow: set the repo's Pages source to "GitHub Actions" under Settings → Pages.
 
 ## 10. Where the real site differs from the mockup
 
@@ -297,6 +294,8 @@ Testing split:
 
 **M3 — Report pipeline**
 - CI produces the bundle (§8.1) with the Sawa families; report page renders it; Fontbakery page hosted.
+- Done: the bundle (`sawa report build`, §8.1), committed shaping snapshots for the current fonts (all pass), the CI build, the `report` artifact and the release asset. Sawa Sans and Sawa Mono render identically to their upstream layers (no diff regions); Sawa Serif differs in every test, from its 1.064 Arabic scale.
+- Remaining: the report page and hosting `fontbakery/index.html` on Pages.
 - ✅ Toggling layers, onion, swipe and side-by-side works on every test.
 - ✅ SVG layers line up pixel-exactly when two identical fonts are stacked.
 
