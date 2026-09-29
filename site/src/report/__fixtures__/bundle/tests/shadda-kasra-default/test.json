@@ -1,0 +1,146 @@
+{
+  "id": "shadda-kasra-default",
+  "purpose": {
+    "en": "Shadda directly above a kasra, in the font's default position.",
+    "ar": "الشدة فوق الكسرة، في الوضع الافتراضي للخط."
+  },
+  "text": "بِّ",
+  "codepoints": ["U+0628", "U+0651", "U+0650"],
+  "features": [],
+  "fontSize": 64,
+  "viewBox": [-16, -104, 96, 168],
+  "layers": [
+    {
+      "id": "sawa-serif",
+      "file": "sawa-serif.svg",
+      "name": "Sawa Serif"
+    },
+    {
+      "id": "upstream-serif",
+      "file": "upstream-serif.svg",
+      "name": "Noto Serif 2.015 + Noto Naskh Arabic 2.021"
+    },
+    {
+      "id": "sawa-sans",
+      "file": "sawa-sans.svg",
+      "name": "Sawa Sans"
+    },
+    {
+      "id": "upstream-sans",
+      "file": "upstream-sans.svg",
+      "name": "Noto Sans 2.015 + Noto Sans Arabic 2.013"
+    },
+    {
+      "id": "sawa-mono",
+      "file": "sawa-mono.svg",
+      "name": "Sawa Mono"
+    },
+    {
+      "id": "upstream-mono",
+      "file": "upstream-mono.svg",
+      "name": "Cascadia Mono 2407.24"
+    }
+  ],
+  "guides": {
+    "sawa-serif": {
+      "ascender": -72.77,
+      "capHeight": -45.7,
+      "xHeight": -34.3,
+      "baseline": 0.0,
+      "descender": 43.2,
+      "lineBoxTop": -72.77,
+      "lineBoxBottom": 43.2
+    },
+    "upstream-serif": {
+      "ascender": -68.42,
+      "capHeight": -45.7,
+      "xHeight": -34.3,
+      "baseline": 0.0,
+      "descender": 40.58,
+      "lineBoxTop": -68.42,
+      "lineBoxBottom": 40.58
+    },
+    "sawa-sans": {
+      "ascender": -87.94,
+      "capHeight": -45.7,
+      "xHeight": -34.3,
+      "baseline": 0.0,
+      "descender": 47.23,
+      "lineBoxTop": -87.94,
+      "lineBoxBottom": 47.23
+    },
+    "upstream-sans": {
+      "ascender": -87.94,
+      "capHeight": -45.7,
+      "xHeight": -34.3,
+      "baseline": 0.0,
+      "descender": 47.23,
+      "lineBoxTop": -87.94,
+      "lineBoxBottom": 47.23
+    },
+    "sawa-mono": {
+      "ascender": -59.38,
+      "capHeight": -44.38,
+      "xHeight": -33.12,
+      "baseline": 0.0,
+      "descender": 15.0,
+      "lineBoxTop": -59.38,
+      "lineBoxBottom": 15.0
+    },
+    "upstream-mono": {
+      "ascender": -59.38,
+      "capHeight": -44.38,
+      "xHeight": -33.12,
+      "baseline": 0.0,
+      "descender": 15.0,
+      "lineBoxTop": -59.38,
+      "lineBoxBottom": 15.0
+    }
+  },
+  "diffBaseline": "upstream",
+  "diffAgainst": {
+    "sawa-serif": "upstream",
+    "sawa-sans": "upstream",
+    "sawa-mono": "upstream"
+  },
+  "diffMethod": {
+    "pxPerUnit": 2.0,
+    "dilatePx": 4
+  },
+  "diffRegions": {
+    "sawa-serif": [
+      {
+        "x": 2.5,
+        "y": -21.0,
+        "width": 20.0,
+        "height": 21.0
+      },
+      {
+        "x": 15.0,
+        "y": -52.0,
+        "width": 18.5,
+        "height": 24.0
+      },
+      {
+        "x": 18.0,
+        "y": 2.5,
+        "width": 14.0,
+        "height": 13.5
+      },
+      {
+        "x": 23.5,
+        "y": -7.5,
+        "width": 6.5,
+        "height": 4.5
+      },
+      {
+        "x": 30.5,
+        "y": -29.5,
+        "width": 20.5,
+        "height": 30.5
+      }
+    ],
+    "sawa-sans": [],
+    "sawa-mono": []
+  }
+}

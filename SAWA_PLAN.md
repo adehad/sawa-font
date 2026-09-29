@@ -249,7 +249,7 @@ Each `commands` entry runs in a fresh shell from the repo root, so a `cd` only l
 8. Build the Astro site with the report bundle and fonts → deploy to GitHub Pages.
 9. On tags: the `release` job (`contents: write`) zips the `report` artifact as `sawa-report-<tag>.zip` and attaches it to the GitHub Release, creating the release if missing (Read the Docs picks it up from there).
 
-**Implemented so far:** steps 2 to 7 and 9, the Pages deploy half of step 8, and the site build half of step 8, which gets `REPORT_DIR=../report/current` but does not read it yet. One-time manual step, not done by the workflow: set the repo's Pages source to "GitHub Actions" under Settings → Pages.
+**Implemented so far:** steps 2 to 9. The site build reads the bundle from `REPORT_DIR` (default `../report/current`, resolved against `site/`), validates it, and copies its SVG layers and Fontbakery pages to `<base>/report-bundle/`; with no bundle the report page says how to make one and the build still succeeds. One-time manual step, not done by the workflow: set the repo's Pages source to "GitHub Actions" under Settings → Pages.
 
 ## 10. Where the real site differs from the mockup
 

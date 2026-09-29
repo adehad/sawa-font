@@ -1,17 +1,20 @@
 ---
 import Base from "../../layouts/Base.astro";
+import NoBundle from "../../components/report/NoBundle.astro";
 import { t } from "../../i18n/t";
 import { LOCALES, type Locale } from "../../i18n/locales";
+import { cachedReport } from "../../report/load";
 
 export function getStaticPaths() {
   return LOCALES.map((lang) => ({ params: { lang } }));
 }
 
 const locale = Astro.params.lang as Locale;
+const report = cachedReport(import.meta.env.SAWA_REPORT_DIR);
 ---
 
 <Base locale={locale} page="report" title={t(locale, "report.title")}>
   <h1>{t(locale, "report.h1")}</h1>
   <p>{t(locale, "report.body")}</p>
-  <p>{t(locale, "report.testsFailed", { count: 0 })}</p>
+  {report.kind === "missing" && <NoBundle locale={locale} />}
 </Base>

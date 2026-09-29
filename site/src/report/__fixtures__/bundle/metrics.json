@@ -1,0 +1,112 @@
+{
+  "families": {
+    "sawa-serif": {
+      "unitsPerEm": 1000,
+      "hhea": {
+        "ascender": 1137,
+        "descender": -675,
+        "lineGap": 0
+      },
+      "typo": {
+        "ascender": 1137,
+        "descender": -675,
+        "lineGap": 0
+      },
+      "win": {
+        "ascent": 1498,
+        "descent": 675
+      },
+      "useTypoMetrics": true,
+      "xHeight": 536,
+      "capHeight": 714,
+      "lineBox": {
+        "source": "typo",
+        "ascender": 1.137,
+        "descender": -0.675,
+        "lineGap": 0.0,
+        "height": 1.812,
+        "winHeight": 2.173
+      },
+      "axes": [
+        {
+          "tag": "wght",
+          "min": 400.0,
+          "default": 400.0,
+          "max": 700.0
+        }
+      ]
+    },
+    "sawa-sans": {
+      "unitsPerEm": 1000,
+      "hhea": {
+        "ascender": 1374,
+        "descender": -738,
+        "lineGap": 0
+      },
+      "typo": {
+        "ascender": 1374,
+        "descender": -738,
+        "lineGap": 0
+      },
+      "win": {
+        "ascent": 1539,
+        "descent": 738
+      },
+      "useTypoMetrics": true,
+      "xHeight": 536,
+      "capHeight": 714,
+      "lineBox": {
+        "source": "typo",
+        "ascender": 1.374,
+        "descender": -0.738,
+        "lineGap": 0.0,
+        "height": 2.112,
+        "winHeight": 2.277
+      },
+      "axes": [
+        {
+          "tag": "wght",
+          "min": 100.0,
+          "default": 400.0,
+          "max": 900.0
+        }
+      ]
+    },
+    "sawa-mono": {
+      "unitsPerEm": 2048,
+      "hhea": {
+        "ascender": 1900,
+        "descender": -480,
+        "lineGap": 0
+      },
+      "typo": {
+        "ascender": 1900,
+        "descender": -480,
+        "lineGap": 0
+      },
+      "win": {
+        "ascent": 2226,
+        "descent": 480
+      },
+      "useTypoMetrics": true,
+      "xHeight": 1060,
+      "capHeight": 1420,
+      "lineBox": {
+        "source": "typo",
+        "ascender": 0.9277,
+        "descender": -0.2344,
+        "lineGap": 0.0,
+        "height": 1.1621,
+        "winHeight": 1.3213
+      },
+      "axes": [
+        {
+          "tag": "wght",
+          "min": 200.0,
+          "default": 400.0,
+          "max": 700.0
+        }
+      ]
+    }
+  }
+}

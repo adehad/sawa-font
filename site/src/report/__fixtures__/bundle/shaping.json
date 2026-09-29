@@ -1,0 +1,59 @@
+{
+  "glyphFields": ["name", "cluster", "xAdvance", "yAdvance", "xOffset", "yOffset"],
+  "summary": {
+    "pass": 6,
+    "fail": 1,
+    "missing": 1
+  },
+  "families": {
+    "sawa-serif": {
+      "shadda-kasra-default": {
+        "wght=400": {
+          "status": "pass",
+          "glyphs": 3
+        },
+        "wght=700": {
+          "status": "pass",
+          "glyphs": 3
+        }
+      }
+    },
+    "sawa-sans": {
+      "shadda-kasra-default": {
+        "wght=100": {
+          "status": "fail",
+          "glyphs": 3,
+          "firstDiff": {
+            "index": 0,
+            "expected": null,
+            "actual": null
+          }
+        },
+        "wght=400": {
+          "status": "missing",
+          "glyphs": 3
+        },
+        "wght=900": {
+          "status": "pass",
+          "glyphs": 3
+        }
+      }
+    },
+    "sawa-mono": {
+      "shadda-kasra-default": {
+        "wght=200": {
+          "status": "pass",
+          "glyphs": 3
+        },
+        "wght=400": {
+          "status": "pass",
+          "glyphs": 3
+        },
+        "wght=700": {
+          "status": "pass",
+          "glyphs": 3
+        }
+      }
+    }
+  }
+}

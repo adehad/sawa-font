@@ -1,0 +1,46 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { BUILD_COMMAND } from "../../report/links";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+---
+
+<section class="no-bundle" data-no-bundle aria-labelledby="no-bundle-title">
+  <h2 id="no-bundle-title">{t(locale, "report.noBundle")}</h2>
+  <p>{t(locale, "report.noBundleHelp")}</p>
+  <pre dir="ltr"><code>{BUILD_COMMAND}</code></pre>
+</section>
+
+<style>
+  .no-bundle {
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--color-rule);
+    border-inline-start: 3px solid var(--color-accent);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+  }
+
+  .no-bundle h2 {
+    margin-block: 0 0.5rem;
+    font-size: 1.2rem;
+  }
+
+  .no-bundle p {
+    margin-block: 0 0.5rem;
+  }
+
+  .no-bundle pre {
+    margin: 0;
+    padding: 0.75rem;
+    overflow-x: auto;
+    border-radius: 0.4rem;
+    background: var(--color-bg);
+    font-size: 0.9rem;
+    text-align: start;
+  }
+</style>
