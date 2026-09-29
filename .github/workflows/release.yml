@@ -110,7 +110,10 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('site/bun.lock') }}
       # --with-deps apt-installs system libraries, which the cache can't hold.
       - run: bunx playwright install --with-deps chromium
+      # Builds the site against the report bundle generated above.
       - run: bun run test:e2e
+        env:
+          REPORT_DIR: ../report/current
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7

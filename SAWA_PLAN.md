@@ -309,9 +309,10 @@ Testing split:
 **M3 — Report pipeline**
 - CI produces the bundle (§8.1) with the Sawa families; report page renders it; Fontbakery page hosted.
 - Done: the bundle (`sawa report build`, §8.1), committed shaping snapshots for the current fonts (all pass), the CI build, the `report` artifact and the release asset. Sawa Sans and Sawa Mono render identically to their upstream layers (no diff regions); Sawa Serif differs in every test, from its 1.064 Arabic scale.
-- Remaining: the report page and hosting `fontbakery/index.html` on Pages.
-- ✅ Toggling layers, onion, swipe and side-by-side works on every test.
-- ✅ SVG layers line up pixel-exactly when two identical fonts are stacked.
+- Done: the report page (`site/src/pages/[lang]/report.astro`): summary tiles, test list and cards, and the layer viewer (`site/src/components/report/overlay/`) with onion skin, swipe and side by side, all in the URL (§6); the Fontbakery pages are served from `<base>/report-bundle/fontbakery/`.
+- Remaining: `REPORT_ONLY=1` for the Read the Docs build (M4).
+- ✅ Toggling layers, onion, swipe and side-by-side works on every test: `report.spec.ts` "toggling each layer changes its visibility", "onion skin opacity sets the upstream layer's computed opacity", "the swipe divider clips the Sawa layer by pointer and by keyboard", "side by side shows the Sawa and upstream layers in two panes"; every test's layers share one viewBox: "every test's SVG layers share its viewBox".
+- ✅ SVG layers line up pixel-exactly when two identical fonts are stacked: `report.spec.ts` "two identical fonts stacked as layers line up pixel-exactly" (Sawa Sans over its upstream layer screenshot identically, with Sawa Serif as the control that must differ).
 
 **M4 — History**
 - Release zip attached on tags; Read the Docs report-only build.
@@ -333,3 +334,4 @@ Resolved: Kawkab Mono is OFL (Reserved Font Name "Source", by Abdullah Arif) but
 - Vendor ID, version and copyright holder in `data/sawa.json` are placeholders.
 - Whether older Amiri releases declared a Reserved Font Name (1.003 does not).
 - Trademark check on "Sawa" (UK IPO, WIPO) before public release.
+- TODO: the Read the Docs project doesn't exist yet. The report page's "Older reports on Read the Docs" link points at a placeholder, `OLDER_REPORTS_URL` in `site/src/report/links.ts` (`https://sawa-font.readthedocs.io/`); confirm the real URL once the project is created.
