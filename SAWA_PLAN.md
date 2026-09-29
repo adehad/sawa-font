@@ -343,7 +343,11 @@ Testing split:
 Resolved: Kawkab Mono is OFL (Reserved Font Name "Source", by Abdullah Arif) but is not used; Sawa Mono comes from Cascadia.
 
 - Simpler letter joins: Amiri's stacked joins (e.g. لمين, نجا) live in the required `rlig` feature and can't be turned off by feature settings. Decide whether Sawa edits those rules.
-- Sawa Sans's line box (2.11 em, from Noto Sans Arabic) makes Latin-only text set loosely.
+- Line box (typo/hhea) per family. Measured on all 6236 Tanzil Uthmani verses, simple-clean, the mixed sentences and Latin with stacked diacritics, at default and max weight:
+  - Current boxes already let adjacent Quran lines collide at `line-height: normal`: Serif 1.812 em (29.9% of line pairs, worst overlap 0.20 em), Mono 1.164 em (97.9%, 0.52 em), Sans 2.112 em (none at 400, 44 pairs at 900).
+  - Quran-safe boxes (zero collisions, 99% of lines inside their box): Serif 2.019 em (1.474/0.545), Sans 2.219 em (1.534/0.685), Mono 1.713 em (1.148/0.565).
+  - Tight boxes for modern Arabic and Latin only: Serif 1.451 em (0.990/0.461), Sans 1.636 em (1.173/0.463), Mono 1.444 em (1.043/0.401).
+  - Options: Quran-safe metrics everywhere (loose Latin); tight metrics and Quran users set a larger line-height; or two builds per family that differ only in vertical metrics. Win metrics stay at the full bounding box in every option so nothing clips.
 - Sawa Mono's vertical metrics (0.93/0.23 em, Cascadia's) differ from Serif's and Sans's.
 - Marks with no anchor in the source, so they sit unattached: Noto Naskh U+0610 to U+0614, U+0618, U+0619, U+08E0, U+08E1; Noto Sans Arabic U+0615 to U+0617, U+06D6 to U+06DC, U+06E8, U+08CC to U+08DF.
 - Sawa Mono lacks 25 Quranic marks, the open tanween U+08F0 to U+08F2 and U+02BE, U+02BF (all listed as `coverageGaps` in `data/sawa.json`).
