@@ -181,6 +181,7 @@ def build_fonts(
                 read=read,
                 fonts_dir=fonts_dir,
                 force=force,
+                masters_dir=cache_dir.parent / "masters",
             )
             state = "built" if built.rebuilt else "up to date"
             print(f"{family.id}: {state}")

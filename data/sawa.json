@@ -14,6 +14,7 @@
       "arabicScale": 1.064,
       "wght": { "min": 400, "default": 400, "max": 700 },
       "pinnedAxes": { "wdth": 100 },
+      "markClearance": 0.03,
       "metrics": { "policy": "shared", "ascender": 1137, "descender": -675, "lineGap": 0, "winAscent": 1498, "winDescent": 675 },
       "licence": [
         { "source": "noto_serif", "path": "OFL.txt" },
@@ -29,6 +30,7 @@
       "arabicScale": 1.0,
       "wght": { "min": 100, "default": 400, "max": 900 },
       "pinnedAxes": { "wdth": 100 },
+      "markClearance": 0.03,
       "metrics": { "policy": "shared", "ascender": 1374, "descender": -738, "lineGap": 0, "winAscent": 1539, "winDescent": 738 },
       "licence": [
         { "source": "noto_sans", "path": "OFL.txt" },

@@ -256,12 +256,12 @@ async function frameWith(page: Page, font: "sawa" | "upstream"): Promise<Buffer>
   return page.locator("[data-frame]").screenshot({ animations: "disabled" });
 }
 
-// Relies on the real bundle: Sawa Sans is built from its upstream fonts
-// without changes, so the two layers have identical outlines. Once Sawa edits
-// Sawa Sans, stack one layer file as both layers instead (e.g. a fixture test
-// whose upstream-sans.svg is a copy of sawa-sans.svg).
+// Relies on the real bundle: in lam-alef-with-marks, Sawa Sans draws the same
+// outlines as its upstream fonts, so the two layers are identical. If a build
+// makes them differ, stack one layer file as both layers instead (e.g. a
+// fixture test whose upstream-sans.svg is a copy of sawa-sans.svg).
 test("two identical fonts stacked as layers line up pixel-exactly", async ({ page }) => {
-  await open(page, `${REPORT}?rt=fatiha-1&rf=sawa-sans&ro=100&rl=sawa,upstream&rz=100`);
+  await open(page, `${REPORT}?rt=lam-alef-with-marks&rf=sawa-sans&ro=100&rl=sawa,upstream&rz=100`);
   await page.addStyleTag({
     content: "[data-overlay] svg[data-font] { color: #000 !important; opacity: 1 !important; }",
   });

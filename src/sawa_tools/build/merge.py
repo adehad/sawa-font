@@ -3,7 +3,8 @@
 Per master location: instance both inputs, scale the Arabic, split the
 codepoints between them, subset and merge into one static font. The masters
 share one set of vertical metrics and are rebuilt into a variable font with
-varLib.
+varLib. Before that, every master attaches the Arabic marks and letters the
+source leaves unattached and clears marks off their letters (anchors.py).
 """
 
 from __future__ import annotations
@@ -27,8 +28,13 @@ from fontTools.unicodedata import script_extension
 from fontTools.varLib import build as varlib_build
 from fontTools.varLib import instancer
 
+from sawa_tools.build.anchors import anchor_masters
+from sawa_tools.build.masters import anchored
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
+
+    from sawa_tools.build.masters import MastersCache
 
 
 def table(font: TTFont, tag: str) -> Any:
@@ -280,6 +286,8 @@ def merge_family(
     wght: WghtRange,
     pinned: Mapping[str, float],
     metrics: LineMetrics,
+    clearance_em: float,
+    masters_cache: MastersCache | None = None,
 ) -> MergeResult:
     """Builds the merged variable font with `metrics` applied to every master.
 
@@ -289,7 +297,15 @@ def merge_family(
     locations = master_locations(
         wght_breakpoints(latin_vf) | wght_breakpoints(arabic_vf), wght
     )
-    masters = {w: make_master(latin_vf, arabic_vf, w, scale, pinned) for w in locations}
+
+    def build() -> dict[float, TTFont]:
+        masters = {
+            w: make_master(latin_vf, arabic_vf, w, scale, pinned) for w in locations
+        }
+        anchor_masters(masters, wght.default, clearance_em)
+        return masters
+
+    masters = anchored(masters_cache, build)
     extents = [y_extent(m) for m in masters.values()]
     derived = derive_metrics(
         (table(latin_vf, "OS/2").sTypoAscender, table(latin_vf, "OS/2").sTypoDescender),

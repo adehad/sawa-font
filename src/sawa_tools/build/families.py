@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    from sawa_tools.build.masters import MastersCache
     from sawa_tools.build.merge import LineMetrics, WghtRange
     from sawa_tools.build.naming import Release
 
@@ -28,7 +29,15 @@ DEFAULT_FONTS_DIR = Path("fonts")
 
 _KINDS = {"merge": "shared", "rename": "source"}
 _GENERICS = ("serif", "sans-serif", "monospace")
-_CODE_MODULES = ("families.py", "merge.py", "naming.py")
+_CODE_MODULES = (
+    "anchors.py",
+    "families.py",
+    "harfbuzz.py",
+    "ink.py",
+    "masters.py",
+    "merge.py",
+    "naming.py",
+)
 
 
 class FamilyError(Exception):
@@ -53,6 +62,7 @@ class Family:
     generic: str | None
     arabic_scale: float = 1.0
     pinned_axes: dict[str, float] = field(default_factory=dict)
+    mark_clearance: float | None = None
     rename_from: str | None = None
     notice: str | None = None
     cell_width: int | None = None
@@ -139,6 +149,9 @@ def _parse_family(family_id: str, raw: Any) -> Family:
         generic=generic,
         arabic_scale=float(raw.get("arabicScale", 1.0)),
         pinned_axes={k: float(v) for k, v in raw.get("pinnedAxes", {}).items()},
+        mark_clearance=(
+            float(raw["markClearance"]) if "markClearance" in raw else None
+        ),
         rename_from=_get(raw, "renameFrom", context) if kind == "rename" else None,
         notice=_get(raw, "notice", context) if kind == "rename" else None,
         cell_width=raw.get("cellWidth"),
@@ -233,11 +246,19 @@ def _copyright(font: Any) -> str:
     return font["name"].getDebugName(0) or ""
 
 
+def _clearance(family: Family) -> float:
+    """The mark clearance every family that anchors marks needs."""
+    if family.mark_clearance is None:
+        raise FamilyError(f"family '{family.id}': missing required key 'markClearance'")
+    return family.mark_clearance
+
+
 def _build_merge(
     family: Family,
     release: Release,
     sources: Mapping[str, Any],
     read: ReadMember,
+    masters_cache: MastersCache | None = None,
 ) -> Any:
     from sawa_tools.build.merge import axis_range, merge_family
     from sawa_tools.build.naming import finalize_merged
@@ -267,6 +288,8 @@ def _build_merge(
         wght=family.wght,
         pinned=family.pinned_axes,
         metrics=family.metrics,
+        clearance_em=_clearance(family),
+        masters_cache=masters_cache,
     )
     if result.derived != family.metrics:
         raise FamilyError(
@@ -309,6 +332,7 @@ def _build_rename(
     release: Release,
     sources: Mapping[str, Any],
     read: ReadMember,
+    masters_cache: MastersCache | None = None,
 ) -> Any:
     from sawa_tools.build.merge import axis_range
     from sawa_tools.build.naming import rename_family
@@ -352,8 +376,13 @@ def build_family(
     read: ReadMember,
     fonts_dir: Path,
     force: bool = False,
+    masters_dir: Path | None = None,
 ) -> BuiltFamily:
-    """Builds one family into `fonts_dir`, or reuses a fresh earlier build."""
+    """Builds one family into `fonts_dir`, or reuses a fresh earlier build.
+
+    With `masters_dir`, keeps the family's anchored masters there and reuses
+    them while their inputs, config and code stay the same (masters.py).
+    """
     for member in [*family.inputs.values(), *family.licence]:
         if member.source not in sources:
             raise FamilyError(f"family '{family.id}': unknown source '{member.source}'")
@@ -371,7 +400,13 @@ def build_family(
         return BuiltFamily(family, ttf, woff2, rebuilt=False)
 
     builder = _build_merge if family.kind == "merge" else _build_rename
-    font = builder(family, config.release, sources, read)
+    cache = None
+    if masters_dir is not None:
+        from sawa_tools.build.masters import MastersCache, masters_key
+
+        shas = {m.source: sources[m.source]["sha256"] for m in family.inputs.values()}
+        cache = MastersCache(masters_dir / family.id, masters_key(family.raw, shas))
+    font = builder(family, config.release, sources, read, cache)
     fonts_dir.mkdir(parents=True, exist_ok=True)
     stamp_path.unlink(missing_ok=True)
     _save_atomic(font, ttf)
