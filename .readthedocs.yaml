@@ -1,0 +1,15 @@
+version: 2
+
+build:
+  os: ubuntu-24.04
+  tools:
+    nodejs: "22"
+    python: "3.13"
+  commands:
+    - pip install uv
+    - npm install -g bun@1.4.0
+    - uv run --locked --group build sawa build fonts
+    - uv run --locked sawa rtd fetch-bundle --version "$READTHEDOCS_VERSION_NAME" --out report/current
+    - cd site && bun install --frozen-lockfile
+    - cd site && export BASE_PATH="$(uv run sawa rtd base-path)" && test -n "$BASE_PATH" && REPORT_ONLY=1 REPORT_DIR=../report/current bun run build
+    - uv run sawa rtd copy-tree site/dist "$READTHEDOCS_OUTPUT/html"

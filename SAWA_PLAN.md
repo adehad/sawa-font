@@ -228,10 +228,11 @@ report/<version>/
 
 ### 8.3 History on Read the Docs
 
-`.readthedocs.yaml` sketch:
+`.readthedocs.yaml` (repo root):
 
 ```yaml
 version: 2
+
 build:
   os: ubuntu-24.04
   tools:
@@ -240,19 +241,28 @@ build:
   commands:
     - pip install uv
     - npm install -g bun@1.4.0
-    - uv run sawa rtd fetch-bundle --version "$READTHEDOCS_VERSION" --out report/current
+    - uv run --locked --group build sawa build fonts
+    - uv run --locked sawa rtd fetch-bundle --version "$READTHEDOCS_VERSION_NAME" --out report/current
     - cd site && bun install --frozen-lockfile
-    - cd site && REPORT_ONLY=1 REPORT_DIR=../report/current BASE_PATH="$(uv run sawa rtd base-path)" bun run build
+    - cd site && export BASE_PATH="$(uv run sawa rtd base-path)" && test -n "$BASE_PATH" && REPORT_ONLY=1 REPORT_DIR=../report/current bun run build
     - uv run sawa rtd copy-tree site/dist "$READTHEDOCS_OUTPUT/html"
 ```
 
 Each `commands` entry runs in a fresh shell from the repo root, so a `cd` only lasts for its own line. Read the Docs builds run on Linux; the `sawa` CLI keeps the same steps runnable locally on Windows.
 `npm install -g bun` bootstraps bun from the image's existing Node.js tool, landing on npm's global bin, which is already on `PATH` for every later `commands` line; a curl install would need its own `PATH` export repeated on each line since every line is a fresh shell.
+`sawa build fonts` runs the same full command as CI (§9 step 2): the report page needs the Sawa family woff2s and `site/public/fonts/fonts.json`, and there's no lighter "Sawa families only" mode, so this also downloads and builds the whole roster (~2 minutes); the report-only build simply never links to the pages that would use it.
 
-- `REPORT_ONLY=1` builds just the report page (both locales) plus minimal layout.
-- `BASE_PATH` is derived from `READTHEDOCS_CANONICAL_URL`, because pages are served under `/<lang>/<version>/`. Read the Docs' `<lang>` is the project language, not the site locale, so a real URL looks like `/en/v1.0/ar/report/`. That double prefix is expected; don't "fix" it.
-- Read the Docs builds from tags; `latest` may point at `main`.
+Implemented:
+- `sawa rtd fetch-bundle --version <v> --out <dir>` (`src/sawa_tools/rtd.py`): for a tag, downloads `sawa-report-<tag>.zip` from that tag's GitHub release via the public, unauthenticated REST API (`GET /repos/adehad/sawa-font/releases/tags/<tag>`) and its asset's `browser_download_url`; for `latest` or `stable`, Read the Docs' names for the default-branch and stable-branch builds, takes the newest release via `GET /repos/adehad/sawa-font/releases/latest` (skips prereleases and drafts, GitHub's own definition of "latest"). `.readthedocs.yaml` passes `$READTHEDOCS_VERSION_NAME`, not `$READTHEDOCS_VERSION`: the former is the actual tag name Read the Docs checked out, the latter a slug that need not match it. A 403/429 with no rate-limit quota left (checked via the `X-RateLimit-Remaining`/`X-RateLimit-Reset` headers) fails immediately with the reset time in the message rather than burning retries on a request that cannot succeed sooner; other transient failures retry twice with a short, increasing backoff (1s, 2s). A 404 (no matching release, or a release with no bundle asset) writes nothing and returns cleanly, so the site build still succeeds and the report page shows its no-bundle message. Zip extraction rejects absolute paths, `..` members and Windows drive-relative members (`C:foo`); before removing an existing `--out`, it also refuses when that path is the working directory or one of its ancestors.
+- `sawa rtd base-path`: prints `READTHEDOCS_CANONICAL_URL`'s path component (leading and trailing slash), or `/` with the variable unset.
+- `sawa rtd copy-tree <src> <dst>`: cross-platform recursive copy, replacing `<dst>`; refuses when `<src>` and `<dst>` are the same path or one contains the other.
+- `REPORT_ONLY=1` (site side): `getStaticPaths` returns `[]` for the Specimen, Compare and About pages, so only the report page (both locales) and the root `/` redirect build; the redirect targets `<base><locale>/report/` instead of the Specimen page. The base layout's nav and brand link hide the missing pages, its injected `@font-face` CSS is scoped to the three Sawa families (`fonts/css.ts`'s `fontFaceCss(..., SAWA_FONT_IDS)`), and the built `dist/fonts` directory is pruned to just those families' woff2s after the build (the report page never links to the rest of the comparison roster, but Astro's public-dir copy ships it verbatim otherwise). A second Playwright project (`site/playwright.report-only.config.ts`, `bun run test:e2e:report-only`) builds the site this way under a versioned base path and audits it the way `link-audit.spec.ts` audits the full build: only the expected pages exist, `dist/fonts` holds only the Sawa families, no link points outside the base path, the language switch and root redirect work, and no request for a built page 404s.
+
+- `BASE_PATH` is derived from `READTHEDOCS_CANONICAL_URL`, because pages are served under `/<lang>/<version>/`. Read the Docs' `<lang>` is the project language, not the site locale, so a real URL looks like `/en/v1.0/ar/report/`. That double prefix is expected; don't "fix" it. `.readthedocs.yaml` exports `BASE_PATH` from `sawa rtd base-path` and checks it is non-empty before building, so a failure in that step stops the build instead of silently building under the wrong base.
+- Read the Docs builds from tags; `latest` and `stable` may point at `main` (or whichever branch each tracks). `fetch-bundle`'s `latest`/`stable` handling is about which *bundle* to show, not which page gets built: the report-only site build itself always builds from whatever branch or tag Read the Docs checked out for that version, `fetch-bundle` just downloads the newest tagged release's bundle into it.
 - The free Community plan shows small ethical ads; accepted.
+
+Checked against Read the Docs' own v2 config reference (docs.readthedocs.com): `build.os: ubuntu-24.04`, `tools.nodejs: "22"`, `tools.python: "3.13"` are all listed as supported values; `build.commands` is documented to fully replace the default build steps (no Sphinx/MkDocs assumptions to satisfy); `$READTHEDOCS_OUTPUT/html` is the documented location for the final HTML. Not verified: an actual Read the Docs build, since that needs the project to exist (below); the local simulation in this repo's history stands in for that.
 
 ## 9. CI workflow (`release.yml`, outline)
 
@@ -316,7 +326,13 @@ Testing split:
 
 **M4 — History**
 - Release zip attached on tags; Read the Docs report-only build.
-- ✅ Two tagged releases show as two versions on Read the Docs with working asset paths.
+- Done: `sawa rtd fetch-bundle` / `base-path` / `copy-tree` (§8.3), the `REPORT_ONLY=1` site build, `.readthedocs.yaml`. Simulated locally end to end (fetch-bundle against the real, currently release-less repo; the report-only build served under `/en/latest/` with a static server) since there is no Read the Docs project yet to build against for real.
+- ✅ Two tagged releases show as two versions on Read the Docs with working asset paths: blocked on the project existing; only the repo owner can do this, at readthedocs.org:
+  1. Sign in with the GitHub account that owns (or administers) `adehad/sawa-font`, then "Import a Project" and pick it; this installs the Read the Docs GitHub App/webhook.
+  2. Project Admin → Settings: confirm the config file is picked up as `.readthedocs.yaml` at the repo root (the default).
+  3. Project Admin → Versions: activate `latest` (tracks `main`) and activate each `v*` tag as its own version. Only activated versions build and appear in the version switcher.
+  4. Trigger a build for `latest` and for at least two tags (push, or "Build Version" in the dashboard), and confirm both appear in the version flyout with the report page loading and its SVG/Fontbakery assets resolving under `/<lang>/<version>/report-bundle/...`.
+  5. Once the project exists, replace the `OLDER_REPORTS_URL` placeholder in `site/src/report/links.ts` with its real subdomain (§13).
 
 **Later**
 - Connect Hosted Weblate (flat JSON component; confirm libre-plan eligibility first).
