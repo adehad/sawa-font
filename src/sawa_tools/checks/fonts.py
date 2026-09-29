@@ -3,8 +3,10 @@
 Per family: the wght axis matches the config, the instancer works at the
 axis minimum, default and maximum, HarfBuzz shapes Latin, Arabic and mixed
 lines without .notdef at those weights, the line box matches the config,
-no family name carries a reserved upstream name, and a monospace family's
-advances are all zero or its cell width.
+no family name carries a reserved upstream name, a monospace family's
+advances are all zero or its cell width, and every mark in
+data/mark-groups.json the font maps is attached and clear of its letter at
+those weights (see attachment.py).
 """
 
 from __future__ import annotations
@@ -25,7 +27,13 @@ from sawa_tools.build.families import (
     FamilyError,
     load_config,
 )
-from sawa_tools.checks.marks import MarksError, _parse_codepoints
+from sawa_tools.checks.attachment import DEFAULT_MAX_GAP_EM
+from sawa_tools.checks.marks import (
+    DEFAULT_GROUPS,
+    MarksError,
+    _parse_codepoints,
+    load_groups,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -69,6 +77,20 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
         default=DEFAULT_FONTS_DIR,
         help="Directory holding the built TTFs (default: %(default)s)",
     )
+    parser.add_argument(
+        "--groups",
+        type=Path,
+        default=DEFAULT_GROUPS,
+        help="Mark groups whose marks must be attached and clear of their "
+        "letter (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--max-mark-gap",
+        type=float,
+        default=DEFAULT_MAX_GAP_EM,
+        help="Largest gap, in em, allowed between a mark's ink and its "
+        "letter's (default: %(default)s)",
+    )
     parser.set_defaults(handler=run)
 
 
@@ -76,10 +98,16 @@ def run(args: argparse.Namespace) -> int:
     try:
         config = load_config(args.families)
         lines = sample_lines(DEFAULT_STRESS, DEFAULT_MIXED, DEFAULT_TANZIL)
+        marks = mark_codepoints(args.groups)
         failed = False
         for family in config.families:
             errors = check_family(
-                family, args.fonts_dir / family.ttf_name, config.reserved_names, lines
+                family,
+                args.fonts_dir / family.ttf_name,
+                config.reserved_names,
+                lines,
+                marks=marks,
+                max_mark_gap=args.max_mark_gap,
             )
             for error in errors:
                 print(f"{family.id}: {error}", file=sys.stderr)
@@ -125,6 +153,16 @@ def sample_lines(stress: Path, mixed: Path, tanzil_dir: Path) -> list[Line]:
         for sentence in _read_json(mixed)["sentences"]
     ]
     return lines
+
+
+def mark_codepoints(groups: Path) -> set[int]:
+    try:
+        parsed, errors = load_groups(groups)
+    except MarksError as exc:
+        raise FontsCheckError(str(exc)) from exc
+    if errors:
+        raise FontsCheckError("; ".join(errors))
+    return set().union(*parsed.values()) if parsed else set()
 
 
 def gap_codepoints(specs: Iterable[str]) -> set[int]:
@@ -223,7 +261,13 @@ def shaping_errors(
 
 
 def check_family(
-    family: Family, ttf: Path, reserved: list[str], lines: list[Line]
+    family: Family,
+    ttf: Path,
+    reserved: list[str],
+    lines: list[Line],
+    *,
+    marks: Iterable[int] = (),
+    max_mark_gap: float = DEFAULT_MAX_GAP_EM,
 ) -> list[str]:
     try:
         from fontTools.ttLib import TTFont
@@ -276,6 +320,19 @@ def check_family(
     shaped = [Line(line.label, without(line.text, gaps)) for line in lines]
     errors += shaping_errors(data, weights, shaped, cmap)
 
+    from sawa_tools.checks.attachment import (
+        attachment_errors,
+        checked_marks,
+        mark_stacks,
+        placement_errors,
+        stack_errors,
+    )
+
+    errors += attachment_errors(font, marks)
+    errors += placement_errors(
+        data, checked_marks(cmap, marks), weights, max_gap_em=max_mark_gap
+    )
+    errors += stack_errors(data, mark_stacks(font, marks), weights)
     errors += line_box_errors(font, family)
     errors += name_errors(font, family.cell_width)
     errors += [

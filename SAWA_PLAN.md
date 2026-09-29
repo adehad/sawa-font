@@ -222,6 +222,7 @@ report/<version>/
 - Fontbakery: the universal profile, run once per family, opt-in because it adds a large dependency tree; `ttx_roundtrip` is excluded (about ten minutes on these variable fonts, against about a minute and a half for the rest), and the manifest records the exclusion and each family's status counts.
 - Test strings come from `tests/strings/stress.json`, the same file the site's "Mark stress test" preset reads.
 - Mark groups come from `data/mark-groups.json`, checked by `uv run sawa check marks`: it fails if two groups share a codepoint, if a codepoint is malformed, or if a combining mark the font's cmap supports (Unicode category `Mn` in the Arabic blocks) is in no group.
+- `sawa check fonts` also fails, per family, when a mark from `data/mark-groups.json` that the font maps is not a GDEF mark, is attached to no letter (no MarkBase subtable with alef as a base positions it), or, shaped by HarfBuzz on beh, alef, lam, kaf, final yeh and final noon at the wght minimum, default and maximum, overlaps the letter's ink (dots and signs included) or sits more than `--max-mark-gap` (0.25 em) from it; and when any pair of those marks a mark-to-mark subtable stacks, shaped on the same letters and weights, puts two of the letter's, the first mark's and the second mark's inks over each other.
 
 ### 8.2 Viewer (report page)
 
