@@ -114,6 +114,9 @@ jobs:
       - run: bun run test:e2e
         env:
           REPORT_DIR: ../report/current
+      - run: bun run test:e2e:report-only
+        env:
+          REPORT_DIR: ../report/current
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7

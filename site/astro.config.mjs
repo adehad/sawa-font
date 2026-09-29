@@ -8,6 +8,9 @@ export default defineConfig({
   trailingSlash: "always",
   integrations: [reportBundle()],
   vite: {
+    define: {
+      "import.meta.env.SAWA_REPORT_ONLY": JSON.stringify(process.env.REPORT_ONLY === "1"),
+    },
     server: {
       // site/src/samples reads tests/strings and data/tanzil from outside
       // this project's root.

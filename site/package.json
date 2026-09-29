@@ -14,7 +14,8 @@
     "lint": "oxlint --deny-warnings",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:report-only": "playwright test --config=playwright.report-only.config.ts"
   },
   "dependencies": {
     "astro": "^7.3.5",

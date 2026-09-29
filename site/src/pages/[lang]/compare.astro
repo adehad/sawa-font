@@ -12,8 +12,12 @@ import { rawMessage, t } from "../../i18n/t";
 import { LOCALES, type Locale } from "../../i18n/locales";
 import { loadFontsData } from "../../fonts/load";
 import { paletteCss } from "../../fonts/specimen";
+import { isReportOnly } from "../../report/mode";
 
 export function getStaticPaths() {
+  if (isReportOnly()) {
+    return [];
+  }
   return LOCALES.map((lang) => ({ params: { lang } }));
 }
 

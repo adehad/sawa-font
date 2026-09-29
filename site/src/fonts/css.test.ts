@@ -108,6 +108,17 @@ describe("fontFaceCss", () => {
     const css = fontFaceCss(FIXTURE, "/sawa-font/");
     expect(css).toContain("font-weight: 200 700;");
   });
+
+  test("with `only`, emits rules for just the listed font ids", () => {
+    const css = fontFaceCss(FIXTURE, "/sawa-font/", ["sawa-mono"]);
+    expect(css.match(/@font-face/g)).toHaveLength(1);
+    expect(css).toContain('font-family: "sawa-mono";');
+  });
+
+  test("with `only`, silently drops an id missing from the data", () => {
+    const css = fontFaceCss(FIXTURE, "/sawa-font/", ["sawa-mono", "sawa-serif"]);
+    expect(css.match(/@font-face/g)).toHaveLength(1);
+  });
 });
 
 describe("fontStack", () => {

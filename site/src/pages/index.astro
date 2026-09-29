@@ -1,14 +1,17 @@
 ---
 import "../styles/global.css";
 import { DEFAULT_LOCALE, LOCALES, LOCALE_INFO } from "../i18n/locales";
-import { localizedPath } from "../i18n/paths";
+import { localizedPath, type PageName } from "../i18n/paths";
 import { t } from "../i18n/t";
+import { isReportOnly } from "../report/mode";
 
 const base = import.meta.env.BASE_URL;
 const siteName = t(DEFAULT_LOCALE, "site.name");
+// REPORT_ONLY builds only the report page, so the redirect must land there.
+const homePage: PageName = isReportOnly() ? "report" : "specimen";
 const links = LOCALES.map((locale) => ({
   locale,
-  href: localizedPath(base, locale, "specimen"),
+  href: localizedPath(base, locale, homePage),
   info: LOCALE_INFO[locale],
 }));
 ---
@@ -35,7 +38,8 @@ const links = LOCALES.map((locale) => ({
     </ul>
     <script>
       import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, isLocale, type Locale } from "../i18n/locales";
-      import { localizedPath } from "../i18n/paths";
+      import { localizedPath, type PageName } from "../i18n/paths";
+      import { isReportOnly } from "../report/mode";
 
       function pickLocale(): Locale {
         try {
@@ -58,7 +62,8 @@ const links = LOCALES.map((locale) => ({
       }
 
       const locale = pickLocale();
-      const target = localizedPath(import.meta.env.BASE_URL, locale, "specimen");
+      const homePage: PageName = isReportOnly() ? "report" : "specimen";
+      const target = localizedPath(import.meta.env.BASE_URL, locale, homePage);
       location.replace(target + location.search + location.hash);
     </script>
   </body>

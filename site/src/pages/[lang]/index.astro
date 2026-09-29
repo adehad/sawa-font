@@ -12,8 +12,12 @@ import { loadFontsData } from "../../fonts/load";
 import { fontStack } from "../../fonts/css";
 import { lineMetrics, paletteCss, specimenCss, specimenFamilies } from "../../fonts/specimen";
 import { SPECIMEN_FAMILIES, defaultState } from "../../state/url";
+import { isReportOnly } from "../../report/mode";
 
 export function getStaticPaths() {
+  if (isReportOnly()) {
+    return [];
+  }
   return LOCALES.map((lang) => ({ params: { lang } }));
 }
 

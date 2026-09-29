@@ -5,7 +5,8 @@ import { t, type MessageKey } from "../i18n/t";
 import { LOCALES, LOCALE_INFO, type Locale } from "../i18n/locales";
 import { localizedPath, PAGE_NAMES, type PageName } from "../i18n/paths";
 import { loadFontsData } from "../fonts/load";
-import { fontFaceCss, fontStack } from "../fonts/css";
+import { fontFaceCss, fontStack, SAWA_FONT_IDS } from "../fonts/css";
+import { isReportOnly } from "../report/mode";
 
 interface Props {
   locale: Locale;
@@ -18,8 +19,13 @@ interface Props {
 const { locale, page, title, wide = false } = Astro.props;
 const dir = LOCALE_INFO[locale].dir;
 const base = import.meta.env.BASE_URL;
+const reportOnly = isReportOnly();
 
-const navEntries: { name: PageName; labelKey: MessageKey }[] = PAGE_NAMES.map((name) => ({
+// REPORT_ONLY builds only the report page; the nav and the brand link must
+// not point at pages that were never built.
+const homePage: PageName = reportOnly ? "report" : "specimen";
+const visiblePages: readonly PageName[] = reportOnly ? (["report"] as const) : PAGE_NAMES;
+const navEntries: { name: PageName; labelKey: MessageKey }[] = visiblePages.map((name) => ({
   name,
   labelKey: `nav.${name}` as MessageKey,
 }));
@@ -30,7 +36,7 @@ const rootTokens = [
   `  --font-display: ${fontStack(fontsData, "sawa-serif")};`,
   `  --font-mono: ${fontStack(fontsData, "sawa-mono")};`,
 ].join("\n");
-const fontStyles = `${fontFaceCss(fontsData, base)}\n\n:root {\n${rootTokens}\n}`;
+const fontStyles = `${fontFaceCss(fontsData, base, reportOnly ? SAWA_FONT_IDS : undefined)}\n\n:root {\n${rootTokens}\n}`;
 
 const uiFace = fontsData.fonts["sawa-sans"]?.faces.find((face) => face.style === "normal");
 if (!uiFace) {
@@ -65,7 +71,7 @@ const uiFaceHref = `${base}fonts/${uiFace.file}`;
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href={localizedPath(base, locale, "specimen")}>
+      <a class="brand" href={localizedPath(base, locale, homePage)}>
         {t(locale, "site.name")}
       </a>
       <nav aria-label={t(locale, "nav.primary")}>

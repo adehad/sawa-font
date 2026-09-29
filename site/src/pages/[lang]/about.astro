@@ -2,8 +2,12 @@
 import Base from "../../layouts/Base.astro";
 import { t } from "../../i18n/t";
 import { LOCALES, type Locale } from "../../i18n/locales";
+import { isReportOnly } from "../../report/mode";
 
 export function getStaticPaths() {
+  if (isReportOnly()) {
+    return [];
+  }
   return LOCALES.map((lang) => ({ params: { lang } }));
 }
 

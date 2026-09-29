@@ -29,7 +29,7 @@
       }
     },
     {
-      "files": ["tests/e2e/**"],
+      "files": ["tests/e2e/**", "tests/e2e-report-only/**"],
       "jsPlugins": [{ "name": "playwright", "specifier": "eslint-plugin-playwright" }],
       "rules": {
         "playwright/no-wait-for-timeout": "error",
