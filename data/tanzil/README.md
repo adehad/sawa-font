@@ -1,5 +1,10 @@
 # Tanzil Quran text
 
+`quran-uthmani.txt.gz` is the full Uthmani download below, byte-exact with
+its complete copyright block, gzipped (`gzip -9 -n`). Uncompressed, its
+sha256 is `0fa31b4f07d72bf85e8052575a33315566322eb905bef7d839b100ac0ef7b683`.
+`sawa_tools.tanzil.uthmani()` returns its 6236 verse lines.
+
 `uthmani-fatiha.txt` and `simple-clean-fatiha.txt` are Al-Fatiha 1:1-7 (the
 first 7 lines of the full downloads below), copied byte-exact, followed by a
 blank line and the source file's complete copyright block, also byte-exact.
@@ -32,6 +37,6 @@ The copyright block embedded in each download adds:
 
 These files must never be edited by hand, including to fix a typo or
 reflow a line. If the upstream text changes, re-fetch it from the URLs
-above and regenerate the excerpt; don't patch the excerpt in place. A
-pytest in `tests/python/` pins each excerpt's verse lines and copyright
-block by sha256, so an edit fails CI.
+above, recompress it and regenerate the excerpts; don't patch a file in
+place. `tests/python/test_tanzil.py` pins the full text and each excerpt's
+verse lines and copyright block by sha256, so an edit fails CI.

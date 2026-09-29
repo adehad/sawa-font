@@ -230,11 +230,6 @@ def test_extract_axes_reads_fvar_axes_and_instances() -> None:
     ]
 
 
-def test_tanzil_verses_drop_the_copyright_block() -> None:
-    text = "one\ntwo\n\n# PLEASE DO NOT REMOVE OR CHANGE THIS COPYRIGHT BLOCK\n# x\n"
-    assert fonts_check.tanzil_verses(text) == ["one", "two"]
-
-
 def test_coverage_gaps_are_removed_before_shaping() -> None:
     gaps = fonts_check.gap_codepoints(["U+06D6..U+06D7", "U+08F0"])
     assert gaps == {0x06D6, 0x06D7, 0x08F0}

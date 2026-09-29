@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sawa_tools.checks.fonts import tanzil_verses
+from sawa_tools.tanzil import verse_lines
 
 DEFAULT_STRESS = Path("tests/strings/stress.json")
 DEFAULT_MIXED = Path("tests/strings/mixed.json")
@@ -67,7 +67,7 @@ def load_tests(
         for entry in _read_json(mixed)["sentences"]
     ]
     try:
-        verses = tanzil_verses(tanzil.read_text(encoding="utf-8"))
+        verses = verse_lines(tanzil.read_text(encoding="utf-8"))
     except OSError as exc:
         raise CatalogueError(f"cannot read {tanzil}: {exc}") from exc
     tests.append(ReportTest(id="fatiha-1", text=verses[0], purpose=_FATIHA_PURPOSE))

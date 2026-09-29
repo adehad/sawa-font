@@ -34,6 +34,7 @@ from sawa_tools.checks.marks import (
     _parse_codepoints,
     load_groups,
 )
+from sawa_tools.tanzil import verse_lines
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -48,7 +49,6 @@ DOTTED_CIRCLE = 0x25CC
 _TRADEMARK_ID = 7
 
 _TANZIL_FILES = ("uthmani-fatiha.txt", "simple-clean-fatiha.txt")
-_TANZIL_COPYRIGHT = "# PLEASE DO NOT REMOVE OR CHANGE THIS COPYRIGHT BLOCK"
 
 
 class FontsCheckError(Exception):
@@ -127,12 +127,6 @@ def _read_json(path: Path) -> Any:
         raise FontsCheckError(f"cannot read {path}: {exc}") from exc
 
 
-def tanzil_verses(text: str) -> list[str]:
-    """The verse lines of a Tanzil excerpt, without its copyright block."""
-    verses = text.split(_TANZIL_COPYRIGHT, 1)[0]
-    return [line for line in verses.splitlines() if line.strip()]
-
-
 def sample_lines(stress: Path, mixed: Path, tanzil_dir: Path) -> list[Line]:
     lines = [Line("latin", LATIN_LINE)]
     lines += [
@@ -146,7 +140,7 @@ def sample_lines(stress: Path, mixed: Path, tanzil_dir: Path) -> list[Line]:
             raise FontsCheckError(f"cannot read {tanzil_dir / name}: {exc}") from exc
         lines += [
             Line(f"tanzil/{name}:{i}", verse)
-            for i, verse in enumerate(tanzil_verses(text), start=1)
+            for i, verse in enumerate(verse_lines(text), start=1)
         ]
     lines += [
         Line(f"mixed/{sentence['id']}", sentence["text"])

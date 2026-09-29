@@ -1,12 +1,15 @@
-"""Pins the Tanzil Al-Fatiha excerpts so an accidental hand-edit fails CI.
+"""Pins the Tanzil texts so an accidental hand-edit fails CI.
 
 data/tanzil/README.md explains why these files must never be edited by hand.
 """
 
+import gzip
 import hashlib
 from pathlib import Path
 
 import pytest
+
+from sawa_tools import tanzil
 
 DATA_DIR = Path(__file__).parents[2] / "data" / "tanzil"
 
@@ -66,3 +69,34 @@ def test_copyright_block_is_present_and_pinned(name: str) -> None:
         hashlib.sha256(copyright_block).hexdigest()
         == EXPECTED[name]["copyright_sha256"]
     )
+
+
+FULL_UTHMANI_SHA256 = "0fa31b4f07d72bf85e8052575a33315566322eb905bef7d839b100ac0ef7b683"
+
+
+def test_full_uthmani_text_is_the_pinned_download() -> None:
+    data = gzip.decompress((DATA_DIR / "quran-uthmani.txt.gz").read_bytes())
+    assert hashlib.sha256(data).hexdigest() == FULL_UTHMANI_SHA256
+    _, copyright_block = _split(data)
+    assert b"Tanzil Project" in copyright_block
+
+
+def test_uthmani_loader_returns_every_verse_in_order() -> None:
+    verses = tanzil.uthmani(DATA_DIR / "quran-uthmani.txt.gz")
+    assert len(verses) == tanzil.VERSE_COUNT == 6236
+    fatiha = (DATA_DIR / "uthmani-fatiha.txt").read_text(encoding="utf-8")
+    assert verses[:7] == tanzil.verse_lines(fatiha)
+    assert not any(v.startswith("#") for v in verses)
+
+
+def test_verse_lines_drop_the_copyright_block() -> None:
+    text = f"one\ntwo\n\n{COPYRIGHT_MARKER.decode()}\n# x\n"
+    assert tanzil.verse_lines(text) == ["one", "two"]
+
+
+def test_verse_refs_count_ayahs_per_surah() -> None:
+    assert tanzil.verse_ref(0) == "1:1"
+    assert tanzil.verse_ref(7) == "2:1"
+    assert tanzil.verse_ref(6235) == "114:6"
+    with pytest.raises(IndexError):
+        tanzil.verse_ref(6236)
