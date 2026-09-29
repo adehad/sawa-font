@@ -3,6 +3,7 @@ import Base from "../../layouts/Base.astro";
 import NoBundle from "../../components/report/NoBundle.astro";
 import ReportSummary from "../../components/report/ReportSummary.astro";
 import TestList from "../../components/report/TestList.astro";
+import LayerViewer from "../../components/report/LayerViewer.astro";
 import { t } from "../../i18n/t";
 import { LOCALES, type Locale } from "../../i18n/locales";
 import { cachedReport } from "../../report/load";
@@ -28,7 +29,9 @@ const report = cachedReport(import.meta.env.SAWA_REPORT_DIR);
         <section class="report-tests" aria-labelledby="report-tests-title">
           <h2 id="report-tests-title">{t(locale, "report.tests")}</h2>
           <p class="report-tests-intro">{t(locale, "report.testsIntro")}</p>
-          <TestList locale={locale} bundle={report.bundle} />
+          <TestList locale={locale} bundle={report.bundle}>
+            <LayerViewer locale={locale} bundle={report.bundle} />
+          </TestList>
         </section>
       </>
     )

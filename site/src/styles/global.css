@@ -8,6 +8,9 @@
   --color-surface: light-dark(#fffdf9, #1e2123);
   --color-on-accent: light-dark(#ffffff, #10201b);
   --color-fail: light-dark(#a3261c, #ff8f80);
+  --layer-sawa: light-dark(#b8326e, #ff7eb6);
+  --layer-upstream: light-dark(#1d64a8, #7cbcff);
+  --layer-diff: light-dark(#c77700, #ffc94d);
   --grid-band: light-dark(rgb(47 93 80 / 0.08), rgb(111 191 168 / 0.1));
   --grid-rule: light-dark(rgb(47 93 80 / 0.55), rgb(111 191 168 / 0.6));
   --mark-short: light-dark(#0072b2, #56b4e9);

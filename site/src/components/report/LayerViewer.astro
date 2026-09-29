@@ -1,0 +1,299 @@
+---
+import LayerCanvas from "./overlay/LayerCanvas.astro";
+import { rawMessage, t, type MessageKey } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { BUNDLE_SEGMENT } from "../../report/integration";
+import { bundleFamilies } from "../../report/summary";
+import type { ReportBundle } from "../../report/types";
+import { viewerJson, viewerTests, type ViewerData } from "../../report/viewer-data";
+import { REPORT_LAYERS, REPORT_MODES, REPORT_ZOOMS, defaultReportState } from "../../state/url";
+
+interface Props {
+  locale: Locale;
+  bundle: ReportBundle;
+}
+
+const { locale, bundle } = Astro.props;
+const initial = defaultReportState();
+const percent = new Intl.NumberFormat(locale, { style: "percent" });
+const CLIENT_KEYS = [
+  "report.diffCount",
+  "report.diffPrevious",
+  "report.loading",
+  "report.loadError",
+  "report.swipe",
+  "compare.guide.lineBox",
+  "compare.guide.ascender",
+  "compare.guide.capHeight",
+  "compare.guide.xHeight",
+  "compare.guide.baseline",
+  "compare.guide.descender",
+] as const satisfies readonly MessageKey[];
+const data: ViewerData = {
+  bundleBase: `${import.meta.env.BASE_URL}${BUNDLE_SEGMENT}/`,
+  tests: viewerTests(bundle),
+  messages: Object.fromEntries(CLIENT_KEYS.map((key) => [key, rawMessage(locale, key)])),
+};
+const previousVersion = bundle.manifest.diffBaseline.version ?? "";
+
+function zoomLabel(zoom: (typeof REPORT_ZOOMS)[number]): string {
+  return zoom === "fit" ? t(locale, "report.zoom.fit") : percent.format(Number(zoom) / 100);
+}
+---
+
+<section
+  class="viewer"
+  aria-labelledby="viewer-title"
+  data-viewer
+  data-previous-version={previousVersion}
+  data-no-data={t(locale, "report.loadError")}
+>
+  <script type="application/json" data-viewer-data set:html={viewerJson(data)} />
+  <h3 id="viewer-title" class="visually-hidden">{t(locale, "report.viewer")}</h3>
+  <div class="viewer-controls">
+    <fieldset class="viewer-control">
+      <legend>{t(locale, "report.viewerFamily")}</legend>
+      <div class="segmented">
+        {
+          bundleFamilies(bundle).map((family) => (
+            <button
+              type="button"
+              data-viewer-family={family}
+              aria-pressed={family === initial.family ? "true" : "false"}
+            >
+              {t(locale, `font.${family}.name`)}
+            </button>
+          ))
+        }
+      </div>
+    </fieldset>
+    <fieldset class="viewer-control">
+      <legend>{t(locale, "report.mode")}</legend>
+      <div class="segmented">
+        {
+          REPORT_MODES.map((mode) => (
+            <button
+              type="button"
+              data-viewer-mode={mode}
+              aria-pressed={mode === initial.mode ? "true" : "false"}
+            >
+              {t(locale, `report.mode.${mode}`)}
+            </button>
+          ))
+        }
+      </div>
+    </fieldset>
+    <fieldset class="viewer-control">
+      <legend>{t(locale, "report.layers")}</legend>
+      <div class="layer-toggles">
+        {
+          REPORT_LAYERS.map((layer) => (
+            <div class="check" data-swatch={layer}>
+              <input
+                id={`viewer-layer-${layer}`}
+                type="checkbox"
+                checked={initial.layers.includes(layer)}
+                data-viewer-layer={layer}
+              />
+              <label for={`viewer-layer-${layer}`}>
+                <span class="swatch" aria-hidden="true" />
+                {t(locale, `report.layer.${layer}`)}
+              </label>
+            </div>
+          ))
+        }
+      </div>
+    </fieldset>
+    <div class="viewer-control" data-opacity-control>
+      <div class="control-head">
+        <label for="viewer-opacity">{t(locale, "report.opacity")}</label>
+        <output for="viewer-opacity" data-viewer-opacity-output>
+          {percent.format(initial.opacity / 100)}
+        </output>
+      </div>
+      <input
+        id="viewer-opacity"
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        value={initial.opacity}
+        data-viewer-opacity
+      />
+    </div>
+    <fieldset class="viewer-control">
+      <legend>{t(locale, "report.zoom")}</legend>
+      <div class="segmented">
+        {
+          REPORT_ZOOMS.map((zoom) => (
+            <button
+              type="button"
+              data-viewer-zoom={zoom}
+              aria-pressed={zoom === initial.zoom ? "true" : "false"}
+            >
+              {zoomLabel(zoom)}
+            </button>
+          ))
+        }
+      </div>
+    </fieldset>
+  </div>
+
+  <ul class="legend" data-legend>
+    <li data-swatch="sawa"><span class="swatch" aria-hidden="true"></span><span data-legend-name="sawa"></span></li>
+    <li data-swatch="upstream"><span class="swatch" aria-hidden="true"></span><span data-legend-name="upstream"></span></li>
+  </ul>
+  <LayerCanvas label={t(locale, "report.canvas")} />
+  <p class="viewer-note" data-viewer-status aria-live="polite"></p>
+  <p class="viewer-note" data-diff-note></p>
+</section>
+
+<script>
+  import { mountViewer } from "./viewer";
+
+  const root = document.querySelector<HTMLElement>("[data-viewer]");
+  if (root) {
+    mountViewer(root);
+  }
+</script>
+
+<style>
+  .viewer {
+    display: grid;
+    gap: 0.75rem;
+    min-inline-size: 0;
+    margin-block-start: 0.5rem;
+  }
+
+  .viewer-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+    padding: 1rem;
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+  }
+
+  .viewer-control {
+    display: grid;
+    align-content: start;
+    gap: 0.4rem;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .viewer-control[hidden] {
+    display: none;
+  }
+
+  .viewer-control legend,
+  .viewer-control label[for="viewer-opacity"] {
+    padding: 0;
+    margin-block-end: 0.4rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .control-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .control-head output {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+  }
+
+  .viewer-control input[type="range"] {
+    inline-size: 12rem;
+    max-inline-size: 100%;
+    min-block-size: 44px;
+    margin: 0;
+    accent-color: var(--color-accent);
+  }
+
+  .layer-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1rem;
+  }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-block-size: 44px;
+  }
+
+  .check input {
+    flex: none;
+    inline-size: 1.2rem;
+    block-size: 1.2rem;
+    margin: 0;
+    accent-color: var(--color-accent);
+  }
+
+  .check label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+  }
+
+  .swatch {
+    display: inline-block;
+    flex: none;
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+    border-radius: 0.2rem;
+    background: var(--swatch, transparent);
+  }
+
+  [data-swatch="sawa"] {
+    --swatch: var(--layer-sawa);
+  }
+
+  [data-swatch="upstream"] {
+    --swatch: var(--layer-upstream);
+  }
+
+  [data-swatch="diff"] .swatch {
+    border: 2px solid var(--layer-diff);
+  }
+
+  [data-swatch="guides"] .swatch {
+    block-size: 0;
+    border-block-start: 2px dashed var(--color-muted);
+    border-radius: 0;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.9rem;
+  }
+
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .viewer-note {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-muted);
+  }
+
+  .viewer-note:empty {
+    display: none;
+  }
+</style>

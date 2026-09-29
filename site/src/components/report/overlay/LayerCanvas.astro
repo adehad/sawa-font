@@ -1,0 +1,162 @@
+---
+interface Props {
+  label: string;
+}
+
+const { label } = Astro.props;
+---
+
+<div class="overlay" dir="ltr" role="group" aria-label={label} data-overlay data-state="loading">
+</div>
+
+<style>
+  .overlay {
+    --fit-block: min(60vh, 28rem);
+    --fit-min-block: 6rem;
+
+    direction: ltr;
+    min-width: 0;
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+    background: var(--color-bg);
+  }
+
+  /* The inline padding is wider than the swipe divider's 22px overhang, so
+     the divider at either end never makes the overlay scroll. */
+  .overlay :global(.overlay-scroll) {
+    overflow: auto;
+    padding: 1rem 1.5rem;
+  }
+
+  .overlay :global(.overlay-panes) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: safe center;
+  }
+
+  .overlay[data-zoom="fit"] :global(.overlay-pane) {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  .overlay :global(.overlay-pane) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .overlay[data-zoom="fit"] :global(.overlay-pane) {
+    align-self: stretch;
+  }
+
+  .overlay :global(.overlay-frame) {
+    position: relative;
+    flex: none;
+    max-width: none;
+    touch-action: pan-y;
+  }
+
+  .overlay[data-mode="side"] :global(.overlay-frame) {
+    outline: 1px dashed var(--color-rule);
+  }
+
+  .overlay :global(.overlay-frame > svg) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .overlay :global(.overlay-frame > svg[hidden]) {
+    display: none;
+  }
+
+  .overlay :global([data-font="sawa"]) {
+    color: var(--layer-sawa);
+  }
+
+  .overlay :global([data-font="upstream"]) {
+    color: var(--layer-upstream);
+  }
+
+  .overlay :global(svg[data-layer="guides"] line) {
+    stroke: currentColor;
+    stroke-width: 1px;
+    stroke-dasharray: 4 3;
+    vector-effect: non-scaling-stroke;
+    opacity: 0.8;
+  }
+
+  .overlay :global(svg[data-layer="guides"] line[data-guide="baseline"]) {
+    stroke-dasharray: none;
+  }
+
+  .overlay :global(svg[data-layer="guides"] rect) {
+    fill: currentColor;
+    opacity: 0.06;
+  }
+
+  .overlay :global(svg[data-layer="diff"] rect) {
+    fill: var(--layer-diff);
+    fill-opacity: 0.15;
+    stroke: var(--layer-diff);
+    stroke-width: 2px;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .overlay[data-mode="swipe"] :global(.overlay-frame) {
+    cursor: ew-resize;
+  }
+
+  .overlay :global(.swipe-divider) {
+    position: absolute;
+    top: -0.5rem;
+    bottom: -0.5rem;
+    width: 44px;
+    margin-left: -22px;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+
+  .overlay :global(.swipe-divider::before) {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 21px;
+    width: 2px;
+    background: var(--color-ink);
+  }
+
+  .overlay :global(.swipe-divider::after) {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    width: 20px;
+    height: 20px;
+    margin-top: -10px;
+    border: 2px solid var(--color-ink);
+    border-radius: 50%;
+    background: var(--color-bg);
+  }
+
+  .overlay :global(.swipe-divider:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 0;
+  }
+
+  .overlay :global(.overlay-caption) {
+    margin: 0;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  .overlay[data-state="loading"] :global(.overlay-frame) {
+    opacity: 0.4;
+  }
+</style>
