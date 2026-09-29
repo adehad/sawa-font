@@ -1,6 +1,8 @@
 ---
 import Base from "../../layouts/Base.astro";
 import NoBundle from "../../components/report/NoBundle.astro";
+import ReportSummary from "../../components/report/ReportSummary.astro";
+import TestList from "../../components/report/TestList.astro";
 import { t } from "../../i18n/t";
 import { LOCALES, type Locale } from "../../i18n/locales";
 import { cachedReport } from "../../report/load";
@@ -13,8 +15,48 @@ const locale = Astro.params.lang as Locale;
 const report = cachedReport(import.meta.env.SAWA_REPORT_DIR);
 ---
 
-<Base locale={locale} page="report" title={t(locale, "report.title")}>
-  <h1>{t(locale, "report.h1")}</h1>
-  <p>{t(locale, "report.body")}</p>
+<Base locale={locale} page="report" title={t(locale, "report.title")} wide>
+  <header class="report-intro">
+    <h1>{t(locale, "report.h1")}</h1>
+    <p>{t(locale, "report.body")}</p>
+  </header>
   {report.kind === "missing" && <NoBundle locale={locale} />}
+  {
+    report.kind === "ok" && (
+      <>
+        <ReportSummary locale={locale} bundle={report.bundle} />
+        <section class="report-tests" aria-labelledby="report-tests-title">
+          <h2 id="report-tests-title">{t(locale, "report.tests")}</h2>
+          <p class="report-tests-intro">{t(locale, "report.testsIntro")}</p>
+          <TestList locale={locale} bundle={report.bundle} />
+        </section>
+      </>
+    )
+  }
 </Base>
+
+<style>
+  .report-intro h1 {
+    margin-block: 0 0.5rem;
+  }
+
+  .report-intro p {
+    margin-block: 0 1.5rem;
+    max-inline-size: 46rem;
+    color: var(--color-muted);
+  }
+
+  .report-tests {
+    margin-block-start: 2.5rem;
+  }
+
+  .report-tests h2 {
+    margin-block: 0 0.5rem;
+  }
+
+  .report-tests-intro {
+    margin-block: 0 1rem;
+    max-inline-size: 46rem;
+    color: var(--color-muted);
+  }
+</style>

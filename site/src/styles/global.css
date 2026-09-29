@@ -7,6 +7,7 @@
   --color-muted: light-dark(#4a453d, #a9a297);
   --color-surface: light-dark(#fffdf9, #1e2123);
   --color-on-accent: light-dark(#ffffff, #10201b);
+  --color-fail: light-dark(#a3261c, #ff8f80);
   --grid-band: light-dark(rgb(47 93 80 / 0.08), rgb(111 191 168 / 0.1));
   --grid-rule: light-dark(rgb(47 93 80 / 0.55), rgb(111 191 168 / 0.6));
   --mark-short: light-dark(#0072b2, #56b4e9);

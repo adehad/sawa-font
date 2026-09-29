@@ -138,6 +138,20 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 | `fonts` | comma list of font ids, in order | `sawa-serif,sawa-sans,status` |
 | `ov` | per-pane overrides, e.g. `2:font=amiri;pal=gray` | none |
 
+**Report page params.** The Build report page keeps its own state in `r`-prefixed params (`parseReportState` / `toReportSearch` in `url.ts`), so it never reads or writes the playground's:
+
+| Param | Values | Default |
+|---|---|---|
+| `rt` | a test id from the bundle's manifest | the bundle's first test |
+| `rf` | `sawa-serif` · `sawa-sans` · `sawa-mono` (which Sawa layer and its upstream layer are compared) | `sawa-serif` |
+| `rm` | `onion` · `swipe` · `side` | `onion` |
+| `ro` | 0–100, the upstream layer's opacity in onion mode | `50` |
+| `rs` | 0–100, the swipe divider's position from the left | `50` |
+| `rl` | comma list of the toggles that are on, from `sawa`, `upstream`, `guides`, `diff`; `none` for all off | `sawa,upstream,diff` |
+| `rz` | `fit` · `100` · `200` | `fit` |
+
+Same rules as above: fixed order `rt, rf, rm, ro, rs, rl, rz`, defaults omitted, invalid values fall back to their default, `ro`/`rs` are integers clamped to 0–100, `rl` is written in the order listed. `rt` must be a lowercase id; the page drops one the bundle lacks, and writes none for the first test.
+
 Language switch links carry the current query string. Use `history.replaceState` while controls change; don't push a history entry for every slider tick.
 
 **`ov` syntax:** entries joined by `,`; each entry is `<pane>:<key>=<value>[;<key>=<value>]`, where `<pane>` is the 1-based position of a font in `fonts`. The only allowed keys are `font` (a roster id or `local`) and `pal`. Example: `ov=2:font=amiri;pal=gray,3:pal=mono`.

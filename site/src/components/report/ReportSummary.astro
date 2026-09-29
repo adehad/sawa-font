@@ -1,0 +1,372 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { BUNDLE_SEGMENT } from "../../report/integration";
+import { COMMIT_URL, OLDER_REPORTS_URL } from "../../report/links";
+import { bundleFamilies, coverageSummary, failedTests, ratio } from "../../report/summary";
+import type { CoverageCount, ReportBundle } from "../../report/types";
+
+interface Props {
+  locale: Locale;
+  bundle: ReportBundle;
+}
+
+const { locale, bundle } = Astro.props;
+const { manifest, metrics, coverage } = bundle;
+const bundleBase = `${import.meta.env.BASE_URL}${BUNDLE_SEGMENT}/`;
+const families = bundleFamilies(bundle);
+const FONTBAKERY_STATUSES = ["FAIL", "WARN", "PASS"] as const;
+
+const numbers = new Intl.NumberFormat(locale);
+const ems = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 });
+const percent = new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 });
+const date = new Intl.DateTimeFormat(locale, {
+  dateStyle: "long",
+  timeStyle: "short",
+  timeZone: "UTC",
+}).format(new Date(manifest.date));
+const list = new Intl.ListFormat(locale, { type: "conjunction" });
+
+function share(count: CoverageCount | undefined): string {
+  return count ? percent.format(ratio(count)) : "–";
+}
+
+function shareTitle(count: CoverageCount | undefined): string | undefined {
+  return count ? `${numbers.format(count.supported)} / ${numbers.format(count.total)}` : undefined;
+}
+
+const fontbakery = manifest.fontbakery;
+const baseline =
+  manifest.diffBaseline.kind === "previous"
+    ? t(locale, "report.baseline.previous", { version: manifest.diffBaseline.version ?? "?" })
+    : t(locale, "report.baseline.upstream");
+---
+
+<section class="report-head" aria-label={t(locale, "report.facts")}>
+  <nav class="release" aria-label={t(locale, "report.release")} data-release>
+    <span class="release-label">{t(locale, "report.release")}</span>
+    <ul>
+      <li>
+        <span class="release-current" aria-current="page">
+          {t(locale, "report.releaseLatest", { version: `⁦${manifest.version}⁩` })}
+        </span>
+      </li>
+      <li><a href={OLDER_REPORTS_URL} data-older-reports>{t(locale, "report.releaseOlder")}</a></li>
+    </ul>
+  </nav>
+  <dl class="facts">
+    <div>
+      <dt>{t(locale, "report.version")}</dt>
+      <dd data-fact="version"><span dir="ltr">{manifest.version}</span></dd>
+    </div>
+    <div>
+      <dt>{t(locale, "report.commit")}</dt>
+      <dd data-fact="commit">
+        {
+          manifest.gitSha ? (
+            <a href={`${COMMIT_URL}${manifest.gitSha}`} dir="ltr">
+              <code>{manifest.gitSha.slice(0, 7)}</code>
+            </a>
+          ) : (
+            t(locale, "report.commitNone")
+          )
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>{t(locale, "report.date")}</dt>
+      <dd data-fact="date">
+        <time datetime={manifest.date}>{t(locale, "report.dateValue", { date })}</time>
+      </dd>
+    </div>
+    <div>
+      <dt>{t(locale, "report.baseline")}</dt>
+      <dd data-fact="baseline">{baseline}</dd>
+    </div>
+  </dl>
+</section>
+
+<section class="summary" aria-labelledby="report-summary-title">
+  <h2 id="report-summary-title">{t(locale, "report.summary")}</h2>
+  <div class="tiles">
+    <article class="tile" data-tile="shaping" data-failed={failedTests(bundle)}>
+      <h3>{t(locale, "report.shaping")}</h3>
+      <p class="tile-headline" data-status={failedTests(bundle) > 0 ? "fail" : "pass"}>
+        {t(locale, "report.testsFailed", { count: failedTests(bundle) })}
+      </p>
+      <p class="tile-note">
+        {t(locale, "report.shapingCounts", { ...manifest.shaping })}
+      </p>
+    </article>
+
+    <article class="tile" data-tile="coverage">
+      <h3>{t(locale, "report.coverage")}</h3>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{t(locale, "report.family")}</th>
+            <th scope="col">{t(locale, "report.coverageLatin")}</th>
+            <th scope="col">{t(locale, "report.coverageArabic")}</th>
+            <th scope="col">{t(locale, "report.coverageMarks")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            families.map((family) => {
+              const set = coverage.families[family];
+              const summary = set ? coverageSummary(set) : undefined;
+              return (
+                <tr data-family={family}>
+                  <th scope="row">{t(locale, `font.${family}.name`)}</th>
+                  <td title={shareTitle(summary?.latinCore)}>{share(summary?.latinCore)}</td>
+                  <td title={shareTitle(summary?.arabicBlocks)}>{share(summary?.arabicBlocks)}</td>
+                  <td title={shareTitle(summary?.markGroups)}>{share(summary?.markGroups)}</td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+      <p class="tile-note">
+        {t(locale, "report.coverageNote", { version: coverage.unicodeVersion })}
+      </p>
+    </article>
+
+    <article class="tile" data-tile="metrics">
+      <h3>{t(locale, "report.metrics")}</h3>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{t(locale, "report.family")}</th>
+            <th scope="col">{t(locale, "report.lineBox")}</th>
+            <th scope="col">{t(locale, "report.ascender")}</th>
+            <th scope="col">{t(locale, "report.descender")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            families.map((family) => {
+              const box = metrics.families[family]?.lineBox;
+              return (
+                <tr data-family={family}>
+                  <th scope="row">{t(locale, `font.${family}.name`)}</th>
+                  <td>{box ? ems.format(box.height) : "–"}</td>
+                  <td>{box ? ems.format(box.ascender) : "–"}</td>
+                  <td>{box ? ems.format(box.descender) : "–"}</td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+      <p class="tile-note">{t(locale, "report.metricsNote")}</p>
+    </article>
+
+    <article class="tile" data-tile="fontbakery">
+      <h3>{t(locale, "report.fontbakery")}</h3>
+      {
+        fontbakery.ran ? (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">{t(locale, "report.family")}</th>
+                  {FONTBAKERY_STATUSES.map((status) => (
+                    <th scope="col">{t(locale, `report.fb.${status}`)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {families.map((family) => {
+                  const result = fontbakery.families[family];
+                  const name = t(locale, `font.${family}.name`);
+                  return (
+                    <tr data-family={family}>
+                      <th scope="row">
+                        {result && bundle.fontbakeryHtml ? (
+                          <a
+                            href={`${bundleBase}${result.report}`}
+                            aria-label={t(locale, "report.fontbakeryLink", { family: name })}
+                            data-fontbakery-link={family}
+                          >
+                            {name}
+                          </a>
+                        ) : (
+                          name
+                        )}
+                      </th>
+                      {FONTBAKERY_STATUSES.map((status) => (
+                        <td data-count={status}>
+                          {result ? numbers.format(result.counts[status] ?? 0) : "–"}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p class="tile-note">
+              {t(locale, "report.fontbakeryNote", {
+                profile: `⁦${fontbakery.profile}⁩`,
+                excluded: `⁦${list.format(fontbakery.excluded)}⁩`,
+              })}
+            </p>
+            {bundle.fontbakeryHtml && (
+              <p class="tile-note">
+                <a href={`${bundleBase}${fontbakery.report}`} data-fontbakery-index>
+                  {t(locale, "report.fontbakeryIndex")}
+                </a>
+              </p>
+            )}
+          </>
+        ) : (
+          <p class="tile-note">{t(locale, "report.fontbakeryNotRun")}</p>
+        )
+      }
+    </article>
+  </div>
+</section>
+
+<style>
+  .report-head {
+    display: grid;
+    gap: 1rem;
+    margin-block-end: 2rem;
+  }
+
+  .release {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+  }
+
+  .release-label {
+    font-weight: 600;
+  }
+
+  .release ul {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .release-current {
+    display: inline-block;
+    padding-block: 0.3rem;
+    padding-inline: 0.75rem;
+    border-radius: 999px;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+
+  .release a {
+    display: inline-block;
+    min-block-size: 44px;
+    line-height: 44px;
+  }
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 0.75rem 1.5rem;
+    margin: 0;
+  }
+
+  .facts dt {
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+
+  .facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .summary h2 {
+    margin-block: 0 1rem;
+  }
+
+  .tiles {
+    display: grid;
+    gap: 1rem;
+  }
+
+  @media (width >= 48rem) {
+    .tiles {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .tile {
+    display: grid;
+    align-content: start;
+    gap: 0.6rem;
+    min-inline-size: 0;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+  }
+
+  .tile h3 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+
+  .tile-headline {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+  }
+
+  .tile-headline[data-status="fail"] {
+    color: var(--color-fail);
+  }
+
+  .tile-note {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-muted);
+  }
+
+  .tile table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tile th,
+  .tile td {
+    padding-block: 0.3rem;
+    padding-inline: 0 0.5rem;
+    border-block-end: 1px solid var(--color-rule);
+    text-align: end;
+    vertical-align: baseline;
+  }
+
+  .tile th:first-child {
+    text-align: start;
+  }
+
+  .tile thead th {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+
+  .tile tbody th {
+    font-weight: 400;
+  }
+
+  .tile tbody th a {
+    display: inline-block;
+    min-block-size: 44px;
+    line-height: 44px;
+  }
+</style>

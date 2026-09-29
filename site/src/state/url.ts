@@ -579,3 +579,140 @@ export function visiblePanes(state: PlaygroundState): VisiblePane[] {
     palette: paneValue(state, index + 1, "pal"),
   }));
 }
+
+export const REPORT_MODES = ["onion", "swipe", "side"] as const;
+export type ReportMode = (typeof REPORT_MODES)[number];
+/** The viewer's toggles: the Sawa layer, its upstream counterpart, guides and diff regions. */
+export const REPORT_LAYERS = ["sawa", "upstream", "guides", "diff"] as const;
+export type ReportLayer = (typeof REPORT_LAYERS)[number];
+export const REPORT_ZOOMS = ["fit", "100", "200"] as const;
+export type ReportZoom = (typeof REPORT_ZOOMS)[number];
+
+/** The report page's state, in its own `r`-prefixed params so it never collides with the playground's. */
+export interface ReportState {
+  /** A test id; undefined means the bundle's first test. The page drops ids the bundle lacks. */
+  readonly test: string | undefined;
+  readonly family: SpecimenFamily;
+  readonly mode: ReportMode;
+  /** The upstream layer's opacity in onion mode, 0-100. */
+  readonly opacity: number;
+  /** The swipe divider's position from the left edge, 0-100. */
+  readonly swipe: number;
+  /** The toggles that are on, in REPORT_LAYERS order. */
+  readonly layers: readonly ReportLayer[];
+  readonly zoom: ReportZoom;
+}
+
+const DEFAULT_REPORT_PERCENT = 50;
+const DEFAULT_REPORT_LAYERS: readonly ReportLayer[] = ["sawa", "upstream", "diff"];
+const NO_LAYERS = "none";
+const REPORT_TEST_ID = /^[a-z0-9][a-z0-9-]*$/;
+
+function isOneOf<T extends string>(options: readonly T[], value: string | null): value is T {
+  return value !== null && (options as readonly string[]).includes(value);
+}
+
+export function defaultReportState(): ReportState {
+  return {
+    test: undefined,
+    family: DEFAULT_FAMILY,
+    mode: "onion",
+    opacity: DEFAULT_REPORT_PERCENT,
+    swipe: DEFAULT_REPORT_PERCENT,
+    layers: [...DEFAULT_REPORT_LAYERS],
+    zoom: "fit",
+  };
+}
+
+function parsePercent(raw: string | null): number {
+  const value = raw?.trim() ?? "";
+  if (!/^-?\d+$/.test(value)) {
+    return DEFAULT_REPORT_PERCENT;
+  }
+  return clamp(Number(value), 0, 100);
+}
+
+function orderedLayers(layers: Iterable<string>): ReportLayer[] {
+  const wanted = new Set(layers);
+  return REPORT_LAYERS.filter((layer) => wanted.has(layer));
+}
+
+function parseReportLayers(raw: string | null): ReportLayer[] {
+  const value = raw?.trim();
+  if (value === undefined) {
+    return [...DEFAULT_REPORT_LAYERS];
+  }
+  if (value === NO_LAYERS) {
+    return [];
+  }
+  const layers = orderedLayers(value.split(",").map((token) => token.trim()));
+  return layers.length > 0 ? layers : [...DEFAULT_REPORT_LAYERS];
+}
+
+/** Reads the report state from a query string; invalid values fall back to their defaults. */
+export function parseReportState(search: string | URLSearchParams): ReportState {
+  const params = toParams(search);
+  const test = trimmed(params.get("rt"));
+  const family = trimmed(params.get("rf"));
+  const mode = trimmed(params.get("rm"));
+  const zoom = trimmed(params.get("rz"));
+  return {
+    test: test !== null && REPORT_TEST_ID.test(test) ? test : undefined,
+    family: family !== null && isSpecimenFamily(family) ? family : DEFAULT_FAMILY,
+    mode: isOneOf(REPORT_MODES, mode) ? mode : "onion",
+    opacity: parsePercent(params.get("ro")),
+    swipe: parsePercent(params.get("rs")),
+    layers: parseReportLayers(params.get("rl")),
+    zoom: isOneOf(REPORT_ZOOMS, zoom) ? zoom : "fit",
+  };
+}
+
+function normalizePercent(value: number): number {
+  return Number.isFinite(value) ? clamp(Math.round(value), 0, 100) : DEFAULT_REPORT_PERCENT;
+}
+
+/**
+ * Serialises the report state in the fixed order rt, rf, rm, ro, rs, rl, rz,
+ * omitting defaults. `rl=none` means every toggle is off, since an empty
+ * value would read back as the default.
+ */
+export function toReportSearch(state: ReportState): string {
+  const defaults = defaultReportState();
+  const pairs: [string, string][] = [];
+  if (state.test !== undefined && REPORT_TEST_ID.test(state.test)) {
+    pairs.push(["rt", state.test]);
+  }
+  if (state.family !== defaults.family && isSpecimenFamily(state.family)) {
+    pairs.push(["rf", state.family]);
+  }
+  if (state.mode !== defaults.mode && isOneOf(REPORT_MODES, state.mode)) {
+    pairs.push(["rm", state.mode]);
+  }
+  const opacity = normalizePercent(state.opacity);
+  if (opacity !== defaults.opacity) {
+    pairs.push(["ro", String(opacity)]);
+  }
+  const swipe = normalizePercent(state.swipe);
+  if (swipe !== defaults.swipe) {
+    pairs.push(["rs", String(swipe)]);
+  }
+  const layers = orderedLayers(state.layers);
+  if (layers.join(",") !== defaults.layers.join(",")) {
+    pairs.push(["rl", layers.length > 0 ? layers.join(",") : NO_LAYERS]);
+  }
+  if (state.zoom !== defaults.zoom && isOneOf(REPORT_ZOOMS, state.zoom)) {
+    pairs.push(["rz", state.zoom]);
+  }
+  if (pairs.length === 0) {
+    return "";
+  }
+  return `?${pairs.map(([key, value]) => `${key}=${encodeReadable(value)}`).join("&")}`;
+}
+
+/** Turns one viewer toggle on or off. */
+export function toggleReportLayer(state: ReportState, layer: ReportLayer): ReportState {
+  const layers = state.layers.includes(layer)
+    ? state.layers.filter((entry) => entry !== layer)
+    : orderedLayers([...state.layers, layer]);
+  return { ...state, layers };
+}

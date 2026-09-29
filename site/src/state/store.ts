@@ -1,7 +1,14 @@
-import { replaceState } from "./history";
-import { parseState, type PlaygroundState } from "./url";
+import { replaceSearch, replaceState } from "./history";
+import {
+  parseReportState,
+  parseState,
+  toReportSearch,
+  type PlaygroundState,
+  type ReportState,
+} from "./url";
 
 const STATE_EVENT = "sawa:state";
+const REPORT_EVENT = "sawa:report-state";
 
 /** The playground state the current URL describes. */
 export function readState(): PlaygroundState {
@@ -22,4 +29,21 @@ export function commit(next: PlaygroundState): void {
 export function subscribe(listener: (state: PlaygroundState) => void): void {
   window.addEventListener(STATE_EVENT, () => listener(readState()));
   listener(readState());
+}
+
+/** The report page's state the current URL describes. */
+export function readReportState(): ReportState {
+  return parseReportState(location.search);
+}
+
+/** `commit` for the report page's state. */
+export function commitReport(next: ReportState): void {
+  replaceSearch(toReportSearch(next));
+  window.dispatchEvent(new Event(REPORT_EVENT));
+}
+
+/** `subscribe` for the report page's state. */
+export function subscribeReport(listener: (state: ReportState) => void): void {
+  window.addEventListener(REPORT_EVENT, () => listener(readReportState()));
+  listener(readReportState());
 }
