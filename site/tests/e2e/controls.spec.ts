@@ -4,6 +4,7 @@ import { BASE_PATH } from "./config";
 
 const SPECIMEN = localizedPath(BASE_PATH, "en", "specimen");
 const SPECIMEN_AR = localizedPath(BASE_PATH, "ar", "specimen");
+const COMPARE = localizedPath(BASE_PATH, "en", "compare");
 
 async function top(page: Page, selector: string): Promise<number> {
   return page.locator(selector).evaluate((element) => element.getBoundingClientRect().top);
@@ -207,5 +208,53 @@ test.describe("mobile", () => {
         expect(gap).toBeLessThanOrEqual(24);
       }
     }
+  });
+});
+
+test.describe("Compare", () => {
+  test("desktop keeps its controls in a sticky inline-start column", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(COMPARE);
+    const dock = page.getByRole("complementary", {
+      name: "These settings change every font on this page",
+    });
+    await expect(dock).toBeVisible();
+    const dockBox = await dock.boundingBox();
+    const stageBox = await page.locator(".compare-main").boundingBox();
+    expect(dockBox && stageBox && dockBox.x + dockBox.width < stageBox.x).toBe(true);
+
+    await page.evaluate(() => window.scrollTo(0, 1200));
+    await expect.poll(() => top(page, "[data-dock]")).toBeLessThan(40);
+  });
+
+  test("tablet collapses the controls into a summary bar", async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 900 });
+    await page.goto(COMPARE);
+    const toggle = page.locator("[data-dock-toggle]");
+    await expect(toggle).toContainText("Mixed English and Arabic · 32 px · Stacked");
+    await expect(page.locator("[data-dock-panel]")).toBeHidden();
+    await toggle.click();
+    await expect(page.locator("#compare-preset")).toBeVisible();
+  });
+
+  test("mobile opens the controls in a sheet that updates the stage and the URL", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(COMPARE);
+    const fab = page.getByRole("button", { name: "Settings for every font on this page" });
+    await fab.click();
+    const sheet = page.getByRole("dialog", {
+      name: "These settings change every font on this page",
+    });
+    await expect(sheet).toBeVisible();
+
+    await sheet.locator("#compare-preset").selectOption("quran");
+    expect(new URL(page.url()).searchParams.get("preset")).toBe("quran");
+    await expect(fab).toContainText("Al-Fatiha (Tanzil)");
+
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(fab).toBeFocused();
   });
 });

@@ -63,7 +63,6 @@
   "compare.title": "مقارنة الخطوط مع سوا",
   "compare.h1": "المقارنة",
   "compare.body": "ضع سوا بجانب خطوط عربية ولاتينية أخرى لمقارنة الوزن والتباعد والإيقاع بين الخطين.",
-  "compare.controls": "أدوات التحكم في المقارنة",
   "compare.preset": "العينة",
   "compare.preset.mixed": "عربي وإنجليزي معًا",
   "compare.preset.quran": "سورة الفاتحة (تنزيل)",
@@ -240,5 +239,7 @@
   "controls.name.palette": "لوحة الألوان",
   "controls.name.grid": "شبكة الأسطر",
   "controls.open": "الإعدادات لكل العينات في هذه الصفحة",
-  "controls.close": "إغلاق الإعدادات"
+  "controls.close": "إغلاق الإعدادات",
+  "compare.controlsHeading": "تغيّر هذه الإعدادات كل الخطوط في هذه الصفحة",
+  "compare.controlsOpen": "الإعدادات لكل الخطوط في هذه الصفحة"
 }

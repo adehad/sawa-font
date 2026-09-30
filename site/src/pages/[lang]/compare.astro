@@ -1,5 +1,6 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ControlDock from "../../components/controls/ControlDock.astro";
 import SampleControls from "../../components/compare/SampleControls.astro";
 import TypeControls from "../../components/compare/TypeControls.astro";
 import FontRoster from "../../components/compare/FontRoster.astro";
@@ -32,39 +33,71 @@ const pageCss = paletteCss(loadFontsData());
   <style is:global set:html={pageCss}></style>
   <script type="application/json" data-compare-messages set:html={messagesJson(clientMessages)}
   ></script>
-  <div class="compare">
-    <header class="compare-intro">
-      <h1>{t(locale, "compare.h1")}</h1>
-      <p>{t(locale, "compare.body")}</p>
-    </header>
-    <div class="compare-controls" role="group" aria-label={t(locale, "compare.controls")}>
-      <SampleControls locale={locale} />
-      <TypeControls locale={locale} />
-      <FontRoster locale={locale} />
-      <PaletteControl locale={locale} />
-      <FeaturePanel locale={locale} />
-      <LocalFont locale={locale} />
+  <div class="compare dock-layout">
+    <ControlDock
+      locale={locale}
+      heading={t(locale, "compare.controlsHeading")}
+      openLabel={t(locale, "compare.controlsOpen")}
+    >
+      <div
+        class="control-groups"
+        data-compare-controls
+        data-size-template={rawMessage(locale, "controls.summarySize")}
+      >
+        <SampleControls locale={locale} />
+        <TypeControls locale={locale} />
+        <FontRoster locale={locale} />
+        <PaletteControl locale={locale} />
+        <FeaturePanel locale={locale} />
+        <LocalFont locale={locale} />
+      </div>
+    </ControlDock>
+    <div class="compare-main">
+      <header class="compare-intro">
+        <h1>{t(locale, "compare.h1")}</h1>
+        <p>{t(locale, "compare.body")}</p>
+      </header>
+      <Stage locale={locale} />
     </div>
-    <Stage locale={locale} />
   </div>
 </Base>
 
 <script>
   import { COMPARE_WEIGHT } from "../../fonts/compare";
   import { storedWeight } from "../../fonts/specimen";
-  import { commit, readState } from "../../state/store";
+  import { setDockSummary } from "../../components/controls/dock";
+  import { fillTemplate } from "../../components/controls/summary";
+  import { commit, readState, subscribe } from "../../state/store";
+  import { clampSize } from "../../state/url";
 
   const loaded = readState();
   const weight = storedWeight(loaded.weight, COMPARE_WEIGHT);
   if (weight !== loaded.weight) {
     commit({ ...loaded, weight });
   }
+
+  const controls = document.querySelector<HTMLElement>("[data-compare-controls]");
+  if (controls) {
+    const numbers = new Intl.NumberFormat(document.documentElement.lang);
+    const sizeTemplate = controls.dataset.sizeTemplate ?? "{size}";
+    const label = (selector: string): string =>
+      controls.querySelector(selector)?.textContent?.trim() ?? "";
+    subscribe((state) => {
+      setDockSummary([
+          label(`[data-preset] option[value="${state.preset}"]`),
+          fillTemplate(sizeTemplate, { size: numbers.format(clampSize(state.size)) }),
+          label(`[data-view-button="${state.view}"]`),
+      ]);
+    });
+  }
 </script>
 
 <style is:global>
-  .compare {
+  .compare-main {
     display: grid;
+    align-content: start;
     gap: 1.5rem;
+    min-inline-size: 0;
   }
 
   .compare-intro h1 {
@@ -77,26 +110,11 @@ const pageCss = paletteCss(loadFontsData());
     color: var(--color-muted);
   }
 
-  .compare-controls {
+  .compare .control-groups {
     display: grid;
     align-content: start;
     gap: 1.25rem;
     min-inline-size: 0;
-    padding: 1.25rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-rule);
-    border-radius: 0.5rem;
-  }
-
-  @media (width >= 64rem) {
-    .compare {
-      grid-template-columns: minmax(17rem, 21rem) minmax(0, 1fr);
-      align-items: start;
-    }
-
-    .compare-intro {
-      grid-column: 1 / -1;
-    }
   }
 
   .compare .control {

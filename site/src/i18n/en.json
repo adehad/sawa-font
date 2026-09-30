@@ -63,7 +63,6 @@
   "compare.title": "Compare fonts with Sawa",
   "compare.h1": "Compare",
   "compare.body": "Place Sawa next to other Arabic and Latin faces to compare weight, spacing and rhythm across scripts.",
-  "compare.controls": "Comparison controls",
   "compare.preset": "Sample",
   "compare.preset.mixed": "Mixed English and Arabic",
   "compare.preset.quran": "Al-Fatiha (Tanzil)",
@@ -240,5 +239,7 @@
   "controls.name.palette": "Palette",
   "controls.name.grid": "Line grid",
   "controls.open": "Settings for every sample on this page",
-  "controls.close": "Close settings"
+  "controls.close": "Close settings",
+  "compare.controlsHeading": "These settings change every font on this page",
+  "compare.controlsOpen": "Settings for every font on this page"
 }
