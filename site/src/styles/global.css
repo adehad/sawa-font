@@ -13,14 +13,6 @@
   --layer-diff: light-dark(#c77700, #ffc94d);
   --grid-band: light-dark(rgb(47 93 80 / 0.08), rgb(111 191 168 / 0.1));
   --grid-rule: light-dark(rgb(47 93 80 / 0.55), rgb(111 191 168 / 0.6));
-  --mark-short: light-dark(#0072b2, #56b4e9);
-  --mark-tanween: light-dark(#c0510a, #f0883e);
-  --mark-sukun: light-dark(#8e8a82, #7a766f);
-  --mark-shadda: light-dark(#a8467f, #e58fc4);
-  --mark-madd: light-dark(#00785a, #3fc79b);
-  --mark-hamza: light-dark(#9a6a00, #e0b440);
-  --mark-waqf: light-dark(#5f5a50, #b8b0a1);
-  --mark-other: light-dark(#7a7466, #948d80);
   --font-serif: Georgia, "Times New Roman", Cambria, serif;
 }
 

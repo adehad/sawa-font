@@ -42,7 +42,8 @@
         { "source": "noto_serif", "path": "OFL.txt" },
         { "source": "noto_naskh_arabic", "path": "OFL.txt" }
       ],
-      "site": { "generic": "serif" }
+      "site": { "generic": "serif" },
+      "harakat": true
     },
     "sawa-sans": {
       "name": "Sawa Sans",
@@ -63,7 +64,8 @@
         { "source": "noto_sans", "path": "OFL.txt" },
         { "source": "noto_sans_arabic", "path": "OFL.txt" }
       ],
-      "site": { "generic": "sans-serif" }
+      "site": { "generic": "sans-serif" },
+      "harakat": true
     },
     "sawa-mono": {
       "name": "Sawa Mono",

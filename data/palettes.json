@@ -1,0 +1,19 @@
+{
+  "order": [
+    { "palette": "groups", "scheme": "light", "label": "Groups (light)" },
+    { "palette": "groups", "scheme": "dark", "label": "Groups (dark)" },
+    { "palette": "gray", "scheme": "light", "label": "Gray (light)" },
+    { "palette": "gray", "scheme": "dark", "label": "Gray (dark)" }
+  ],
+  "groups": {
+    "short": { "light": "#0072b2", "dark": "#56b4e9" },
+    "tanween": { "light": "#c0510a", "dark": "#f0883e" },
+    "sukun": { "light": "#8e8a82", "dark": "#7a766f" },
+    "shadda": { "light": "#a8467f", "dark": "#e58fc4" },
+    "madd": { "light": "#00785a", "dark": "#3fc79b" },
+    "hamza": { "light": "#9a6a00", "dark": "#e0b440" },
+    "waqf": { "light": "#5f5a50", "dark": "#b8b0a1" },
+    "other": { "light": "#7a7466", "dark": "#948d80" }
+  },
+  "gray": { "light": "#6b665d", "dark": "#a9a297" }
+}

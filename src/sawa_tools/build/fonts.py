@@ -210,6 +210,14 @@ def build_fonts(
                 fonts_manifest[family.id] = _publish_family(
                     built, out_dir, sources, cached_paths
                 )
+            if family.harakat and not refit:
+                twin = _build_twin(built, fonts_dir, families.parent, force)
+                state = "built" if twin.rebuilt else "up to date"
+                print(f"{twin.family.id}: {state}")
+                if twin.woff2 is not None:
+                    fonts_manifest[twin.family.id] = _publish_family(
+                        twin, out_dir, sources, cached_paths
+                    )
         if refit:
             print("refitted only the named families; run `sawa build fonts` next")
             return
@@ -294,6 +302,17 @@ def build_fonts(
         json.dumps({"fonts": fonts_manifest}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _build_twin(
+    built: BuiltFamily, fonts_dir: Path, data_dir: Path, force: bool
+) -> BuiltFamily:
+    from sawa_tools.build.harakat import HarakatError, build_twin
+
+    try:
+        return build_twin(built, fonts_dir=fonts_dir, data_dir=data_dir, force=force)
+    except HarakatError as exc:
+        raise BuildError(f"family '{built.family.id}' Harakat: {exc}") from exc
 
 
 def _publish_family(

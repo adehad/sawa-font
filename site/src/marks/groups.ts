@@ -1,4 +1,4 @@
-import markGroupsData from "../../../data/mark-groups.json";
+import markGroupsData from "../../../data/mark-groups.json" with { type: "json" };
 
 export type MarkGroupId =
   | "short"

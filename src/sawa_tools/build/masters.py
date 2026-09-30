@@ -35,6 +35,7 @@ _LATER_KEYS = (
     "leading",
     "compaction",
     "metrics",
+    "harakat",
 )
 
 _INDEX = "masters.json"

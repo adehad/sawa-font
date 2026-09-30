@@ -7,6 +7,7 @@ import { localizedPath, PAGE_NAMES, type PageName } from "../i18n/paths";
 import { loadFontsData } from "../fonts/load";
 import { fontFaceCss, fontStack, SAWA_FONT_IDS } from "../fonts/css";
 import { isReportOnly } from "../report/mode";
+import { markTokens } from "../marks/palettes";
 
 interface Props {
   locale: Locale;
@@ -32,10 +33,13 @@ const navEntries: { name: PageName; labelKey: MessageKey }[] = visiblePages.map(
 
 const fontsData = loadFontsData();
 const rootTokens = [
-  `  --font-ui: ${fontStack(fontsData, "sawa-sans")};`,
-  `  --font-display: ${fontStack(fontsData, "sawa-serif")};`,
-  `  --font-mono: ${fontStack(fontsData, "sawa-mono")};`,
-].join("\n");
+  `--font-ui: ${fontStack(fontsData, "sawa-sans")};`,
+  `--font-display: ${fontStack(fontsData, "sawa-serif")};`,
+  `--font-mono: ${fontStack(fontsData, "sawa-mono")};`,
+  ...markTokens(),
+]
+  .map((line) => `  ${line}`)
+  .join("\n");
 const fontStyles = `${fontFaceCss(fontsData, base, reportOnly ? SAWA_FONT_IDS : undefined)}\n\n:root {\n${rootTokens}\n}`;
 
 const uiFace = fontsData.fonts["sawa-sans"]?.faces.find((face) => face.style === "normal");

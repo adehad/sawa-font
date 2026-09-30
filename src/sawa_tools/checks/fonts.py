@@ -6,7 +6,8 @@ lines without .notdef at those weights, the line box matches the config,
 no family name carries a reserved upstream name, a monospace family's
 advances are all zero or its cell width, and every mark in
 data/mark-groups.json the font maps is attached and clear of its letter at
-those weights (see attachment.py).
+those weights (see attachment.py). A family's Harakat twin gets the same
+axis, instancer, line box and name checks, and those of harakat.py.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from sawa_tools.build.families import (
     FamilyError,
     load_config,
 )
+from sawa_tools.build.harakat import PALETTES_FILE, HarakatError, twin_family
 from sawa_tools.checks.attachment import DEFAULT_MAX_GAP_EM
 from sawa_tools.checks.marks import (
     DEFAULT_GROUPS,
@@ -109,11 +111,23 @@ def run(args: argparse.Namespace) -> int:
                 marks=marks,
                 max_mark_gap=args.max_mark_gap,
             )
-            for error in errors:
-                print(f"{family.id}: {error}", file=sys.stderr)
-            if not errors:
-                print(f"OK: {family.id}")
-            failed = failed or bool(errors)
+            report = {family.id: errors}
+            if family.harakat:
+                twin = twin_family(family)
+                report[twin.id] = check_twin_family(
+                    family,
+                    args.fonts_dir,
+                    config.reserved_names,
+                    lines,
+                    args.groups,
+                    args.families.parent / PALETTES_FILE,
+                )
+            for family_id, family_errors in report.items():
+                for error in family_errors:
+                    print(f"{family_id}: {error}", file=sys.stderr)
+                if not family_errors:
+                    print(f"OK: {family_id}")
+                failed = failed or bool(family_errors)
     except (FamilyError, FontsCheckError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -254,6 +268,78 @@ def shaping_errors(
     return errors
 
 
+def _variable_errors(font: Any, ttf: Path, family: Family) -> list[str]:
+    """The wght axis matches the config and instances at its minimum,
+    default and maximum.
+    """
+    from fontTools.ttLib import TTFont
+    from fontTools.varLib import instancer
+
+    from sawa_tools.build.merge import axis_range
+
+    errors = []
+    axis = axis_range(font, "wght")
+    if axis != family.wght:
+        errors.append(f"fvar wght {axis} differs from the config's {family.wght}")
+    for weight in _weights(family):
+        try:
+            static = instancer.instantiateVariableFont(
+                TTFont(ttf), {"wght": weight}, inplace=False
+            )
+            static.save(io.BytesIO())
+        except Exception as exc:
+            errors.append(f"instancer fails at wght {weight:g}: {exc}")
+            continue
+        if family.cell_width is not None:
+            errors += advance_errors(static, family.cell_width, f"wght {weight:g}")
+    return errors
+
+
+def _weights(family: Family) -> list[float]:
+    return sorted({family.wght.minimum, family.wght.default, family.wght.maximum})
+
+
+def check_twin_family(
+    family: Family,
+    fonts_dir: Path,
+    reserved: list[str],
+    lines: list[Line],
+    groups: Path,
+    palettes: Path,
+) -> list[str]:
+    """The checks of the Harakat twin of `family` (build/harakat.py)."""
+    from fontTools.ttLib import TTFont
+
+    from sawa_tools.build.harakat import load_groups, load_palettes
+    from sawa_tools.build.naming import family_name_records, reserved_name_hits
+    from sawa_tools.checks.harakat import check_twin
+
+    twin = twin_family(family)
+    ttf = fonts_dir / twin.ttf_name
+    if not ttf.exists():
+        return [f"{ttf} not found; run `sawa build fonts` first"]
+    try:
+        grouped = load_groups(groups)
+        coloured = load_palettes(palettes, grouped)
+    except HarakatError as exc:
+        raise FontsCheckError(str(exc)) from exc
+    try:
+        font = TTFont(ttf)
+        errors = _variable_errors(font, ttf, twin)
+    except Exception as exc:
+        return [f"cannot open {ttf} as a wght variable font: {exc}"]
+    errors += line_box_errors(font, twin)
+    errors += name_errors(font, twin.cell_width)
+    errors += [
+        f"reserved name in {hit}"
+        for hit in reserved_name_hits(family_name_records(font), reserved)
+    ]
+    weights = [family.wght.minimum, family.wght.maximum]
+    return errors + check_twin(
+        ttf, fonts_dir / family.ttf_name, twin.name, weights, lines, grouped, coloured
+    )
+
+
 def check_family(
     family: Family,
     ttf: Path,
@@ -265,7 +351,6 @@ def check_family(
 ) -> list[str]:
     try:
         from fontTools.ttLib import TTFont
-        from fontTools.varLib import instancer
     except ImportError as exc:
         raise FontsCheckError(
             "fontTools and uharfbuzz are required; install the 'build' "
@@ -280,26 +365,12 @@ def check_family(
     try:
         font = TTFont(ttf)
         data = ttf.read_bytes()
-        axis = axis_range(font, "wght")
+        axis_range(font, "wght")
     except Exception as exc:
         return [f"cannot open {ttf} as a wght variable font: {exc}"]
 
-    errors = []
-    if axis != family.wght:
-        errors.append(f"fvar wght {axis} differs from the config's {family.wght}")
-    weights = sorted({family.wght.minimum, family.wght.default, family.wght.maximum})
-
-    for weight in weights:
-        try:
-            static = instancer.instantiateVariableFont(
-                TTFont(ttf), {"wght": weight}, inplace=False
-            )
-            static.save(io.BytesIO())
-        except Exception as exc:
-            errors.append(f"instancer fails at wght {weight:g}: {exc}")
-            continue
-        if family.cell_width is not None:
-            errors += advance_errors(static, family.cell_width, f"wght {weight:g}")
+    errors = _variable_errors(font, ttf, family)
+    weights = _weights(family)
     if family.cell_width is not None:
         errors += advance_errors(font, family.cell_width, "default")
 

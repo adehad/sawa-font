@@ -101,6 +101,8 @@ class Family:
     box_parts: tuple[str, ...] | None = None
     compaction: dict[str, Any] | None = None
     borrow: list[Borrow] = field(default_factory=list)
+    # Whether the family has a Harakat twin (harakat.py).
+    harakat: bool = False
     raw: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -233,6 +235,7 @@ def _parse_family(
         ),
         compaction=_compaction_config(compaction, raw),
         borrow=borrow,
+        harakat=bool(raw.get("harakat", False)),
         raw=raw,
     )
 
