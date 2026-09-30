@@ -1,5 +1,5 @@
 import { fontStack } from "./css";
-import { lineMetrics, type LineMetrics, type WeightAxis } from "./specimen";
+import { lineMetrics, paletteTwin, type LineMetrics, type WeightAxis } from "./specimen";
 import type { FamilyInfo, FontsData } from "./types";
 import type { FontId } from "./roster";
 
@@ -25,6 +25,8 @@ export interface CompareFont {
   /** GSUB and GPOS feature tags across all of the font's families, sorted. */
   readonly features: readonly string[];
   readonly hasPalettes: boolean;
+  /** The Harakat twin's stack, which the gray and groups palettes show; null without one. */
+  readonly twinStack: string | null;
 }
 
 export function guideMetrics(info: FamilyInfo): GuideMetrics {
@@ -44,6 +46,7 @@ export function compareFont(data: FontsData, id: FontId): CompareFont {
     throw new Error(`fonts.json: no family info for "${id}"`);
   }
   const families = Object.values(entry.families);
+  const twin = paletteTwin(data, id);
   const axis = primary.axes.find((candidate) => candidate.tag === "wght");
   const staticWeights = [
     ...new Set(
@@ -57,7 +60,10 @@ export function compareFont(data: FontsData, id: FontId): CompareFont {
     staticWeights,
     metrics: guideMetrics(primary),
     features: [...new Set(families.flatMap((family) => family.features))].toSorted(),
-    hasPalettes: families.some((family) => family.cpal !== null && family.cpal.palettes > 0),
+    hasPalettes:
+      twin !== undefined ||
+      families.some((family) => family.cpal !== null && family.cpal.palettes > 0),
+    twinStack: twin === undefined ? null : fontStack(data, twin),
   };
 }
 

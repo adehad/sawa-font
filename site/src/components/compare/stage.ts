@@ -84,7 +84,8 @@ export function mountStage(stage: HTMLElement, panes: HTMLElement): void {
       }
       const font = paneFont(id);
       const weight = font.weight(state.weight);
-      body.style.fontFamily = font.stack;
+      const palette = body.dataset.pal ?? "";
+      body.style.fontFamily = isPalette(palette) ? font.stackFor(palette) : font.stack;
       body.style.fontWeight = String(weight.weight);
       body.style.fontFeatureSettings = featureSettings(state.features);
       body.style.setProperty("--sample-size", `${clampSize(state.size)}px`);

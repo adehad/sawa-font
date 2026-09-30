@@ -8,7 +8,7 @@ import {
 } from "../../fonts/compare";
 import { loadFontsData } from "../../fonts/load";
 import { FONT_ROSTER, type FontId } from "../../fonts/roster";
-import type { FontOrLocal } from "../../state/url";
+import type { FontOrLocal, Palette } from "../../state/url";
 
 /** Why a pane has no metrics to draw. */
 export type MetricsGap = "woff2" | "unreadable" | "none";
@@ -21,6 +21,8 @@ export interface PaneFont {
   readonly features: readonly string[] | null;
   readonly hasPalettes: boolean;
   readonly metrics: GuideMetrics | MetricsGap;
+  /** The stack a pane sets under `palette`: a Sawa family's Harakat twin for gray and groups. */
+  stackFor(palette: Palette): string;
   weight(target: number | undefined): RenderedWeight;
 }
 
@@ -39,6 +41,8 @@ function rosterFonts(): Map<FontId, PaneFont> {
             features: font.features,
             hasPalettes: font.hasPalettes,
             metrics: font.metrics,
+            stackFor: (palette) =>
+              palette === "mono" || font.twinStack === null ? font.stack : font.twinStack,
             weight: (target) => renderedWeight(target, font),
           },
         ];
@@ -56,6 +60,7 @@ function localPaneFont(): PaneFont {
       features: null,
       hasPalettes: false,
       metrics: "none",
+      stackFor: () => "",
       weight: (target) => ({ weight: target ?? COMPARE_WEIGHT.default, nearest: false }),
     };
   }
@@ -66,6 +71,7 @@ function localPaneFont(): PaneFont {
       features: null,
       hasPalettes: false,
       metrics: local.sfnt.kind,
+      stackFor: () => stack,
       weight: (target) => ({ weight: target ?? COMPARE_WEIGHT.default, nearest: false }),
     };
   }
@@ -76,6 +82,7 @@ function localPaneFont(): PaneFont {
     features: info.features,
     hasPalettes: info.hasPalettes,
     metrics: info.metrics,
+    stackFor: () => stack,
     weight: (target) => renderedWeight(target, { axis: info.axis, staticWeights }),
   };
 }

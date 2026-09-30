@@ -140,7 +140,7 @@ test("the shared and per-pane palettes round-trip through the URL", async ({ pag
 test("with no CPAL on screen the palette switch is hidden and pane palettes are disabled", async ({
   page,
 }) => {
-  await open(page, `${COMPARE}?view=side`);
+  await open(page, `${COMPARE}?view=side&fonts=amiri,noto`);
 
   await expect(page.locator("[data-palette-switch]")).toBeHidden();
   await expect(page.locator("[data-palette-none]")).toBeVisible();

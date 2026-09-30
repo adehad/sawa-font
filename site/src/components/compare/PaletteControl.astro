@@ -32,6 +32,9 @@ const initial = defaultState();
   <p id="compare-palette-none" class="control-note" data-palette-none>
     {t(locale, "compare.paletteNone")}
   </p>
+  <p id="compare-palette-harakat" class="control-note" data-palette-harakat hidden>
+    {t(locale, "compare.paletteHarakat")}
+  </p>
 </div>
 
 <script>
@@ -44,14 +47,16 @@ const initial = defaultState();
   const root = document.querySelector<HTMLElement>("[data-palette-control]");
   const fieldset = root?.querySelector<HTMLFieldSetElement>("[data-palette-switch]");
   const none = root?.querySelector<HTMLElement>("[data-palette-none]");
-  if (root && fieldset && none) {
+  const harakat = root?.querySelector<HTMLElement>("[data-palette-harakat]");
+  if (root && fieldset && none && harakat) {
     const buttons = root.querySelectorAll<HTMLButtonElement>("[data-palette]");
 
     function render(state: PlaygroundState): void {
       const any = visiblePanes(state).some((pane) => paneFont(pane.font).hasPalettes);
-      if (fieldset && none) {
+      if (fieldset && none && harakat) {
         fieldset.hidden = !any;
         none.hidden = any;
+        harakat.hidden = !any;
       }
       buttons.forEach((button) => {
         button.setAttribute("aria-pressed", String(button.dataset.palette === state.palette));

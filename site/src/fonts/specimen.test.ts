@@ -11,7 +11,7 @@ import {
   specimenFamilies,
   storedWeight,
 } from "./specimen";
-import type { FamilyInfo, FontsData } from "./types";
+import type { FamilyInfo, FontsData, PaletteType } from "./types";
 import { defaultState } from "../state/url";
 
 function family(overrides: Partial<FamilyInfo> = {}): FamilyInfo {
@@ -146,16 +146,66 @@ describe("specimenCss", () => {
   });
 });
 
+function withTwin(data: FontsData, types: PaletteType[]): FontsData {
+  const twin = entry("sawa-serif-harakat", family({ cpal: { palettes: types.length, types } }));
+  return { fonts: { ...data.fonts, "sawa-serif-harakat": twin } };
+}
+
+const FOUR: PaletteType[] = ["light", "dark", "light", "dark"];
+
+/** The declarations of every rule `selector` opens, in order. */
+function rulesFor(css: string, selector: string): string[] {
+  return css
+    .split("\n")
+    .flatMap((line, index, lines) =>
+      line.trim() === `${selector} {` ? [lines[index + 1]?.trim() ?? ""] : [],
+    );
+}
+
 describe("paletteCss", () => {
-  test("is empty when no family has CPAL", () => {
+  test("is empty when no Sawa family has a Harakat twin", () => {
     expect(paletteCss(fixture())).toBe("");
   });
 
-  test("names one rule per palette the font has", () => {
-    const css = paletteCss(fixture(family({ cpal: { palettes: 2, types: [null, null] } })));
-    expect(css).toContain("@font-palette-values --sawa-mono {");
-    expect(css).toContain("@font-palette-values --sawa-gray {");
-    expect(css).not.toContain("--sawa-groups");
-    expect(css).toContain("base-palette: 1;");
+  test("names each twin palette by its palettes.json order", () => {
+    const css = paletteCss(withTwin(fixture(), FOUR));
+    expect(rulesFor(css, "@font-palette-values --sawa-groups-light")).toEqual([
+      'font-family: "sawa-serif-harakat";',
+    ]);
+    expect(css).toMatch(/--sawa-groups-light \{[^}]*base-palette: 0;/);
+    expect(css).toMatch(/--sawa-gray-dark \{[^}]*base-palette: 3;/);
+    expect(css).not.toContain("--sawa-mono");
+  });
+
+  test("picks the dark palette in a dark theme, and a stage's own background wins", () => {
+    const css = paletteCss(withTwin(fixture(), FOUR));
+    expect(rulesFor(css, '[data-pal="groups"]')).toEqual([
+      "font-palette: --sawa-groups-light;",
+      "font-palette: --sawa-groups-dark;",
+    ]);
+    expect(css.indexOf("@media (prefers-color-scheme: dark)")).toBeLessThan(
+      css.indexOf("font-palette: --sawa-groups-dark;"),
+    );
+    expect(rulesFor(css, '[data-bg="light"] [data-pal="gray"]')).toEqual([
+      "font-palette: --sawa-gray-light;",
+    ]);
+    expect(rulesFor(css, '[data-bg="dark"] [data-pal="gray"]')).toEqual([
+      "font-palette: --sawa-gray-dark;",
+    ]);
+  });
+
+  test("swaps a family for its twin under gray and groups only", () => {
+    const css = paletteCss(withTwin(fixture(), FOUR));
+    expect(
+      rulesFor(css, '[data-harakat="sawa-serif"]:is([data-pal="gray"], [data-pal="groups"])'),
+    ).toEqual(['font-family: "sawa-serif-harakat", serif;']);
+    expect(css).not.toContain('[data-harakat="sawa-sans"]');
+  });
+
+  test("a twin without CPAL gives the family no palettes", () => {
+    const data = withTwin(fixture(), []);
+    expect(paletteCss(data)).toBe("");
+    expect(familyInfo(data, "sawa-serif").hasPalettes).toBe(false);
+    expect(familyInfo(withTwin(fixture(), FOUR), "sawa-serif").hasPalettes).toBe(true);
   });
 });

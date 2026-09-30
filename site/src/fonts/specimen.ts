@@ -1,4 +1,6 @@
 import { fontStack } from "./css";
+import { HARAKAT_TWINS, harakatTwin, type HarakatId } from "./roster";
+import { COLOUR_PALETTES, CPAL_PALETTES, type Scheme } from "../marks/palettes";
 import type { FamilyInfo, FontsData } from "./types";
 import { SPECIMEN_FAMILIES, type PlaygroundState, type SpecimenFamily } from "../state/url";
 
@@ -90,7 +92,7 @@ export function familyInfo(data: FontsData, id: SpecimenFamily): SpecimenFamilyI
       return wght === undefined ? [] : [{ name: instance.name, wght }];
     }),
     metrics: lineMetrics(info),
-    hasPalettes: info.cpal !== null && info.cpal.palettes > 0,
+    hasPalettes: (info.cpal?.palettes ?? 0) > 0 || paletteTwin(data, id) !== undefined,
   };
 }
 
@@ -153,30 +155,72 @@ export function specimenCss(
   return rules.join("\n\n");
 }
 
+function paletteCount(data: FontsData, id: string): number {
+  const entry = data.fonts[id];
+  const primary = entry?.stack[0];
+  const info = primary === undefined ? undefined : entry?.families[primary];
+  return info?.cpal?.palettes ?? 0;
+}
+
 /**
- * One @font-palette-values rule per palette, named --sawa-<palette> and
- * covering every Sawa family whose CPAL table has it. CPAL order isn't fixed
- * yet; this assumes the palettes are stored in PALETTE_NAMES order.
+ * The Harakat twin whose palettes the gray and groups palettes show `id`
+ * in, or undefined when `id` has none in fonts.json.
+ */
+export function paletteTwin(data: FontsData, id: string): HarakatId | undefined {
+  const twin = harakatTwin(id);
+  return twin !== undefined && paletteCount(data, twin) > 0 ? twin : undefined;
+}
+
+function block(selector: string, declaration: string): string {
+  return `${selector} {\n  ${declaration}\n}`;
+}
+
+/** Each colour palette's `font-palette` for `scheme`, under `prefix`. */
+function choose(prefix: string, scheme: Scheme): string[] {
+  return COLOUR_PALETTES.map((palette) =>
+    block(`${prefix}[data-pal="${palette}"]`, `font-palette: --sawa-${palette}-${scheme};`),
+  );
+}
+
+/**
+ * The palette CSS: one @font-palette-values rule per CPAL palette of the
+ * Harakat builds, `font-palette` for each [data-pal] under the theme in
+ * force, and each [data-harakat] family swapped for its twin under gray
+ * and groups. Chrome keeps `font-palette: normal` on palette 0 in dark mode
+ * whatever its CPAL type, so a dark theme names the dark palette itself.
  */
 export function paletteCss(data: FontsData): string {
-  const counts: [string, number][] = [];
-  for (const id of SPECIMEN_FAMILIES) {
-    for (const [family, info] of Object.entries(data.fonts[id]?.families ?? {})) {
-      counts.push([family, info.cpal?.palettes ?? 0]);
-    }
+  const twins = Object.entries(HARAKAT_TWINS).filter(([id]) => paletteTwin(data, id));
+  if (twins.length === 0) {
+    return "";
   }
-  return PALETTE_NAMES.flatMap((palette, index) => {
-    const families = counts.filter(([, count]) => count > index).map(([family]) => `"${family}"`);
+  const rules = CPAL_PALETTES.flatMap(({ palette, scheme, index }) => {
+    const families = twins
+      .filter(([, twin]) => paletteCount(data, twin) > index)
+      .map(([, twin]) => `"${data.fonts[twin]?.stack[0] ?? twin}"`);
     if (families.length === 0) {
       return [];
     }
     return [
       [
-        `@font-palette-values --sawa-${palette} {`,
+        `@font-palette-values --sawa-${palette}-${scheme} {`,
         `  font-family: ${families.join(", ")};`,
         `  base-palette: ${index};`,
         "}",
       ].join("\n"),
     ];
-  }).join("\n\n");
+  });
+  rules.push(
+    ...choose("", "light"),
+    `@media (prefers-color-scheme: dark) {\n${choose("", "dark").join("\n")}\n}`,
+    ...choose('[data-bg="light"] ', "light"),
+    ...choose('[data-bg="dark"] ', "dark"),
+  );
+  const coloured = COLOUR_PALETTES.map((palette) => `[data-pal="${palette}"]`).join(", ");
+  for (const [id, twin] of twins) {
+    rules.push(
+      block(`[data-harakat="${id}"]:is(${coloured})`, `font-family: ${fontStack(data, twin)};`),
+    );
+  }
+  return rules.join("\n\n");
 }

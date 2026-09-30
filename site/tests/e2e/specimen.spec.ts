@@ -149,13 +149,12 @@ test("the mark legend has one chip per group in mark-groups.json", async ({ page
   );
 });
 
-test("with no CPAL in fonts.json the palette switch is hidden and the note says so", async ({
-  page,
-}) => {
-  await page.goto(SPECIMEN);
+test("a family without a Harakat twin hides the palette switch and says so", async ({ page }) => {
+  await page.goto(`${SPECIMEN}?fam=sawa-mono`);
 
   await expect(page.locator("[data-palette-switch]")).toBeHidden();
-  await expect(page.locator('.palette-note[data-for-family="sawa-serif"]')).toBeVisible();
+  await expect(page.locator('.palette-note[data-for-family="sawa-mono"]')).toBeVisible();
+  await expect(page.locator("[data-fatiha]")).toHaveAttribute("data-pal", "");
 });
 
 for (const locale of ["en", "ar"] as const) {

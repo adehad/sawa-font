@@ -9,6 +9,7 @@ import { compareBlocks, type SampleBlock } from "../../samples";
 import {
   clampSize,
   type FontOrLocal,
+  visiblePanes,
   type PlaygroundState,
   type VisiblePane,
 } from "../../state/url";
@@ -49,6 +50,7 @@ function fontNote(format: Format, id: FontOrLocal): string {
 
 function overrideSelect(
   context: PaneContext,
+  state: PlaygroundState,
   spec: VisiblePane,
   key: "font" | "pal",
   labelKey: ClientKey,
@@ -71,7 +73,11 @@ function overrideSelect(
   select.value = key === "font" ? spec.font : spec.palette;
   if (key === "pal" && !paneFont(spec.font).hasPalettes) {
     select.disabled = true;
-    select.setAttribute("aria-describedby", "compare-palette-none");
+    const any = visiblePanes(state).some((pane) => paneFont(pane.font).hasPalettes);
+    select.setAttribute(
+      "aria-describedby",
+      any ? "compare-palette-harakat" : "compare-palette-none",
+    );
   }
   label.append(select);
   return label;
@@ -157,8 +163,8 @@ export function paneElement(
   if (side) {
     const overrides = element("div", "pane-overrides");
     overrides.append(
-      overrideSelect(context, spec, "font", "compare.paneFont"),
-      overrideSelect(context, spec, "pal", "compare.panePalette"),
+      overrideSelect(context, state, spec, "font", "compare.paneFont"),
+      overrideSelect(context, state, spec, "pal", "compare.panePalette"),
     );
     head.append(overrides);
   }

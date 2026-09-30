@@ -5,9 +5,17 @@ import { BASE_PATH } from "./config";
 const QUERY = "?size=40&pal=gray&fonts=sawa,amiri";
 const HASH = "#x";
 
+/**
+ * Picks `locale` and waits for the page it opens to load. Until the new
+ * page's module script runs, a click follows the bare link href and drops
+ * the query, so the next pick must not start any earlier.
+ */
 async function openSwitcherAndPick(page: import("@playwright/test").Page, locale: "en" | "ar") {
-  await page.locator("[data-lang-switcher] summary").click();
-  await page.locator(`[data-lang-switcher] a[data-locale="${locale}"]`).click();
+  const switcher = page.locator("[data-lang-switcher]");
+  await switcher.locator("summary").click();
+  await expect(switcher).toHaveAttribute("open", "");
+  await switcher.locator(`a[data-locale="${locale}"]`).click();
+  await page.waitForURL((url) => url.pathname.startsWith(`${BASE_PATH}${locale}/`));
 }
 
 for (const pageName of PAGE_NAMES) {
