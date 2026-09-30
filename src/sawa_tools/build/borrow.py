@@ -23,7 +23,6 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.varLib import instancer
 
 from sawa_tools.build.anchors import REFERENCE_MARKS, anchor_masters, placement
-from sawa_tools.build.compact import compacted
 from sawa_tools.build.masters import anchored
 from sawa_tools.build.merge import (
     axis_range,
@@ -39,9 +38,8 @@ if TYPE_CHECKING:
 
     from fontTools.ttLib import TTFont
 
-    from sawa_tools.build.compact import Compaction
     from sawa_tools.build.masters import MastersCache
-    from sawa_tools.build.merge import WghtRange
+    from sawa_tools.build.merge import Finish, WghtRange
 
 Bounds = tuple[float, float, float, float]
 
@@ -237,17 +235,17 @@ def borrow_glyphs(
     cell_width: int | None,
     clearance_em: float,
     masters_cache: MastersCache | None = None,
-    compaction: Compaction | None = None,
+    finish: Finish | None = None,
 ) -> TTFont:
     """`font` rebuilt with the borrowed glyphs added, anchored and, with
-    `compaction`, compacted.
+    `finish`, finished (families.py).
     """
     masters = anchored(
         masters_cache,
         lambda: _borrowing_masters(font, borrowed, wght, cell_width, clearance_em),
     )
-    if compaction is not None:
-        masters = compacted(masters, wght.default, compaction, masters_cache)
+    if finish is not None:
+        masters = finish(masters)
     rebuilt = build_variable(masters, wght, axis_map(font))
     for tag in _RESTORED_TABLES:
         if tag in font:

@@ -40,6 +40,13 @@ _LATER_KEYS = (
 _INDEX = "masters.json"
 
 
+def code_bytes(path: Path) -> bytes:
+    """A source file's bytes for a key, with LF line ends: an editor on
+    Windows may write CRLF, and a key must match on every platform.
+    """
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
 def masters_key(family_raw: Mapping[str, Any], input_sha256s: Mapping[str, str]) -> str:
     import importlib.metadata
 
@@ -55,7 +62,7 @@ def masters_key(family_raw: Mapping[str, Any], input_sha256s: Mapping[str, str])
     digest.update(json.dumps(payload, sort_keys=True).encode("utf-8"))
     here = Path(__file__).parent
     for module in MASTER_MODULES:
-        digest.update((here / module).read_bytes())
+        digest.update(code_bytes(here / module))
     return digest.hexdigest()
 
 
@@ -65,14 +72,6 @@ class MastersCache:
 
     folder: Path
     key: str
-
-    def stage(self, name: str, key: str) -> MastersCache:
-        """The cache of a stage run on these masters, valid while both this
-        cache's key and `key` match.
-        """
-        digest = hashlib.sha256(f"{self.key}\n{key}".encode()).hexdigest()
-        folder = self.folder.with_name(f"{self.folder.name}.{name}")
-        return MastersCache(folder, digest)
 
     def get(self, build: Callable[[], Mapping[float, TTFont]]) -> dict[float, TTFont]:
         """The cached masters, or `build`'s, saved first.

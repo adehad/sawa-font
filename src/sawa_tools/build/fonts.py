@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sawa_tools.build.families import (
+    COMPACTION_DIR,
     DEFAULT_FAMILIES,
     DEFAULT_FONTS_DIR,
     BuiltFamily,
@@ -28,7 +29,7 @@ from sawa_tools.build.families import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Collection, Mapping
 
 DEFAULT_OUT = Path("site/public/fonts")
 DEFAULT_CACHE = Path(".cache/downloads")
@@ -101,6 +102,15 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Rebuild every Sawa family even when its build stamp matches",
     )
+    parser.add_argument(
+        "--refit",
+        nargs="*",
+        metavar="FAMILY",
+        help="Fit the compaction of these Sawa families again and build only "
+        "them, or of every family with none named, writing it to "
+        "compaction/<family>.json beside the family config; about an hour "
+        "per family on 16 cores",
+    )
     parser.set_defaults(handler=run)
 
 
@@ -113,6 +123,7 @@ def run(args: argparse.Namespace) -> int:
             families=args.families,
             fonts_dir=args.fonts_dir,
             force=args.force,
+            refit=args.refit,
         )
     except (BuildError, FamilyError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -128,6 +139,7 @@ def build_fonts(
     families: Path | None = None,
     fonts_dir: Path = DEFAULT_FONTS_DIR,
     force: bool = False,
+    refit: Collection[str] | None = None,
 ) -> None:
     """Downloads, verifies and converts every font listed in `manifest`.
 
@@ -135,7 +147,9 @@ def build_fonts(
     sha256 still matches the manifest. Writes `<out_dir>/<font-id>/<to>.woff2`
     and `<out_dir>/<font-id>/OFL.txt` for every font id, printing the id once
     it is done. With `families`, first builds each Sawa family into
-    `fonts_dir` and adds the ones shown on the site to `out_dir` the same way.
+    `fonts_dir` and adds the ones shown on the site to `out_dir` the same way;
+    `refit` names the families to fit the compaction of again and builds only
+    those, or with none named refits every family and builds as usual.
     Raises BuildError on any failure, including a malformed manifest.
     """
     try:
@@ -169,11 +183,16 @@ def build_fonts(
 
     if families is not None:
         config = load_config(families)
+        unknown = set(refit or ()) - {f.id for f in config.families}
+        if unknown:
+            raise BuildError(f"--refit: no such family {', '.join(sorted(unknown))}")
         for family in config.families:
             if family.id in fonts:
                 raise BuildError(
                     f"family '{family.id}' is also a font id in {manifest}"
                 )
+            if refit and family.id not in refit:
+                continue
             built = build_family(
                 family,
                 config,
@@ -182,6 +201,8 @@ def build_fonts(
                 fonts_dir=fonts_dir,
                 force=force,
                 masters_dir=cache_dir.parent / "masters",
+                compaction_dir=families.parent / COMPACTION_DIR,
+                refit=refit is not None,
             )
             state = "built" if built.rebuilt else "up to date"
             print(f"{family.id}: {state}")
@@ -189,6 +210,9 @@ def build_fonts(
                 fonts_manifest[family.id] = _publish_family(
                     built, out_dir, sources, cached_paths
                 )
+        if refit:
+            print("refitted only the named families; run `sawa build fonts` next")
+            return
 
     for font_id, font in fonts.items():
         _validate_path_component(font_id, what="font id")

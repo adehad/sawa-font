@@ -1,9 +1,11 @@
 """Builds the Sawa families described in data/sawa.json into fonts/.
 
 A family is either `merge` (an Arabic and a Latin variable font merged under
-one wght axis, see merge.py) or `rename` (one variable font renamed). Each
-build writes a stamp next to its output; a later run whose inputs, config and
-build code hash to the same stamp reuses the output.
+one wght axis, see merge.py) or `rename` (one variable font renamed). Either
+way its anchored static masters are finished here before varLib builds them:
+compacted by the family's fitted compaction (fitted.py). Each build writes a
+stamp next to its output; a later run whose inputs, config, fitted
+compaction and build code hash to the same stamp reuses the output.
 """
 
 from __future__ import annotations
@@ -18,14 +20,19 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    from fontTools.ttLib import TTFont
+
     from sawa_tools.build.compact import Compaction
+    from sawa_tools.build.fitted import FittedFile
     from sawa_tools.build.masters import MastersCache
-    from sawa_tools.build.merge import LineMetrics, WghtRange
+    from sawa_tools.build.merge import Finish, LineMetrics, WghtRange
     from sawa_tools.build.naming import Release
 
     ReadMember = Callable[[str, str | None], bytes]
 
 DEFAULT_FAMILIES = Path("data/sawa.json")
+# Beside the family config: <dir>/<family id>.json per compacted family.
+COMPACTION_DIR = "compaction"
 DEFAULT_FONTS_DIR = Path("fonts")
 
 _KINDS = {"merge": "shared", "rename": "box"}
@@ -36,6 +43,7 @@ _CODE_MODULES = (
     "clearance.py",
     "compact.py",
     "families.py",
+    "fitted.py",
     "harfbuzz.py",
     "ink.py",
     "lines.py",
@@ -271,10 +279,12 @@ def code_version() -> str:
     """Hashes this build's own source and fontTools version into one string."""
     from fontTools import version as fonttools_version
 
+    from sawa_tools.build.masters import code_bytes
+
     digest = hashlib.sha256(fonttools_version.encode())
     here = Path(__file__).parent
     for module in _CODE_MODULES:
-        digest.update((here / module).read_bytes())
+        digest.update(code_bytes(here / module))
     return digest.hexdigest()
 
 
@@ -360,6 +370,7 @@ def _build_merge(
     sources: Mapping[str, Any],
     read: ReadMember,
     masters_cache: MastersCache | None = None,
+    finish: Finish | None = None,
 ) -> Any:
     from sawa_tools.build.merge import axis_range, merge_family
     from sawa_tools.build.naming import finalize_merged
@@ -391,7 +402,7 @@ def _build_merge(
         metrics=family.metrics,
         clearance_em=_clearance(family),
         masters_cache=masters_cache,
-        compaction=_compaction(family),
+        finish=finish,
     )
     from sawa_tools.build.merge import win_errors
 
@@ -460,6 +471,7 @@ def _build_rename(
     sources: Mapping[str, Any],
     read: ReadMember,
     masters_cache: MastersCache | None = None,
+    finish: Finish | None = None,
 ) -> Any:
     from sawa_tools.build.naming import rename_family, set_named_weights
 
@@ -485,7 +497,7 @@ def _build_rename(
             family.cell_width,
             _clearance(family),
             masters_cache,
-            _compaction(family),
+            finish,
         )
         derived_from += ", with marks from " + " and ".join(
             _describe(sources, entry.member) for entry in family.borrow
@@ -519,6 +531,17 @@ def _save_atomic(font: Any, dest: Path) -> None:
     tmp.replace(dest)
 
 
+def _finish(
+    family: Family, compaction: Compaction, fitted: FittedFile, refit: bool
+) -> Finish:
+    def finish(masters: dict[float, TTFont]) -> dict[float, TTFont]:
+        from sawa_tools.build.fitted import compacted
+
+        return compacted(masters, family.wght.default, compaction, fitted, refit)
+
+    return finish
+
+
 def build_family(
     family: Family,
     config: FamilyConfig,
@@ -528,12 +551,20 @@ def build_family(
     fonts_dir: Path,
     force: bool = False,
     masters_dir: Path | None = None,
+    compaction_dir: Path | None = None,
+    refit: bool = False,
 ) -> BuiltFamily:
     """Builds one family into `fonts_dir`, or reuses a fresh earlier build.
 
     With `masters_dir`, keeps the family's anchored masters there and reuses
-    them while their inputs, config and code stay the same (masters.py).
+    them while their inputs, config and code stay the same (masters.py). A
+    family with compaction applies `compaction_dir`/<id>.json, or with
+    `refit` fits it again and writes it there first (fitted.py); a file
+    fitted against other inputs stops the build before it starts.
     """
+    from sawa_tools.build.fitted import FitError, FittedFile, fit_key
+    from sawa_tools.build.masters import MastersCache, masters_key
+
     for member in [*family.inputs.values(), *family.licence]:
         if member.source not in sources:
             raise FamilyError(f"family '{family.id}': unknown source '{member.source}'")
@@ -541,22 +572,45 @@ def build_family(
     woff2 = fonts_dir / family.woff2_name if family.generic else None
     outputs = [ttf] if woff2 is None else [ttf, woff2]
     stamp_path = fonts_dir / f"{family.id}.stamp"
-    inputs = {m.source: sources[m.source]["sha256"] for m in family.inputs.values()}
+    shas = {m.source: sources[m.source]["sha256"] for m in family.inputs.values()}
+    anchored_key = masters_key(family.raw, shas)
     compaction = _compaction(family)
+    fitted = None
     if compaction is not None:
-        inputs["compaction"] = compaction.key()
-    digest = stamp_digest(family.raw, config.raw_release, inputs, code_version())
-    if not force and is_fresh(stamp_path, digest, outputs):
+        if compaction_dir is None:
+            raise FamilyError(f"family '{family.id}': no compaction directory given")
+        fitted = FittedFile(
+            family.id,
+            compaction_dir / f"{family.id}.json",
+            fit_key(anchored_key, compaction),
+        )
+        if not refit:
+            try:
+                fitted.read()
+            except FitError as exc:
+                raise FamilyError(f"family '{family.id}': {exc}") from exc
+
+    def digest() -> str:
+        inputs = dict(shas)
+        if fitted is not None:
+            inputs["compaction"] = fitted.key
+            inputs["compactionData"] = fitted.digest()
+        return stamp_digest(family.raw, config.raw_release, inputs, code_version())
+
+    if not force and not refit and is_fresh(stamp_path, digest(), outputs):
         return BuiltFamily(family, ttf, woff2, rebuilt=False)
 
     builder = _build_merge if family.kind == "merge" else _build_rename
     cache = None
     if masters_dir is not None:
-        from sawa_tools.build.masters import MastersCache, masters_key
-
-        shas = {m.source: sources[m.source]["sha256"] for m in family.inputs.values()}
-        cache = MastersCache(masters_dir / family.id, masters_key(family.raw, shas))
-    font = builder(family, config.release, sources, read, cache)
+        cache = MastersCache(masters_dir / family.id, anchored_key)
+    finish = None
+    if compaction is not None and fitted is not None:
+        finish = _finish(family, compaction, fitted, refit)
+    try:
+        font = builder(family, config.release, sources, read, cache, finish)
+    except FitError as exc:
+        raise FamilyError(f"family '{family.id}': {exc}") from exc
     fonts_dir.mkdir(parents=True, exist_ok=True)
     stamp_path.unlink(missing_ok=True)
     _save_atomic(font, ttf)
@@ -564,6 +618,6 @@ def build_family(
         font.flavor = "woff2"
         _save_atomic(font, woff2)
     tmp = stamp_path.with_name(stamp_path.name + ".tmp")
-    tmp.write_text(digest + "\n", encoding="utf-8")
+    tmp.write_text(digest() + "\n", encoding="utf-8")
     tmp.replace(stamp_path)
     return BuiltFamily(family, ttf, woff2, rebuilt=True)

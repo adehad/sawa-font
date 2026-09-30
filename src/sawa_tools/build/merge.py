@@ -4,8 +4,8 @@ Per master location: instance both inputs, scale the Arabic, split the
 codepoints between them, subset and merge into one static font. The masters
 share one set of vertical metrics and are rebuilt into a variable font with
 varLib. Before that, every master attaches the Arabic marks and letters the
-source leaves unattached (anchors.py) and moves them close to, and clear
-of, their letters' ink (compact.py).
+source leaves unattached (anchors.py), and the caller finishes the masters,
+compacting the marks among other things (families.py).
 """
 
 from __future__ import annotations
@@ -31,14 +31,15 @@ from fontTools.varLib import build as varlib_build
 from fontTools.varLib import instancer
 
 from sawa_tools.build.anchors import anchor_masters
-from sawa_tools.build.compact import compacted
 from sawa_tools.build.masters import anchored
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
-    from sawa_tools.build.compact import Compaction
     from sawa_tools.build.masters import MastersCache
+
+    # Takes the anchored masters by wght and returns them finished.
+    Finish = Callable[[dict[float, TTFont]], dict[float, TTFont]]
 
 
 def table(font: TTFont, tag: str) -> Any:
@@ -299,7 +300,7 @@ def merge_family(
     metrics: LineMetrics,
     clearance_em: float,
     masters_cache: MastersCache | None = None,
-    compaction: Compaction | None = None,
+    finish: Finish | None = None,
 ) -> MergeResult:
     """Builds the merged variable font with `metrics` applied to every master.
 
@@ -318,8 +319,8 @@ def merge_family(
         return masters
 
     masters = anchored(masters_cache, build)
-    if compaction is not None:
-        masters = compacted(masters, wght.default, compaction, masters_cache)
+    if finish is not None:
+        masters = finish(masters)
     extents = [y_extent(m) for m in masters.values()]
     extent = (min(e[0] for e in extents), max(e[1] for e in extents))
     for master in masters.values():

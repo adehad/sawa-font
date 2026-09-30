@@ -42,7 +42,6 @@ import hashlib
 import io
 import math
 import re
-import time
 import unicodedata
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
@@ -72,7 +71,6 @@ if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
 
-    from sawa_tools.build.masters import MastersCache
 
 ot: Any = _otTables
 
@@ -1110,13 +1108,14 @@ def _best_move(
 @dataclass
 class Found:
     """One pass of step 6 on one font: the further moves per context and
-    position, the contacts no move within the limits clears, and the lines
-    (by index) with contacts.
+    position, the contacts no move within the limits clears, the lines (by
+    index) with contacts, and those with a contact under the clearance.
     """
 
     moves: Rules
     stuck: list[str]
     touched: set[int]
+    under: set[int]
 
 
 def find_contexts(
@@ -1140,7 +1139,7 @@ def find_contexts(
     found: Rules = {}
     tried: dict[tuple[Context, tuple[int, ...]], tuple[float, Move] | None] = {}
     stuck = []
-    touched = set()
+    touched, under = set(), set()
     for n, (text, parents) in enumerate(zip(lines, structures, strict=True)):
         if only is not None and n not in only:
             continue
@@ -1148,6 +1147,8 @@ def find_contexts(
         position = {id(g): p for p, g in enumerate(line.placed)}
         for contact in table.contacts([g for g in line.placed if g.rtl], clearance):
             touched.add(n)
+            if contact.gap < params.clearance * master.upem:
+                under.add(n)
             i, j = position[id(contact.mark)], position[id(contact.other)]
             candidates = [(i, j)]
             if contact.other.gid in table.checked:
@@ -1224,7 +1225,7 @@ def find_contexts(
                 old = moves.get(p, (0, 0))
                 if abs(move[0]) + abs(move[1]) > abs(old[0]) + abs(old[1]):
                     moves[p] = move
-    return Found(found, stuck, touched)
+    return Found(found, stuck, touched, under)
 
 
 def add_contexts(
@@ -1371,15 +1372,56 @@ class Job:
     lines: tuple[str, ...]
 
 
-def _anchor_steps(job: Job) -> tuple[bytes, dict[str, int]]:
-    """Steps 1 to 5 on one master."""
-    master = Master(TTFont(io.BytesIO(job.data)), job.params, job.plan)
+# (lookup, subtable, glyph, component, class) of a base, ligature
+# component or mark2 anchor; one lookup can list a glyph in several subtables.
+AnchorPlace = tuple[int, int, str, int, int]
+
+
+def anchor_lists(font: TTFont) -> Iterator[tuple[int, int, str, int, list[Any]]]:
+    """(lookup, subtable, glyph, component, per-class anchors) of every mark
+    subtable's bases, ligature components and mark2 glyphs.
+    """
+    gpos = table(font, "GPOS").table
+    for li, lookup in enumerate(gpos.LookupList.Lookup):
+        for si, sub in enumerate(lookup.SubTable):
+            kind = lookup.LookupType
+            if kind == _EXTENSION:
+                kind, sub = sub.ExtensionLookupType, sub.ExtSubTable
+            if kind not in (_MARK_BASE, _MARK_LIG, _MARK_MARK):
+                continue
+            for glyph, component, anchors in _anchored(kind, sub):
+                yield li, si, glyph, component, anchors
+
+
+def anchor_values(font: TTFont) -> dict[AnchorPlace, tuple[int, int]]:
+    return {
+        (li, si, glyph, component, cls): (a.XCoordinate, a.YCoordinate)
+        for li, si, glyph, component, anchors in anchor_lists(font)
+        for cls, a in enumerate(anchors)
+        if a is not None
+    }
+
+
+def structure(master: Master) -> None:
+    """Steps 1 and 2, which decide which anchors exist but fit none."""
     split_classes(master)
     add_stacks(master)
+
+
+def _anchor_steps(
+    job: Job,
+) -> tuple[bytes, dict[str, int], dict[AnchorPlace, tuple[int, int]]]:
+    """Steps 1 to 5 on one master; also returns the anchors steps 3 to 5
+    moved, at their new positions.
+    """
+    master = Master(TTFont(io.BytesIO(job.data)), job.params, job.plan)
+    structure(master)
+    before = anchor_values(master.font)
     lowered = tighten_stacks(master)
     lowered |= fit_letters(master)
     repair_neighbours(master, job.lines, lowered, job.params.passes)
-    return _bytes(master.font), dict(master.log)
+    moved = {k: v for k, v in anchor_values(master.font).items() if before[k] != v}
+    return _bytes(master.font), dict(master.log), moved
 
 
 def _context_pass(
@@ -1478,10 +1520,42 @@ class Report:
     rules: int = 0
     lookups: int = 0
     passes: int = 0
-    # Per pass, the contexts with contacts plus the contacts no move clears.
+    # Per joint pass of step 6, the lines with contacts in all fonts, and
+    # those with a contact under the clearance.
     contacts: list[int] = field(default_factory=list)
+    under: list[int] = field(default_factory=list)
     moves: Rules = field(default_factory=dict)
     stuck: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Fit:
+    """What compaction fitted, per master location: the anchors steps 3 to
+    5 moved, at their new positions, and step 6's rules; and the layer of
+    each of step 6's contexts, which every master shares.
+    """
+
+    anchors: dict[float, dict[AnchorPlace, tuple[int, int]]]
+    rules: dict[float, Rules]
+    layers: dict[Context, int]
+
+
+def prepared(
+    masters: Mapping[float, TTFont],
+    default: float,
+    params: Params,
+    lines: Sequence[str],
+) -> tuple[dict[float, TTFont], Plan, int]:
+    """Copies of `masters` with the pause marks made spacing, the plan
+    decided on the default one, and the number of spacing glyphs.
+    """
+    masters = {w: TTFont(io.BytesIO(_bytes(m))) for w, m in masters.items()}
+    spaced = (
+        spacing_masters(masters, default, params.pause)
+        if params.pause is not None
+        else []
+    )
+    return masters, plan(masters[default], params, lines), len(spaced)
 
 
 def compact_masters(
@@ -1490,12 +1564,26 @@ def compact_masters(
     params: Params,
     lines: Sequence[str],
     jobs: int | None = None,
-) -> tuple[dict[float, TTFont], Report]:
-    """Runs every step on every master, deciding structure on `default`."""
+) -> tuple[dict[float, TTFont], Fit, Report]:
+    """Runs every step on every master, deciding structure on `default`.
+    Returns the compacted masters and what was fitted to make them.
+    """
     report = Report()
     with ProcessPoolExecutor(max_workers=jobs) as pool:
-        work = fit_masters(masters, default, params, lines, pool, report)
-        return add_context_rules(work, params, pool, report), report
+        work, anchors = fit_masters(masters, default, params, lines, pool, report)
+        rules, layers = fit_context_rules(work, params, pool, report)
+    fonts = [TTFont(io.BytesIO(job.data)) for job in work]
+    report.lookups = add_contexts(fonts, rules, layers)
+    fit = Fit(
+        anchors=anchors,
+        rules={job.wght: own for job, own in zip(work, rules, strict=True)},
+        layers=layers,
+    )
+    compacted = {
+        job.wght: TTFont(io.BytesIO(_bytes(font)))
+        for job, font in zip(work, fonts, strict=True)
+    }
+    return compacted, fit, report
 
 
 def fit_masters(
@@ -1505,22 +1593,21 @@ def fit_masters(
     lines: Sequence[str],
     pool: ProcessPoolExecutor,
     report: Report,
-) -> list[Job]:
-    """The pause marks made spacing, then steps 1 to 5, on every master.
-    Steps 5 and 6 see the everyday view of `lines`.
+) -> tuple[list[Job], dict[float, dict[AnchorPlace, tuple[int, int]]]]:
+    """The pause marks made spacing, then steps 1 to 5, on every master;
+    also returns the anchors each moved. Steps 5 and 6 see the everyday
+    view of `lines`.
     """
-    masters = {w: TTFont(io.BytesIO(_bytes(m))) for w, m in masters.items()}
-    if params.pause is not None:
-        spaced = spacing_masters(masters, default, params.pause)
-        report.spacing = len(spaced)
-    decided = plan(masters[default], params, lines)
+    masters, decided, report.spacing = prepared(masters, default, params, lines)
     views = tuple(dict.fromkeys(everyday(t) for t in lines))
     work = [
         Job(w, _bytes(m), params, decided, views) for w, m in sorted(masters.items())
     ]
     done = list(pool.map(_anchor_steps, work))
-    report.steps = {j.wght: log for j, (_, log) in zip(work, done, strict=True)}
-    return [replace(j, data=data) for j, (data, _) in zip(work, done, strict=True)]
+    report.steps = {j.wght: log for j, (_, log, _) in zip(work, done, strict=True)}
+    anchors = {j.wght: moved for j, (_, _, moved) in zip(work, done, strict=True)}
+    jobs = [replace(j, data=data) for j, (data, _, _) in zip(work, done, strict=True)]
+    return jobs, anchors
 
 
 def merge_moves(rules: Rules, proposal: Rules) -> bool:
@@ -1578,18 +1665,20 @@ def fit_contexts(job: Job) -> Fitted:
     return Fitted(best[1], best[2], counts)
 
 
-def add_context_rules(
+def fit_context_rules(
     work: Sequence[Job],
     params: Params,
     pool: ProcessPoolExecutor,
     report: Report,
-) -> dict[float, TTFont]:
+) -> tuple[list[Rules], dict[Context, int]]:
     """Step 6, fitted on each master alone, then on the masters and the
     fonts halfway between each two neighbours together, passes until none
     has a contact, `patience` passes bring no fewer or the passes run out;
-    the pass with the fewest is kept. A move a halfway font needs is added
-    to both its masters. Every master's rules go to every master with its
-    own offsets (add_contexts). After the first joint pass, each font is
+    the pass with the fewest under the clearance, then the fewest in all, is
+    kept, since `sawa check leading` fails only those. A move a halfway font
+    needs is added
+    to both its masters. Returns each master's rules and each context's
+    layer, for add_contexts. After the first joint pass, each font is
     scanned again only on the lines it had contacts in and those a changed
     rule matches.
     """
@@ -1612,8 +1701,9 @@ def add_context_rules(
     # Per font (the masters, then the halfway fonts): lines with contacts,
     # and the lines to scan next pass (None for all).
     touched: list[set[int]] = [set() for _ in range(len(work) + len(pairs))]
+    below: list[set[int]] = [set() for _ in touched]
     scan: list[frozenset[int] | None] = [None] * len(touched)
-    best: tuple[int, list[Rules], list[str]] | None = None
+    best: tuple[tuple[int, int], list[Rules], list[str]] | None = None
     since = 0
     for _ in range(params.passes):
         report.passes += 1
@@ -1631,14 +1721,18 @@ def add_context_rules(
         found = [f.result() for f in tasks]
         for t, result in enumerate(found):
             lines = scan[t]
-            touched[t] = (touched[t] - lines if lines is not None else set()) | (
-                result.touched
-            )
+            if lines is None:
+                touched[t], below[t] = set(result.touched), set(result.under)
+            else:
+                touched[t] = (touched[t] - lines) | result.touched
+                below[t] = (below[t] - lines) | result.under
         stuck = sorted({s for result in found for s in result.stuck})
         count = sum(len(t) for t in touched)
         report.contacts.append(count)
-        if best is None or count < best[0]:
-            best, since = (count, copy.deepcopy(rules), stuck), 0
+        report.under.append(sum(len(b) for b in below))
+        key = (report.under[-1], count)
+        if best is None or key < best[0]:
+            best, since = (key, copy.deepcopy(rules), stuck), 0
         else:
             since += 1
         if count == 0 or since >= params.patience:
@@ -1661,16 +1755,11 @@ def add_context_rules(
     assert best is not None
     _, rules, report.stuck = best
     layers = layer_rules(shaped, {c for own in rules for c in own}, order)
-    fonts = [TTFont(io.BytesIO(job.data)) for job in work]
-    report.lookups = add_contexts(fonts, rules, layers)
     report.rules = len(layers)
     report.moves = {
         c: {p: m for own in rules for p, m in own.get(c, {}).items()} for c in layers
     }
-    return {
-        job.wght: TTFont(io.BytesIO(_bytes(font)))
-        for job, font in zip(work, fonts, strict=True)
-    }
+    return rules, layers
 
 
 @dataclass(frozen=True)
@@ -1745,37 +1834,13 @@ class Compaction:
         """Hashes the parameters, the corpus and this stage's code."""
         from pathlib import Path
 
+        from sawa_tools.build.masters import code_bytes
+
         digest = hashlib.sha256(repr(self.params).encode())
         digest.update("\n".join(self.lines).encode())
         here = Path(__file__).parent
         for path in [here / m for m in STAGE_MODULES]:
-            digest.update(path.read_bytes())
-        digest.update((here.parent / "report" / "bidi.py").read_bytes())
-        digest.update((here.parent / "corpus.py").read_bytes())
+            digest.update(code_bytes(path))
+        digest.update(code_bytes(here.parent / "report" / "bidi.py"))
+        digest.update(code_bytes(here.parent / "corpus.py"))
         return digest.hexdigest()
-
-
-def compacted(
-    masters: Mapping[float, TTFont],
-    default: float,
-    compaction: Compaction,
-    cache: MastersCache | None,
-) -> dict[float, TTFont]:
-    """The masters compacted, or the cached result of compacting them."""
-    from sawa_tools.build.masters import anchored
-
-    def build() -> dict[float, TTFont]:
-        started = time.perf_counter()
-        result, report = compact_masters(
-            masters, default, compaction.params, compaction.lines
-        )
-        print(
-            f"{compaction.family}: compacted in "
-            f"{time.perf_counter() - started:.0f} s, {report.rules} contextual "
-            f"rules in {report.lookups} lookups"
-            + (f", {len(report.stuck)} contacts unresolved" if report.stuck else "")
-        )
-        return result
-
-    stage = None if cache is None else cache.stage("compact", compaction.key())
-    return anchored(stage, build)

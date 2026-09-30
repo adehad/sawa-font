@@ -49,15 +49,13 @@ jobs:
         with:
           path: .cache/downloads
           key: font-downloads-${{ hashFiles('data/upstream.json') }}
-      # The Sawa families take minutes to build; the stamps in fonts/ let a
-      # restored cache skip them, and the anchored and compacted masters in
-      # .cache/masters let a rebuild skip the stages whose inputs are unchanged.
+      # The build applies the compaction fitted in data/compaction, so a cold
+      # build takes minutes; the stamps in fonts/ let a restored cache skip
+      # the families whose inputs are unchanged.
       - uses: actions/cache@v6
         with:
-          path: |
-            fonts
-            .cache/masters
-          key: sawa-fonts-${{ hashFiles('data/upstream.json', 'data/sawa.json', 'data/mark-groups.json', 'data/tanzil/**', 'tests/strings/**', 'uv.lock', 'src/sawa_tools/build/**', 'src/sawa_tools/report/bidi.py', 'src/sawa_tools/corpus.py', 'src/sawa_tools/tanzil.py', 'src/sawa_tools/checks/attachment.py', 'src/sawa_tools/checks/marks.py') }}
+          path: fonts
+          key: sawa-fonts-${{ hashFiles('data/upstream.json', 'data/sawa.json', 'data/compaction/**', 'data/mark-groups.json', 'data/tanzil/**', 'tests/strings/**', 'uv.lock', 'src/sawa_tools/build/**', 'src/sawa_tools/report/bidi.py', 'src/sawa_tools/corpus.py', 'src/sawa_tools/tanzil.py', 'src/sawa_tools/checks/attachment.py', 'src/sawa_tools/checks/marks.py') }}
           restore-keys: sawa-fonts-
       - name: Build Sawa and fetch roster fonts
         working-directory: .
