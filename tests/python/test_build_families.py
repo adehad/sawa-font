@@ -56,16 +56,14 @@ def test_split_gives_arabic_its_script_and_what_latin_lacks() -> None:
     assert arabic_owned == {0x060C, 0x0628, 0x0660, 0xFDFD}
 
 
-def test_derive_metrics_holds_both_scripts_and_the_ink_extent() -> None:
-    metrics = merge.derive_metrics((1000, -300), (900, -600), 1.1, (-700.4, 1200.2))
-    assert metrics == merge.LineMetrics(
-        ascender=1000, descender=-660, line_gap=0, win_ascent=1200, win_descent=700
+def test_win_metrics_must_hold_the_box_and_the_ink() -> None:
+    metrics = merge.LineMetrics(
+        ascender=1100, descender=-500, line_gap=0, win_ascent=1200, win_descent=700
     )
-
-
-def test_derive_metrics_win_never_smaller_than_typo() -> None:
-    metrics = merge.derive_metrics((1000, -300), (900, -600), 1.0, (-10.0, 10.0))
-    assert (metrics.win_ascent, metrics.win_descent) == (1000, 600)
+    assert merge.win_errors(metrics, (-700.0, 1199.6)) == []
+    assert len(merge.win_errors(metrics, (-700.2, 1200.4))) == 2
+    low = merge.LineMetrics(1300, -800, 0, 1200, 700)
+    assert len(merge.win_errors(low, (0.0, 0.0))) == 2
 
 
 def test_named_weights_cover_the_range() -> None:
@@ -156,7 +154,7 @@ def _family(**overrides: object) -> dict:
         "notice": "Derived.",
         "wght": {"min": 400, "default": 400, "max": 700},
         "metrics": {
-            "policy": "source",
+            "policy": "box",
             "ascender": 800,
             "descender": -200,
             "lineGap": 0,
@@ -187,7 +185,7 @@ def _write_config(tmp_path: Path, family: dict) -> Path:
 def test_config_rejects_a_policy_that_does_not_fit_the_kind(tmp_path: Path) -> None:
     raw = _family()
     raw["metrics"]["policy"] = "shared"
-    with pytest.raises(families.FamilyError, match="policy must be 'source'"):
+    with pytest.raises(families.FamilyError, match="policy must be 'box'"):
         families.load_config(_write_config(tmp_path, raw))
 
 

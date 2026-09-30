@@ -65,6 +65,9 @@ jobs:
       - name: Check the Sawa families
         working-directory: .
         run: uv run --locked --group build sawa check fonts
+      - name: Check line boxes and mark clearance over the Quran text
+        working-directory: .
+        run: uv run --locked --group build sawa check leading
       - name: Fetch the previous release's report
         id: baseline
         working-directory: .

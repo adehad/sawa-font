@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 DEFAULT_FAMILIES = Path("data/sawa.json")
 DEFAULT_FONTS_DIR = Path("fonts")
 
-_KINDS = {"merge": "shared", "rename": "source"}
+_KINDS = {"merge": "shared", "rename": "box"}
 _GENERICS = ("serif", "sans-serif", "monospace")
 _CODE_MODULES = (
     "anchors.py",
@@ -84,6 +84,8 @@ class Family:
     cell_width: int | None = None
     coverage_gaps: list[str] = field(default_factory=list)
     leading_quran: bool = True
+    # The corpus parts whose lines size the line box; None for all.
+    box_parts: tuple[str, ...] | None = None
     compaction: dict[str, Any] | None = None
     borrow: list[Borrow] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
@@ -211,6 +213,11 @@ def _parse_family(
         cell_width=raw.get("cellWidth"),
         coverage_gaps=list(raw.get("coverageGaps", [])),
         leading_quran=bool(raw.get("leading", {}).get("quran", True)),
+        box_parts=(
+            tuple(raw["leading"]["boxParts"])
+            if "boxParts" in raw.get("leading", {})
+            else None
+        ),
         compaction=_compaction_config(compaction, raw),
         borrow=borrow,
         raw=raw,
@@ -386,11 +393,11 @@ def _build_merge(
         masters_cache=masters_cache,
         compaction=_compaction(family),
     )
-    if result.derived != family.metrics:
-        raise FamilyError(
-            f"{context}: configured metrics {family.metrics} differ from the "
-            f"shared metrics the inputs imply, {result.derived}"
-        )
+    from sawa_tools.build.merge import win_errors
+
+    errors = win_errors(family.metrics, result.extent)
+    if errors:
+        raise FamilyError(f"{context}: " + "; ".join(errors))
     font: Any = result.font
     finalize_merged(
         font,
@@ -409,17 +416,19 @@ def _build_merge(
     return font
 
 
-def _source_metrics(font: Any) -> LineMetrics:
-    from sawa_tools.build.merge import LineMetrics
+def _instances_extent(font: Any, wght: WghtRange) -> tuple[float, float]:
+    """The lowest and highest glyph ink of `font` at the wght minimum,
+    default and maximum.
+    """
+    from fontTools.varLib import instancer
 
-    os2 = font["OS/2"]
-    return LineMetrics(
-        ascender=os2.sTypoAscender,
-        descender=os2.sTypoDescender,
-        line_gap=os2.sTypoLineGap,
-        win_ascent=os2.usWinAscent,
-        win_descent=os2.usWinDescent,
-    )
+    from sawa_tools.build.merge import y_extent
+
+    extents = [
+        y_extent(instancer.instantiateVariableFont(font, {"wght": w}, inplace=False))
+        for w in sorted({wght.minimum, wght.default, wght.maximum})
+    ]
+    return min(e[0] for e in extents), max(e[1] for e in extents)
 
 
 def _build_rename(
@@ -437,11 +446,6 @@ def _build_rename(
     context = f"family '{family.id}'"
     if axis_range(font, "wght") != family.wght:
         raise FamilyError(f"{context}: input wght axis differs from {family.wght}")
-    if _source_metrics(font) != family.metrics:
-        raise FamilyError(
-            f"{context}: configured metrics {family.metrics} differ from the "
-            f"input's {_source_metrics(font)}"
-        )
     assert family.rename_from is not None and family.notice is not None
     derived_from = _describe(sources, member, family.rename_from)
     lenders = []
@@ -479,6 +483,12 @@ def _build_rename(
     # A digital signature over the upstream bytes no longer matches.
     if "DSIG" in font:
         del font["DSIG"]
+    from sawa_tools.build.merge import apply_metrics, win_errors
+
+    errors = win_errors(family.metrics, _instances_extent(font, family.wght))
+    if errors:
+        raise FamilyError(f"{context}: " + "; ".join(errors))
+    apply_metrics(font, family.metrics, font["OS/2"])
     return font
 
 

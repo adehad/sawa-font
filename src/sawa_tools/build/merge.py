@@ -11,6 +11,7 @@ of, their letters' ink (compact.py).
 from __future__ import annotations
 
 import io
+import math
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import TYPE_CHECKING, Any
@@ -154,25 +155,23 @@ def split_codepoints(latin: set[int], arabic: set[int]) -> tuple[set[int], set[i
     return latin - arabic_owned, arabic_owned
 
 
-def derive_metrics(
-    latin_typo: tuple[int, int],
-    arabic_typo: tuple[int, int],
-    scale: float,
-    y_extent: tuple[float, float],
-) -> LineMetrics:
-    """One line box that holds both scripts' typo metrics, with win metrics
-    widened to the ink extent (y_min, y_max) of every master so nothing clips.
+def win_errors(metrics: LineMetrics, extent: tuple[float, float]) -> list[str]:
+    """Where the win metrics fall short of the line box or of the ink extent
+    (y_min, y_max) of every master, so that Windows would clip.
     """
-    ascender = max(latin_typo[0], round(arabic_typo[0] * scale))
-    descender = min(latin_typo[1], round(arabic_typo[1] * scale))
-    y_min, y_max = y_extent
-    return LineMetrics(
-        ascender=ascender,
-        descender=descender,
-        line_gap=0,
-        win_ascent=max(ascender, round(y_max)),
-        win_descent=max(-descender, -round(y_min)),
-    )
+    y_min, y_max = extent
+    errors = []
+    if metrics.win_ascent < max(metrics.ascender, math.ceil(y_max)):
+        errors.append(
+            f"winAscent {metrics.win_ascent} is under the ascender or the ink top "
+            f"{math.ceil(y_max)}"
+        )
+    if metrics.win_descent < max(-metrics.descender, math.ceil(-y_min)):
+        errors.append(
+            f"winDescent {metrics.win_descent} is under the descender or the ink "
+            f"bottom {math.floor(y_min)}"
+        )
+    return errors
 
 
 def instance(font: TTFont, wght: float, pinned: Mapping[str, float]) -> TTFont:
@@ -286,7 +285,8 @@ def build_variable(
 class MergeResult:
     font: TTFont
     masters: list[float]
-    derived: LineMetrics
+    # The lowest and highest ink of every master's glyphs.
+    extent: tuple[float, float]
 
 
 def merge_family(
@@ -303,8 +303,8 @@ def merge_family(
 ) -> MergeResult:
     """Builds the merged variable font with `metrics` applied to every master.
 
-    Returns the metrics the inputs imply too, so the caller can hold the
-    configured numbers to them.
+    Returns the masters' ink extent too, so the caller can hold the
+    configured win metrics to it.
     """
     locations = master_locations(
         wght_breakpoints(latin_vf) | wght_breakpoints(arabic_vf), wght
@@ -321,15 +321,7 @@ def merge_family(
     if compaction is not None:
         masters = compacted(masters, wght.default, compaction, masters_cache)
     extents = [y_extent(m) for m in masters.values()]
-    derived = derive_metrics(
-        (table(latin_vf, "OS/2").sTypoAscender, table(latin_vf, "OS/2").sTypoDescender),
-        (
-            table(arabic_vf, "OS/2").sTypoAscender,
-            table(arabic_vf, "OS/2").sTypoDescender,
-        ),
-        scale,
-        (min(e[0] for e in extents), max(e[1] for e in extents)),
-    )
+    extent = (min(e[0] for e in extents), max(e[1] for e in extents))
     for master in masters.values():
         apply_metrics(master, metrics, table(latin_vf, "OS/2"))
-    return MergeResult(build_variable(masters, wght), locations, derived)
+    return MergeResult(build_variable(masters, wght), locations, extent)
