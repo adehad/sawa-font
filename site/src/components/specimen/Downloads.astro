@@ -7,11 +7,30 @@ interface Props {
 }
 
 const { locale } = Astro.props;
+const FAMILIES = [
+  "sawa-serif",
+  "sawa-sans",
+  "sawa-mono",
+  "sawa-serif-harakat",
+  "sawa-sans-harakat",
+  "sawa-mono-nf",
+] as const;
 ---
 
 <section class="downloads" aria-labelledby="downloads-title">
   <h2 id="downloads-title">{t(locale, "download.h2")}</h2>
   <p>{t(locale, "download.pending")}</p>
+  <p>{t(locale, "download.zip")}</p>
+  <ul class="download-families">
+    {
+      FAMILIES.map((id) => (
+        <li data-download-family={id}>
+          <strong>{t(locale, `font.${id}.name`)}</strong>
+          <span>{t(locale, `download.for.${id}`)}</span>
+        </li>
+      ))
+    }
+  </ul>
   <ul class="download-links">
     <li>
       <a href="https://github.com/adehad/sawa-font/releases">
@@ -58,6 +77,25 @@ const { locale } = Astro.props;
 </section>
 
 <style>
+  .download-families {
+    display: grid;
+    gap: 0.75rem;
+    margin-block: 1rem 1.5rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  .download-families li {
+    display: grid;
+    gap: 0.15rem;
+    padding-inline-start: 0.75rem;
+    border-inline-start: 3px solid var(--color-rule);
+  }
+
+  .download-families span {
+    color: var(--color-muted);
+  }
+
   .download-links {
     display: flex;
     flex-wrap: wrap;

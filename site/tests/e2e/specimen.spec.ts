@@ -22,6 +22,15 @@ async function computed(page: Page, selector: string, property: string): Promise
     .evaluate((element, name) => getComputedStyle(element).getPropertyValue(name), property);
 }
 
+test("the downloads section says what each of the six families is for", async ({ page }) => {
+  await page.goto(SPECIMEN);
+  const items = page.locator("[data-download-family]");
+  await expect(items).toHaveCount(6);
+  for (const id of ["sawa-serif-harakat", "sawa-sans-harakat", "sawa-mono-nf"]) {
+    await expect(page.locator(`[data-download-family="${id}"] span`)).not.toBeEmpty();
+  }
+});
+
 test("the family switch changes the hero's font and the URL", async ({ page }) => {
   await page.goto(SPECIMEN);
   const sans = page.locator('[data-family-button="sawa-sans"]');

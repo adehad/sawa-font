@@ -94,6 +94,22 @@ jobs:
       - name: Check mark-group coverage
         working-directory: .
         run: uv run --locked --group build sawa check marks
+      # Every family's TTF, Harakat twins and Mono NF included. Serif, Sans and
+      # their twins share one licence text (Noto); Mono and Mono NF the other.
+      - name: Stage the release fonts
+        working-directory: .
+        run: |
+          mkdir release-fonts
+          cp fonts/*.ttf release-fonts/
+          cp site/public/fonts/sawa-serif/OFL.txt release-fonts/OFL.txt
+          cp site/public/fonts/sawa-mono/OFL.txt release-fonts/OFL-Mono.txt
+      - name: Upload the fonts
+        uses: actions/upload-artifact@v7
+        with:
+          name: fonts
+          path: release-fonts
+          retention-days: 30
+          if-no-files-found: error
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.0"
@@ -140,7 +156,7 @@ jobs:
           path: site/dist
 
   release:
-    name: Attach the report to the release
+    name: Attach the fonts and report to the release
     if: github.ref_type == 'tag'
     needs: [python, site]
     runs-on: ubuntu-latest
@@ -151,11 +167,18 @@ jobs:
         with:
           name: report
           path: report
+      - uses: actions/download-artifact@v8
+        with:
+          name: fonts
+          path: fonts
+      - name: Zip the fonts
+        working-directory: fonts
+        run: zip -qr "../sawa-fonts-${GITHUB_REF_NAME}.zip" .
       - name: Zip the report bundle
         working-directory: report
         run: zip -qr "../sawa-report-${GITHUB_REF_NAME}.zip" .
       # Read the Docs fetches each release's bundle from this asset (§8.3).
-      - name: Upload it to the release
+      - name: Upload both to the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -163,7 +186,7 @@ jobs:
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes ""
           fi
-          gh release upload "$GITHUB_REF_NAME" "sawa-report-${GITHUB_REF_NAME}.zip" --clobber
+          gh release upload "$GITHUB_REF_NAME"             "sawa-fonts-${GITHUB_REF_NAME}.zip"             "sawa-report-${GITHUB_REF_NAME}.zip" --clobber
 
   deploy:
     name: Deploy to GitHub Pages
