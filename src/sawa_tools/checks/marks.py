@@ -23,7 +23,10 @@ DEFAULT_FONTS = (
     Path("site/public/fonts/sawa-serif/SawaSerif.woff2"),
     Path("site/public/fonts/sawa-sans/SawaSans.woff2"),
     Path("site/public/fonts/sawa-mono/SawaMono.woff2"),
+    Path("site/public/fonts/sawa-serif-harakat/SawaSerifHarakat.woff2"),
+    Path("site/public/fonts/sawa-sans-harakat/SawaSansHarakat.woff2"),
 )
+HARAKAT_SUFFIX = "Harakat"
 
 # The Arabic script's Unicode blocks: Arabic, Arabic Supplement, Arabic
 # Extended-A, Arabic Presentation Forms-A and -B.
@@ -66,7 +69,7 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:
         action="append",
         dest="fonts",
         help="Path to a font to check cmap coverage against, relative to the "
-        "cwd; repeat for several (default: the three Sawa site woff2 files)",
+        "cwd; repeat for several (default: the Sawa site woff2 files)",
     )
     parser.set_defaults(handler=run)
 
@@ -75,7 +78,11 @@ def run(args: argparse.Namespace) -> int:
     failed = False
     for font_path in args.fonts or DEFAULT_FONTS:
         try:
-            result = check_marks(groups_path=args.groups, font_path=font_path)
+            result = check_marks(
+                groups_path=args.groups,
+                font_path=font_path,
+                plain_path=plain_twin(font_path),
+            )
         except MarksError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
@@ -183,8 +190,58 @@ def font_arabic_mark_codepoints(font_path: Path) -> set[int]:
     return result
 
 
-def check_marks(*, groups_path: Path, font_path: Path) -> CheckResult:
-    """Runs every mark-group check: group structure, then font cmap coverage."""
+def plain_twin(font_path: Path) -> Path | None:
+    """The plain family's woff2 beside a Harakat twin's, or None for any other font."""
+    if not font_path.stem.endswith(HARAKAT_SUFFIX):
+        return None
+    directory = font_path.parent.name.removesuffix("-harakat")
+    return (
+        font_path.parent.parent
+        / directory
+        / (font_path.stem.removesuffix(HARAKAT_SUFFIX) + font_path.suffix)
+    )
+
+
+def twin_errors(groups_path: Path, font_path: Path, plain_path: Path) -> list[str]:
+    """Errors in a Harakat twin's mark coverage against its plain family.
+
+    The twin must map the same Arabic combining marks, and its COLR base glyphs
+    must be exactly the plain family's glyphs of the marks in the groups.
+    """
+    from sawa_tools.build.harakat import HarakatError, load_groups
+    from sawa_tools.checks.harakat import colr_errors
+
+    if plain_path.suffix == ".woff2" and not plain_path.exists():
+        raise MarksError(f"font not found: {plain_path}; run `sawa build fonts` first")
+    errors = []
+    twin_marks = font_arabic_mark_codepoints(font_path)
+    plain_marks = font_arabic_mark_codepoints(plain_path)
+    if twin_marks != plain_marks:
+        diff = ", ".join(f"U+{cp:04X}" for cp in sorted(twin_marks ^ plain_marks))
+        errors.append(f"{font_path}: marks differ from {plain_path.name}: {diff}")
+    ttfont_class = _load_ttfont_class()
+    try:
+        grouped = load_groups(groups_path)
+    except HarakatError as exc:
+        raise MarksError(str(exc)) from exc
+    font, plain = ttfont_class(font_path), ttfont_class(plain_path)
+    try:
+        # A woff2 transforms glyf and gvar, which only decompile correctly
+        # before glyphs are added to the font.
+        plain.ensureDecompiled()
+        errors += [f"{font_path}: {e}" for e in colr_errors(font, plain, grouped)]
+    finally:
+        font.close()
+        plain.close()
+    return errors
+
+
+def check_marks(
+    *, groups_path: Path, font_path: Path, plain_path: Path | None = None
+) -> CheckResult:
+    """Runs every mark-group check: group structure, then font cmap coverage,
+    then, for a Harakat twin given its `plain_path`, agreement with that family.
+    """
     groups, errors = load_groups(groups_path)
     codepoint_count = sum(len(cps) for cps in groups.values())
     if errors:
@@ -198,4 +255,6 @@ def check_marks(*, groups_path: Path, font_path: Path) -> CheckResult:
         errors.append(
             f"{font_path}: {len(missing)} Arabic combining mark(s) in no group: {names}"
         )
+    if plain_path is not None:
+        errors += twin_errors(groups_path, font_path, plain_path)
     return CheckResult(errors, len(groups), codepoint_count)

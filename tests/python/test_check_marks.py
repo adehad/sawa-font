@@ -194,3 +194,40 @@ def test_real_sawa_family_has_full_mark_coverage(font: Path) -> None:
         pytest.skip("font not built; run `uv run --group build sawa build fonts` first")
     result = marks.check_marks(groups_path=REAL_GROUPS, font_path=font_path)
     assert result.errors == []
+
+
+def test_plain_twin_of_a_harakat_woff2_is_its_family_beside_it() -> None:
+    twin = Path("fonts/sawa-serif-harakat/SawaSerifHarakat.woff2")
+    assert marks.plain_twin(twin) == Path("fonts/sawa-serif/SawaSerif.woff2")
+    assert marks.plain_twin(Path("fonts/sawa-mono/SawaMono.woff2")) is None
+
+
+def test_a_twin_with_other_marks_than_its_plain_family_is_reported(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "plain").mkdir()
+    (tmp_path / "twin").mkdir()
+    plain = _build_font_with_cmap(tmp_path / "plain", [0x064B, 0x064C])
+    twin = _build_font_with_cmap(tmp_path / "twin", [0x064B])
+    groups = write_groups(
+        tmp_path, [{"id": "tanween", "codepoints": ["U+064B..U+064C"]}]
+    )
+    result = marks.check_marks(groups_path=groups, font_path=twin, plain_path=plain)
+    assert any("marks differ" in error and "U+064C" in error for error in result.errors)
+
+
+@pytest.mark.parametrize(
+    "font",
+    [f for f in marks.DEFAULT_FONTS if marks.plain_twin(f)],
+    ids=lambda p: p.stem,
+)
+def test_real_harakat_twin_matches_its_plain_family(font: Path) -> None:
+    font_path = REPO_ROOT / font
+    if not font_path.exists():
+        pytest.skip("font not built; run `uv run --group build sawa build fonts` first")
+    plain = marks.plain_twin(font_path)
+    assert plain is not None
+    result = marks.check_marks(
+        groups_path=REAL_GROUPS, font_path=font_path, plain_path=plain
+    )
+    assert result.errors == []
