@@ -44,7 +44,11 @@ const pageCss = [
 <Base locale={locale} page="specimen" title={t(locale, "specimen.title")} wide>
   <style is:global set:html={pageCss}></style>
   <div class="dock-layout" data-landing data-family={defaultState().family}>
-    <ControlDock locale={locale} heading={t(locale, "controls.heading")}>
+    <ControlDock
+      locale={locale}
+      heading={t(locale, "controls.heading")}
+      openLabel={t(locale, "controls.open")}
+    >
       <SpecimenControls locale={locale} families={families} />
     </ControlDock>
     <div class="landing">

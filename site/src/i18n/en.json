@@ -238,5 +238,7 @@
   "controls.name.size": "Size",
   "controls.name.sample": "Sample text",
   "controls.name.palette": "Palette",
-  "controls.name.grid": "Line grid"
+  "controls.name.grid": "Line grid",
+  "controls.open": "Settings for every sample on this page",
+  "controls.close": "Close settings"
 }

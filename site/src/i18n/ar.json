@@ -238,5 +238,7 @@
   "controls.name.size": "الحجم",
   "controls.name.sample": "نص العينة",
   "controls.name.palette": "لوحة الألوان",
-  "controls.name.grid": "شبكة الأسطر"
+  "controls.name.grid": "شبكة الأسطر",
+  "controls.open": "الإعدادات لكل العينات في هذه الصفحة",
+  "controls.close": "إغلاق الإعدادات"
 }

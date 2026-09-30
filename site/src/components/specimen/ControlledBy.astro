@@ -29,7 +29,7 @@ const labelId = `controlled-by-${section}`;
   document.querySelectorAll<HTMLButtonElement>("[data-reveal-control]").forEach((chip) => {
     chip.addEventListener("click", () => {
       if (chip.dataset.revealControl) {
-        revealControl(chip.dataset.revealControl);
+        revealControl(chip.dataset.revealControl, chip);
       }
     });
   });

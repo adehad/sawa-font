@@ -1,6 +1,7 @@
 import { SUMMARY_SEPARATOR, summaryParts } from "./summary";
 
-const COMPACT = "(width < 1024px)";
+const COMPACT = "(720px <= width < 1024px)";
+const MOBILE = "(width < 720px)";
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 const EDGE = 12;
 const FOCUSABLE = "input, button, select, textarea, [tabindex]";
@@ -23,11 +24,39 @@ export function setDockSummary(parts: readonly (string | undefined)[]): void {
   });
 }
 
-function dockParts(): { dock: HTMLElement; toggle: HTMLButtonElement; panel: HTMLElement } | null {
+interface DockParts {
+  dock: HTMLElement;
+  toggle: HTMLButtonElement;
+  panel: HTMLElement;
+  home: HTMLElement;
+  fab: HTMLButtonElement;
+  sheet: HTMLDialogElement;
+  slot: HTMLElement;
+}
+
+function dockParts(): DockParts | null {
   const dock = document.querySelector<HTMLElement>("[data-dock]");
   const toggle = dock?.querySelector<HTMLButtonElement>("[data-dock-toggle]");
   const panel = document.querySelector<HTMLElement>("[data-dock-panel]");
-  return dock && toggle && panel ? { dock, toggle, panel } : null;
+  const home = document.querySelector<HTMLElement>("[data-dock-home]");
+  const fab = document.querySelector<HTMLButtonElement>("[data-dock-fab]");
+  const sheet = document.querySelector<HTMLDialogElement>("[data-dock-sheet]");
+  const slot = sheet?.querySelector<HTMLElement>("[data-dock-sheet-slot]");
+  return dock && toggle && panel && home && fab && sheet && slot
+    ? { dock, toggle, panel, home, fab, sheet, slot }
+    : null;
+}
+
+let sheetOpener: HTMLElement | null = null;
+
+/**
+ * Shows the one panel inside the sheet. The panel is moved rather than
+ * copied so every control keeps its listeners and there is one set of controls.
+ */
+function openSheet(parts: DockParts, opener: HTMLElement): void {
+  sheetOpener = opener;
+  parts.slot.append(parts.panel);
+  parts.sheet.showModal();
 }
 
 function setOpen(dock: HTMLElement, toggle: HTMLButtonElement, open: boolean): void {
@@ -84,8 +113,11 @@ export function highlightControls(ids: readonly string[]): void {
   }
 }
 
-/** Shows the control group `id`, opening the compact bar if it has to, and focuses its first control. */
-export function revealControl(id: string): void {
+/**
+ * Shows the control group `id`, opening the compact bar or the sheet if it
+ * has to, and focuses its current choice. Closing the sheet returns focus to `opener`.
+ */
+export function revealControl(id: string, opener: HTMLElement): void {
   const parts = dockParts();
   if (!parts) {
     return;
@@ -95,7 +127,9 @@ export function revealControl(id: string): void {
   if (!group) {
     return;
   }
-  if (matchMedia(COMPACT).matches) {
+  if (matchMedia(MOBILE).matches) {
+    openSheet(parts, opener);
+  } else if (matchMedia(COMPACT).matches) {
     setOpen(dock, toggle, true);
   }
   scrollIntoPanel(panel, group);
@@ -107,17 +141,37 @@ export function revealControl(id: string): void {
   control?.focus({ preventScroll: true });
 }
 
-/** Wires the compact top bar's expand and collapse. */
-export function initDock(dock: HTMLElement): void {
-  const toggle = dock.querySelector<HTMLButtonElement>("[data-dock-toggle]");
-  if (!toggle) {
+/** Wires the compact top bar's expand and collapse and the small-screen sheet. */
+export function initDock(): void {
+  const parts = dockParts();
+  if (!parts) {
     return;
   }
+  const { dock, toggle, panel, home, fab, sheet } = parts;
   toggle.addEventListener("click", () => setOpen(dock, toggle, dock.dataset.open !== "true"));
   dock.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && dock.dataset.open === "true" && matchMedia(COMPACT).matches) {
       setOpen(dock, toggle, false);
       toggle.focus();
+    }
+  });
+
+  fab.addEventListener("click", () => openSheet(parts, fab));
+  sheet.querySelector("[data-dock-close]")?.addEventListener("click", () => sheet.close());
+  sheet.addEventListener("click", (event) => {
+    if (event.target === sheet) {
+      sheet.close();
+    }
+  });
+  sheet.addEventListener("close", () => {
+    home.append(panel);
+    const opener = sheetOpener?.checkVisibility() ? sheetOpener : fab;
+    sheetOpener = null;
+    opener.focus();
+  });
+  matchMedia(MOBILE).addEventListener("change", (event) => {
+    if (!event.matches && sheet.open) {
+      sheet.close();
     }
   });
 }

@@ -131,3 +131,81 @@ test.describe("tablet", () => {
     await expect.poll(() => top(page, "[data-dock]")).toBe(0);
   });
 });
+
+test.describe("mobile", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("the floating button opens the settings sheet and Escape returns focus to it", async ({
+    page,
+  }) => {
+    await page.goto(SPECIMEN);
+    const fab = page.getByRole("button", { name: "Settings for every sample on this page" });
+    const sheet = page.getByRole("dialog", {
+      name: "These settings change every sample on this page",
+    });
+    await expect(page.locator("[data-dock]")).toBeHidden();
+    await expect(fab).toBeVisible();
+    await expect(fab).toContainText("Sawa Serif · 400 · 32 px · Groups");
+    const box = await fab.boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(56);
+
+    await fab.click();
+    await expect(sheet).toBeVisible();
+    await expect(sheet.locator("[data-weight]")).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(fab).toBeFocused();
+  });
+
+  test("a control changed in the sheet updates the page and the URL", async ({ page }) => {
+    await page.goto(SPECIMEN);
+    await page.locator("[data-dock-fab]").click();
+    const sheet = page.locator("[data-dock-sheet]");
+
+    await sheet.locator('[data-family-button="sawa-sans"]').click();
+    await sheet.locator("[data-size]").fill("48");
+
+    expect(new URL(page.url()).searchParams.get("fam")).toBe("sawa-sans");
+    expect(new URL(page.url()).searchParams.get("size")).toBe("48");
+    await expect(page.locator("[data-specimen]")).toHaveCSS("font-size", "48px");
+    await expect(page.locator("[data-dock-fab]")).toContainText("Sawa Sans · 400 · 48 px");
+
+    await sheet.locator("[data-dock-close]").click();
+    await expect(sheet).toBeHidden();
+    await expect(page.locator("[data-dock-fab]")).toBeFocused();
+  });
+
+  test("a Controlled by chip opens the sheet at its control and closing returns to the chip", async ({
+    page,
+  }) => {
+    await page.goto(SPECIMEN);
+    const chip = page.locator('[data-tashkeel] [data-reveal-control="palette"]');
+    await chip.click();
+
+    const sheet = page.locator("[data-dock-sheet]");
+    await expect(sheet).toBeVisible();
+    const palette = sheet.locator('[data-palette="groups"]');
+    await expect(palette).toBeFocused();
+    await expect(palette).toBeInViewport();
+
+    await page.keyboard.press("Escape");
+    await expect(chip).toBeFocused();
+  });
+
+  test("the floating button sits in the inline-end corner in both directions", async ({ page }) => {
+    for (const [url, side] of [
+      [SPECIMEN, "right"],
+      [SPECIMEN_AR, "left"],
+    ] as const) {
+      await page.goto(url);
+      const box = await page.locator("[data-dock-fab]").boundingBox();
+      expect(box).not.toBeNull();
+      if (box) {
+        const gap = side === "right" ? 390 - (box.x + box.width) : box.x;
+        expect(gap).toBeGreaterThan(0);
+        expect(gap).toBeLessThanOrEqual(24);
+      }
+    }
+  });
+});
