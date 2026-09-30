@@ -1,29 +1,16 @@
 ---
 import { t } from "../../i18n/t";
 import type { Locale } from "../../i18n/locales";
-import type { SpecimenFamilyInfo } from "../../fonts/specimen";
-import {
-  MAX_SIZE,
-  MIN_SIZE,
-  SPECIMEN_FAMILIES,
-  defaultState,
-  type SpecimenFamily,
-} from "../../state/url";
+import { defaultState } from "../../state/url";
 import { specimenSample } from "../../samples";
 
 interface Props {
   locale: Locale;
-  families: Record<SpecimenFamily, SpecimenFamilyInfo>;
 }
 
-const { locale, families } = Astro.props;
+const { locale } = Astro.props;
 const initial = defaultState();
-const initialFamily = families[initial.family];
 const initialSample = specimenSample(initial.preset, initial.text);
-const numbers = new Intl.NumberFormat(locale);
-const initialWeightText =
-  initialFamily.instances.find((instance) => instance.wght === initialFamily.axis.default)?.name ??
-  numbers.format(initialFamily.axis.default);
 ---
 
 <section class="hero" aria-labelledby="hero-title" data-hero>
@@ -31,194 +18,18 @@ const initialWeightText =
     {t(locale, "specimen.wordmark")}
   </h1>
   <p class="hero-lede">{t(locale, "specimen.lede")}</p>
-
-  <div class="hero-controls" role="group" aria-label={t(locale, "specimen.controls")}>
-    <fieldset class="control">
-      <legend>{t(locale, "specimen.family")}</legend>
-      <div class="segmented">
-        {
-          SPECIMEN_FAMILIES.map((id) => (
-            <button
-              type="button"
-              data-family-button={id}
-              data-font={id}
-              aria-pressed={id === initial.family ? "true" : "false"}
-            >
-              {t(locale, `font.${id}.name`)}
-            </button>
-          ))
-        }
-      </div>
-    </fieldset>
-
-    <div class="control">
-      <div class="control-head">
-        <label for="hero-weight">{t(locale, "specimen.weight")}</label>
-        <output for="hero-weight" data-weight-output>
-          {numbers.format(initialFamily.axis.default)}
-        </output>
-      </div>
-      <input
-        id="hero-weight"
-        type="range"
-        step="1"
-        min={initialFamily.axis.min}
-        max={initialFamily.axis.max}
-        value={initialFamily.axis.default}
-        aria-valuetext={initialWeightText}
-        data-weight
-      />
-      {
-        SPECIMEN_FAMILIES.map((id) => (
-          <p class="control-note" data-for-family={id}>
-            {t(locale, "specimen.axis", {
-              family: t(locale, `font.${id}.name`),
-              min: families[id].axis.min,
-              max: families[id].axis.max,
-              def: families[id].axis.default,
-            })}
-          </p>
-        ))
-      }
-    </div>
-
-    <fieldset class="control">
-      <legend>{t(locale, "specimen.instances")}</legend>
-      {
-        SPECIMEN_FAMILIES.map((id) => (
-          <div class="chips" data-for-family={id}>
-            {families[id].instances.map((instance) => (
-              <button
-                type="button"
-                class="chip-button"
-                data-instance-wght={instance.wght}
-                aria-pressed={
-                  id === initial.family && instance.wght === families[id].axis.default
-                    ? "true"
-                    : "false"
-                }
-              >
-                <span dir="ltr">{instance.name}</span>
-              </button>
-            ))}
-          </div>
-        ))
-      }
-    </fieldset>
-
-    <div class="control">
-      <div class="control-head">
-        <label for="hero-size">{t(locale, "specimen.size")}</label>
-        <output for="hero-size" data-size-output>{numbers.format(initial.size)}</output>
-      </div>
-      <input
-        id="hero-size"
-        type="range"
-        min={MIN_SIZE}
-        max={MAX_SIZE}
-        step="1"
-        value={initial.size}
-        data-size
-      />
-    </div>
-
-    <div class="control control-sample">
-      <label for="hero-text">{t(locale, "specimen.sample")}</label>
-      <textarea id="hero-text" dir="auto" rows="3" spellcheck="false" data-sample-input
-        >{initialSample}</textarea
-      >
-      <button type="button" class="text-button" data-sample-reset>
-        {t(locale, "specimen.reset")}
-      </button>
-    </div>
-  </div>
-
   <p class="hero-specimen in-family" dir="auto" data-specimen>{initialSample}</p>
 </section>
 
 <script>
-  import { loadFontsData } from "../../fonts/load";
-  import { effectiveWeight, specimenFamilies, storedWeight } from "../../fonts/specimen";
   import { specimenSample } from "../../samples";
-  import { commit, readState, subscribe } from "../../state/store";
-  import { SPECIMEN_FAMILIES, clampSize } from "../../state/url";
+  import { subscribe } from "../../state/store";
 
-  const root = document.querySelector<HTMLElement>("[data-hero]");
-  if (root) {
-    const families = specimenFamilies(loadFontsData());
-    const numbers = new Intl.NumberFormat(document.documentElement.lang);
-    const familyButtons = root.querySelectorAll<HTMLButtonElement>("[data-family-button]");
-    const weight = root.querySelector<HTMLInputElement>("[data-weight]");
-    const weightOutput = root.querySelector<HTMLOutputElement>("[data-weight-output]");
-    const size = root.querySelector<HTMLInputElement>("[data-size]");
-    const sizeOutput = root.querySelector<HTMLOutputElement>("[data-size-output]");
-    const sample = root.querySelector<HTMLTextAreaElement>("[data-sample-input]");
-    const reset = root.querySelector<HTMLButtonElement>("[data-sample-reset]");
-    const specimen = root.querySelector<HTMLElement>("[data-specimen]");
-
+  const specimen = document.querySelector<HTMLElement>("[data-hero] [data-specimen]");
+  if (specimen) {
     subscribe((state) => {
-      const family = families[state.family];
-      const wght = effectiveWeight(state.weight, family.axis);
-      familyButtons.forEach((button) => {
-        button.setAttribute("aria-pressed", String(button.dataset.familyButton === state.family));
-      });
-      root.querySelectorAll<HTMLElement>("[data-for-family]").forEach((group) => {
-        const active = group.dataset.forFamily === state.family;
-        group.querySelectorAll<HTMLButtonElement>("[data-instance-wght]").forEach((button) => {
-          const pressed = active && Number(button.dataset.instanceWght) === wght;
-          button.setAttribute("aria-pressed", String(pressed));
-        });
-      });
-      if (weight) {
-        weight.min = String(family.axis.min);
-        weight.max = String(family.axis.max);
-        weight.value = String(wght);
-        const instance = family.instances.find((candidate) => candidate.wght === wght);
-        weight.setAttribute("aria-valuetext", instance?.name ?? numbers.format(wght));
-      }
-      if (weightOutput) {
-        weightOutput.value = numbers.format(wght);
-      }
-      const shownSize = clampSize(state.size);
-      if (size) {
-        size.value = String(shownSize);
-      }
-      if (sizeOutput) {
-        sizeOutput.value = numbers.format(shownSize);
-      }
-      const text = specimenSample(state.preset, state.text);
-      if (sample && sample.value !== text && document.activeElement !== sample) {
-        sample.value = text;
-      }
-      if (specimen) {
-        specimen.textContent = text;
-      }
+      specimen.textContent = specimenSample(state.preset, state.text);
     });
-
-    familyButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        const id = SPECIMEN_FAMILIES.find((candidate) => candidate === button.dataset.familyButton);
-        if (id) {
-          const state = readState();
-          commit({ ...state, family: id, weight: storedWeight(state.weight, families[id].axis) });
-        }
-      });
-    });
-
-    function setWeight(value: number): void {
-      const state = readState();
-      commit({ ...state, weight: storedWeight(value, families[state.family].axis) });
-    }
-
-    weight?.addEventListener("input", () => setWeight(weight.valueAsNumber));
-    root.querySelectorAll<HTMLButtonElement>("[data-instance-wght]").forEach((button) => {
-      button.addEventListener("click", () => setWeight(Number(button.dataset.instanceWght)));
-    });
-    size?.addEventListener("input", () => commit({ ...readState(), size: size.valueAsNumber }));
-    sample?.addEventListener("input", () => {
-      commit({ ...readState(), preset: "custom", text: sample.value });
-    });
-    reset?.addEventListener("click", () => commit({ ...readState(), preset: "mixed", text: "" }));
   }
 </script>
 
@@ -232,7 +43,7 @@ const initialWeightText =
 
   .hero-wordmark {
     margin: 0;
-    font-size: clamp(3.5rem, 14vw, 9rem);
+    font-size: clamp(3.5rem, 10vw, 8rem);
     line-height: 1.1;
     font-weight: var(--wght, var(--wght-default));
   }
@@ -242,74 +53,6 @@ const initialWeightText =
     max-inline-size: 44rem;
     font-size: 1.15rem;
     color: var(--color-muted);
-  }
-
-  .hero-controls {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-    gap: 1.25rem 2rem;
-    padding: 1.25rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-rule);
-    border-radius: 0.5rem;
-  }
-
-  .control {
-    display: grid;
-    align-content: start;
-    gap: 0.5rem;
-    min-inline-size: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  .control legend,
-  .control label {
-    padding: 0;
-    font-weight: 600;
-  }
-
-  .control-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 1rem;
-  }
-
-  .control-head output {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .control-note {
-    margin: 0;
-    font-size: 0.9rem;
-    color: var(--color-muted);
-  }
-
-  .control-sample {
-    grid-column: 1 / -1;
-  }
-
-  input[type="range"] {
-    inline-size: 100%;
-    min-block-size: 44px;
-    margin: 0;
-    accent-color: var(--color-accent);
-  }
-
-  textarea {
-    inline-size: 100%;
-    padding: 0.6rem 0.75rem;
-    border: 1px solid var(--color-rule);
-    border-radius: 0.4rem;
-    background: var(--color-bg);
-    color: var(--color-ink);
-    font: inherit;
-    font-size: 1.05rem;
-    line-height: 1.6;
-    resize: vertical;
   }
 
   .hero-specimen {

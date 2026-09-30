@@ -1,6 +1,8 @@
 ---
 import Base from "../../layouts/Base.astro";
+import ControlDock from "../../components/controls/ControlDock.astro";
 import Hero from "../../components/specimen/Hero.astro";
+import SpecimenControls from "../../components/specimen/SpecimenControls.astro";
 import LineHeightDemo from "../../components/specimen/LineHeightDemo.astro";
 import Tashkeel from "../../components/specimen/Tashkeel.astro";
 import FamilyCards from "../../components/specimen/FamilyCards.astro";
@@ -30,7 +32,7 @@ if (!statusFamily) {
 }
 const statusMetrics = lineMetrics(statusFamily);
 const familyVisibility = SPECIMEN_FAMILIES.map(
-  (id) => `.landing:not([data-family="${id}"]) [data-for-family="${id}"] {\n  display: none;\n}`,
+  (id) => `[data-landing]:not([data-family="${id}"]) [data-for-family="${id}"] {\n  display: none;\n}`,
 ).join("\n\n");
 const pageCss = [
   specimenCss(families, { stack: fontStack(fontsData, "status"), metrics: statusMetrics }),
@@ -41,13 +43,18 @@ const pageCss = [
 
 <Base locale={locale} page="specimen" title={t(locale, "specimen.title")} wide>
   <style is:global set:html={pageCss}></style>
-  <div class="landing" data-landing data-family={defaultState().family}>
-    <Hero locale={locale} families={families} />
-    <LineHeightDemo locale={locale} families={families} statusMetrics={statusMetrics} />
-    <Tashkeel locale={locale} families={families} />
-    <FamilyCards locale={locale} families={families} />
-    <Waterfall locale={locale} />
-    <Downloads locale={locale} />
+  <div class="dock-layout" data-landing data-family={defaultState().family}>
+    <ControlDock locale={locale} heading={t(locale, "controls.heading")}>
+      <SpecimenControls locale={locale} families={families} />
+    </ControlDock>
+    <div class="landing">
+      <Hero locale={locale} />
+      <LineHeightDemo locale={locale} families={families} statusMetrics={statusMetrics} />
+      <Tashkeel locale={locale} families={families} />
+      <FamilyCards locale={locale} families={families} />
+      <Waterfall locale={locale} />
+      <Downloads locale={locale} />
+    </div>
   </div>
 </Base>
 
@@ -80,6 +87,7 @@ const pageCss = [
   .landing {
     display: grid;
     gap: 3.5rem;
+    min-inline-size: 0;
   }
 
   .landing h2 {

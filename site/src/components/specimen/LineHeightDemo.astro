@@ -28,10 +28,6 @@ function boxNote(metrics: LineMetrics): string {
   <h2 id="line-demo-title">{t(locale, "lineHeight.h2")}</h2>
   <p class="section-intro">{t(locale, "lineHeight.intro")}</p>
 
-  <div class="line-toggle">
-    <input id="line-grid" type="checkbox" data-grid-toggle />
-    <label for="line-grid">{t(locale, "lineHeight.grid")}</label>
-  </div>
   <p class="section-note">{t(locale, "lineHeight.gridNote")}</p>
 
   <div class="line-panes">
@@ -65,39 +61,17 @@ function boxNote(metrics: LineMetrics): string {
 </section>
 
 <script>
-  import { commit, readState, subscribe } from "../../state/store";
+  import { subscribe } from "../../state/store";
 
   const root = document.querySelector<HTMLElement>("[data-line-demo]");
-  const toggle = root?.querySelector<HTMLInputElement>("[data-grid-toggle]");
-  if (root && toggle) {
+  if (root) {
     subscribe((state) => {
       root.dataset.grid = state.metrics ? "on" : "off";
-      toggle.checked = state.metrics;
     });
-    toggle.addEventListener("change", () => commit({ ...readState(), metrics: toggle.checked }));
   }
 </script>
 
 <style>
-  .line-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    min-block-size: 44px;
-  }
-
-  .line-toggle input {
-    inline-size: 1.4rem;
-    block-size: 1.4rem;
-    margin: 0;
-    accent-color: var(--color-accent);
-  }
-
-  .line-toggle label {
-    font-weight: 600;
-    cursor: pointer;
-  }
-
   .line-panes {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));

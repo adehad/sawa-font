@@ -137,7 +137,7 @@ describe("specimenCss", () => {
       stack: '"source-sans", sans-serif',
       metrics: { unitsPerEm: 1000, ascender: 1000, descender: -326, lineGap: 0 },
     });
-    expect(css).toContain('.landing[data-family="sawa-sans"] {');
+    expect(css).toContain('[data-landing][data-family="sawa-sans"] {');
     expect(css).toContain("--wght-default: 400;");
     expect(css).toContain("--line-ascent: 1.137;");
     expect(css).toContain("--line-descent: 0.675;");

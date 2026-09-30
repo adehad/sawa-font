@@ -123,7 +123,7 @@ function metricVars(metrics: LineMetrics): string[] {
 
 /**
  * Per-family custom properties for the Specimen page: the selected family's
- * stack, default weight and line metrics on `.landing[data-family]`, and each
+ * stack, default weight and line metrics on `[data-landing][data-family]`, and each
  * family's stack on `[data-font]` for the family cards.
  */
 export function specimenCss(
@@ -135,7 +135,7 @@ export function specimenCss(
     const family = families[id];
     rules.push(
       [
-        `.landing[data-family="${id}"] {`,
+        `[data-landing][data-family="${id}"] {`,
         `  --specimen-font: ${family.stack};`,
         `  --wght-default: ${family.axis.default};`,
         ...metricVars(family.metrics).map((line) => `  ${line}`),

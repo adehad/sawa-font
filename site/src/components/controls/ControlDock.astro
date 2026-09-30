@@ -1,0 +1,187 @@
+---
+import { t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+
+interface Props {
+  locale: Locale;
+  /** Names the panel; the aside takes its accessible name from it. */
+  heading: string;
+}
+
+const { locale, heading } = Astro.props;
+const headingId = "dock-heading";
+const panelId = "dock-panel";
+---
+
+<aside class="dock" aria-labelledby={headingId} data-dock data-open="false">
+  <button
+    type="button"
+    class="dock-toggle"
+    aria-expanded="false"
+    aria-controls={panelId}
+    data-dock-toggle
+  >
+    <svg
+      class="dock-icon"
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      stroke-linecap="round"
+    >
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path>
+      <circle cx="16" cy="7" r="2"></circle>
+      <circle cx="10" cy="17" r="2"></circle>
+    </svg>
+    <span class="dock-toggle-label">{t(locale, "controls.settings")}</span>
+    <span class="dock-summary" data-dock-summary></span>
+    <svg
+      class="dock-chevron"
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M6 9l6 6 6-6"></path>
+    </svg>
+  </button>
+  <div class="dock-home" data-dock-home>
+    <div class="dock-panel" id={panelId} data-dock-panel>
+      <h2 id={headingId} class="dock-heading">{heading}</h2>
+      <slot />
+    </div>
+  </div>
+</aside>
+
+<script>
+  import { initDock } from "./dock";
+
+  const dock = document.querySelector<HTMLElement>("[data-dock]");
+  if (dock) {
+    initDock(dock);
+  }
+</script>
+
+<style is:global>
+  .dock-layout {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .dock {
+    min-inline-size: 0;
+  }
+
+  .dock-toggle {
+    display: none;
+  }
+
+  .dock-panel {
+    padding: 1.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-rule);
+    border-radius: 0.5rem;
+  }
+
+  .dock-heading {
+    margin-block: 0 1.25rem;
+    font-family: var(--font-ui);
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  @media (width >= 1024px) {
+    .dock-layout {
+      grid-template-columns: minmax(16rem, 19rem) minmax(0, 1fr);
+      align-items: start;
+      gap: 3rem;
+    }
+
+    .dock {
+      position: sticky;
+      inset-block-start: 1rem;
+    }
+
+    .dock-panel {
+      max-block-size: calc(100dvh - 2rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+  }
+
+  @media (width < 1024px) {
+    .dock {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 20;
+      margin-inline: calc(-1 * var(--main-gutter));
+      padding-block: 0.5rem;
+      padding-inline: var(--main-gutter);
+      background: var(--color-bg);
+      border-block-end: 1px solid var(--color-rule);
+    }
+
+    .dock-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      inline-size: 100%;
+      min-block-size: 44px;
+      padding-inline: 0.75rem;
+      border: 1px solid var(--color-rule);
+      border-radius: 0.5rem;
+      background: var(--color-surface);
+      color: var(--color-ink);
+      font: inherit;
+      text-align: start;
+      cursor: pointer;
+    }
+
+    .dock-icon,
+    .dock-chevron {
+      flex: none;
+    }
+
+    .dock-toggle-label {
+      flex: none;
+      font-weight: 600;
+    }
+
+    .dock-summary {
+      flex: 1 1 auto;
+      min-inline-size: 0;
+      overflow: hidden;
+      color: var(--color-muted);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .dock[data-open="true"] .dock-chevron {
+      transform: rotate(180deg);
+    }
+
+    .dock[data-open="false"] .dock-panel {
+      display: none;
+    }
+
+    .dock-panel {
+      margin-block-start: 0.5rem;
+      max-block-size: calc(100dvh - 5rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    .dock-panel .control-groups {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    }
+  }
+</style>

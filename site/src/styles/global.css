@@ -174,7 +174,9 @@ button {
 }
 
 main {
-  padding-inline: 1.5rem;
+  --main-gutter: 1.5rem;
+
+  padding-inline: var(--main-gutter);
   padding-block: 2rem;
   max-inline-size: 42rem;
 }
@@ -186,7 +188,7 @@ main.main-wide {
 
 @media (width < 40rem) {
   main {
-    padding-inline: 1rem;
+    --main-gutter: 1rem;
   }
 }
 

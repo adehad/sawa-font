@@ -1,7 +1,7 @@
 ---
 import { t, type MessageKey } from "../../i18n/t";
 import type { Locale } from "../../i18n/locales";
-import { PALETTE_NAMES, type SpecimenFamilyInfo } from "../../fonts/specimen";
+import type { SpecimenFamilyInfo } from "../../fonts/specimen";
 import { MARK_GROUPS, sampleMarks, type MarkGroupId } from "../../marks/groups";
 import { SPECIMEN_FAMILIES, defaultState, type SpecimenFamily } from "../../state/url";
 import { presets } from "../../samples";
@@ -13,7 +13,6 @@ interface Props {
 
 const { locale, families } = Astro.props;
 const initial = defaultState();
-const anyPalettes = SPECIMEN_FAMILIES.some((id) => families[id].hasPalettes);
 // Verse numbers belong to the Quran text, so they use Arabic-Indic digits in both UIs.
 const verseNumbers = new Intl.NumberFormat("ar-u-nu-arab");
 
@@ -69,24 +68,6 @@ const GROUP_NAMES: Record<MarkGroupId, MessageKey> = {
     ))
   }
 
-  <fieldset class="palette-switch" data-palette-switch hidden={!anyPalettes}>
-    <legend>{t(locale, "tashkeel.palette")}</legend>
-    <div class="segmented">
-      {
-        PALETTE_NAMES.map((palette) => (
-          <button
-            type="button"
-            data-palette={palette}
-            aria-pressed={palette === initial.palette ? "true" : "false"}
-          >
-            {t(locale, `palette.${palette}`)}
-          </button>
-        ))
-      }
-    </div>
-    <p class="palette-harakat">{t(locale, "tashkeel.harakat")}</p>
-  </fieldset>
-
   <ul class="mark-legend" data-mark-legend>
     {
       MARK_GROUPS.map((group) => (
@@ -114,35 +95,18 @@ const GROUP_NAMES: Record<MarkGroupId, MessageKey> = {
 
 <script>
   import { loadFontsData } from "../../fonts/load";
-  import { PALETTE_NAMES, specimenFamilies } from "../../fonts/specimen";
-  import { commit, readState, subscribe } from "../../state/store";
+  import { specimenFamilies } from "../../fonts/specimen";
+  import { subscribe } from "../../state/store";
 
   const root = document.querySelector<HTMLElement>("[data-tashkeel]");
   if (root) {
     const families = specimenFamilies(loadFontsData());
     const coloured = root.querySelectorAll<HTMLElement>("[data-harakat]");
-    const paletteSwitch = root.querySelector<HTMLFieldSetElement>("[data-palette-switch]");
-    const buttons = root.querySelectorAll<HTMLButtonElement>("[data-palette]");
 
     subscribe((state) => {
       const hasPalettes = families[state.family].hasPalettes;
-      if (paletteSwitch) {
-        paletteSwitch.hidden = !hasPalettes;
-      }
       coloured.forEach((element) => {
         element.dataset.pal = hasPalettes ? state.palette : "";
-      });
-      buttons.forEach((button) => {
-        button.setAttribute("aria-pressed", String(button.dataset.palette === state.palette));
-      });
-    });
-
-    buttons.forEach((button) => {
-      button.addEventListener("click", () => {
-        const palette = PALETTE_NAMES.find((name) => name === button.dataset.palette);
-        if (palette) {
-          commit({ ...readState(), palette });
-        }
       });
     });
   }
@@ -188,28 +152,6 @@ const GROUP_NAMES: Record<MarkGroupId, MessageKey> = {
     padding-inline: 1rem;
     border-inline-start: 3px solid var(--color-accent);
     background: var(--color-surface);
-  }
-
-  .palette-switch {
-    margin: 0;
-    margin-block-end: 1rem;
-    padding: 0;
-    border: 0;
-  }
-
-  .palette-switch[hidden] {
-    display: none;
-  }
-
-  .palette-harakat {
-    margin-block: 0.5rem 0;
-    font-size: 0.9rem;
-    color: var(--color-muted);
-  }
-
-  .palette-switch legend {
-    font-weight: 600;
-    margin-block-end: 0.5rem;
   }
 
   .mark-legend {

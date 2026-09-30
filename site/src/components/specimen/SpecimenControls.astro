@@ -1,0 +1,385 @@
+---
+import { rawMessage, t } from "../../i18n/t";
+import type { Locale } from "../../i18n/locales";
+import { PALETTE_NAMES, type SpecimenFamilyInfo } from "../../fonts/specimen";
+import {
+  MAX_SIZE,
+  MIN_SIZE,
+  SPECIMEN_FAMILIES,
+  defaultState,
+  type SpecimenFamily,
+} from "../../state/url";
+import { specimenSample } from "../../samples";
+
+interface Props {
+  locale: Locale;
+  families: Record<SpecimenFamily, SpecimenFamilyInfo>;
+}
+
+const { locale, families } = Astro.props;
+const initial = defaultState();
+const initialFamily = families[initial.family];
+const initialSample = specimenSample(initial.preset, initial.text);
+const numbers = new Intl.NumberFormat(locale);
+const initialWeightText =
+  initialFamily.instances.find((instance) => instance.wght === initialFamily.axis.default)?.name ??
+  numbers.format(initialFamily.axis.default);
+const anyPalettes = SPECIMEN_FAMILIES.some((id) => families[id].hasPalettes);
+---
+
+<div
+  class="control-groups"
+  data-specimen-controls
+  data-size-template={rawMessage(locale, "controls.summarySize")}
+>
+  <fieldset class="control" data-control-group="family">
+    <legend>{t(locale, "specimen.family")}</legend>
+    <div class="segmented stack-options">
+      {
+        SPECIMEN_FAMILIES.map((id) => (
+          <button
+            type="button"
+            data-family-button={id}
+            data-font={id}
+            aria-pressed={id === initial.family ? "true" : "false"}
+          >
+            {t(locale, `font.${id}.name`)}
+          </button>
+        ))
+      }
+    </div>
+  </fieldset>
+
+  <div class="control" data-control-group="weight">
+    <div class="control-head">
+      <label for="specimen-weight">{t(locale, "specimen.weight")}</label>
+      <output for="specimen-weight" data-weight-output>
+        {numbers.format(initialFamily.axis.default)}
+      </output>
+    </div>
+    <input
+      id="specimen-weight"
+      type="range"
+      step="1"
+      min={initialFamily.axis.min}
+      max={initialFamily.axis.max}
+      value={initialFamily.axis.default}
+      aria-valuetext={initialWeightText}
+      data-weight
+    />
+    {
+      SPECIMEN_FAMILIES.map((id) => (
+        <p class="control-note" data-for-family={id}>
+          {t(locale, "specimen.axis", {
+            family: t(locale, `font.${id}.name`),
+            min: families[id].axis.min,
+            max: families[id].axis.max,
+            def: families[id].axis.default,
+          })}
+        </p>
+      ))
+    }
+    <fieldset class="control">
+      <legend>{t(locale, "specimen.instances")}</legend>
+      {
+        SPECIMEN_FAMILIES.map((id) => (
+          <div class="chips" data-for-family={id}>
+            {families[id].instances.map((instance) => (
+              <button
+                type="button"
+                class="chip-button"
+                data-instance-wght={instance.wght}
+                aria-pressed={
+                  id === initial.family && instance.wght === families[id].axis.default
+                    ? "true"
+                    : "false"
+                }
+              >
+                <span dir="ltr">{instance.name}</span>
+              </button>
+            ))}
+          </div>
+        ))
+      }
+    </fieldset>
+  </div>
+
+  <div class="control" data-control-group="size">
+    <div class="control-head">
+      <label for="specimen-size">{t(locale, "specimen.size")}</label>
+      <output for="specimen-size" data-size-output>{numbers.format(initial.size)}</output>
+    </div>
+    <input
+      id="specimen-size"
+      type="range"
+      min={MIN_SIZE}
+      max={MAX_SIZE}
+      step="1"
+      value={initial.size}
+      data-size
+    />
+  </div>
+
+  <div class="control" data-control-group="sample">
+    <label for="specimen-text">{t(locale, "specimen.sample")}</label>
+    <textarea id="specimen-text" dir="auto" rows="3" spellcheck="false" data-sample-input
+      >{initialSample}</textarea
+    >
+    <button type="button" class="text-button" data-sample-reset>
+      {t(locale, "specimen.reset")}
+    </button>
+  </div>
+
+  <fieldset
+    class="control"
+    data-control-group="palette"
+    data-palette-switch
+    hidden={!anyPalettes}
+    aria-describedby="specimen-palette-note"
+  >
+    <legend>{t(locale, "tashkeel.palette")}</legend>
+    <div class="segmented stack-options">
+      {
+        PALETTE_NAMES.map((palette) => (
+          <button
+            type="button"
+            data-palette={palette}
+            aria-pressed={palette === initial.palette ? "true" : "false"}
+          >
+            {t(locale, `palette.${palette}`)}
+          </button>
+        ))
+      }
+    </div>
+    <p id="specimen-palette-note" class="control-note">{t(locale, "tashkeel.harakat")}</p>
+  </fieldset>
+
+  <div class="control" data-control-group="grid">
+    <div class="check">
+      <input id="specimen-grid" type="checkbox" data-grid-toggle />
+      <label for="specimen-grid">{t(locale, "lineHeight.grid")}</label>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { setDockSummary } from "../controls/dock";
+  import { fillTemplate } from "../controls/summary";
+  import { loadFontsData } from "../../fonts/load";
+  import {
+    PALETTE_NAMES,
+    effectiveWeight,
+    specimenFamilies,
+    storedWeight,
+  } from "../../fonts/specimen";
+  import { specimenSample } from "../../samples";
+  import { commit, readState, subscribe } from "../../state/store";
+  import { SPECIMEN_FAMILIES, clampSize } from "../../state/url";
+
+  const root = document.querySelector<HTMLElement>("[data-specimen-controls]");
+  if (root) {
+    const families = specimenFamilies(loadFontsData());
+    const numbers = new Intl.NumberFormat(document.documentElement.lang);
+    const sizeTemplate = root.dataset.sizeTemplate ?? "{size}";
+    const familyButtons = root.querySelectorAll<HTMLButtonElement>("[data-family-button]");
+    const weight = root.querySelector<HTMLInputElement>("[data-weight]");
+    const weightOutput = root.querySelector<HTMLOutputElement>("[data-weight-output]");
+    const size = root.querySelector<HTMLInputElement>("[data-size]");
+    const sizeOutput = root.querySelector<HTMLOutputElement>("[data-size-output]");
+    const sample = root.querySelector<HTMLTextAreaElement>("[data-sample-input]");
+    const reset = root.querySelector<HTMLButtonElement>("[data-sample-reset]");
+    const paletteSwitch = root.querySelector<HTMLFieldSetElement>("[data-palette-switch]");
+    const paletteButtons = root.querySelectorAll<HTMLButtonElement>("[data-palette]");
+    const grid = root.querySelector<HTMLInputElement>("[data-grid-toggle]");
+    const label = (selector: string): string =>
+      root.querySelector(selector)?.textContent?.trim() ?? "";
+
+    subscribe((state) => {
+      const family = families[state.family];
+      const wght = effectiveWeight(state.weight, family.axis);
+      familyButtons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.familyButton === state.family));
+      });
+      root.querySelectorAll<HTMLElement>("[data-for-family]").forEach((group) => {
+        const active = group.dataset.forFamily === state.family;
+        group.querySelectorAll<HTMLButtonElement>("[data-instance-wght]").forEach((button) => {
+          const pressed = active && Number(button.dataset.instanceWght) === wght;
+          button.setAttribute("aria-pressed", String(pressed));
+        });
+      });
+      if (weight) {
+        weight.min = String(family.axis.min);
+        weight.max = String(family.axis.max);
+        weight.value = String(wght);
+        const instance = family.instances.find((candidate) => candidate.wght === wght);
+        weight.setAttribute("aria-valuetext", instance?.name ?? numbers.format(wght));
+      }
+      if (weightOutput) {
+        weightOutput.value = numbers.format(wght);
+      }
+      const shownSize = clampSize(state.size);
+      if (size) {
+        size.value = String(shownSize);
+      }
+      if (sizeOutput) {
+        sizeOutput.value = numbers.format(shownSize);
+      }
+      const text = specimenSample(state.preset, state.text);
+      if (sample && sample.value !== text && document.activeElement !== sample) {
+        sample.value = text;
+      }
+      if (paletteSwitch) {
+        paletteSwitch.hidden = !family.hasPalettes;
+      }
+      paletteButtons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.palette === state.palette));
+      });
+      if (grid) {
+        grid.checked = state.metrics;
+      }
+      setDockSummary([
+          label(`[data-family-button="${state.family}"]`),
+          numbers.format(wght),
+          fillTemplate(sizeTemplate, { size: numbers.format(shownSize) }),
+          family.hasPalettes ? label(`[data-palette="${state.palette}"]`) : undefined,
+      ]);
+    });
+
+    familyButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = SPECIMEN_FAMILIES.find((candidate) => candidate === button.dataset.familyButton);
+        if (id) {
+          const state = readState();
+          commit({ ...state, family: id, weight: storedWeight(state.weight, families[id].axis) });
+        }
+      });
+    });
+
+    function setWeight(value: number): void {
+      const state = readState();
+      commit({ ...state, weight: storedWeight(value, families[state.family].axis) });
+    }
+
+    weight?.addEventListener("input", () => setWeight(weight.valueAsNumber));
+    root.querySelectorAll<HTMLButtonElement>("[data-instance-wght]").forEach((button) => {
+      button.addEventListener("click", () => setWeight(Number(button.dataset.instanceWght)));
+    });
+    size?.addEventListener("input", () => commit({ ...readState(), size: size.valueAsNumber }));
+    sample?.addEventListener("input", () => {
+      commit({ ...readState(), preset: "custom", text: sample.value });
+    });
+    reset?.addEventListener("click", () => commit({ ...readState(), preset: "mixed", text: "" }));
+    paletteButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const palette = PALETTE_NAMES.find((name) => name === button.dataset.palette);
+        if (palette) {
+          commit({ ...readState(), palette });
+        }
+      });
+    });
+    grid?.addEventListener("change", () => commit({ ...readState(), metrics: grid.checked }));
+  }
+</script>
+
+<style>
+  .control-groups {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .control {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .control[hidden] {
+    display: none;
+  }
+
+  .control legend,
+  .control label {
+    padding: 0;
+    font-weight: 600;
+  }
+
+  .control legend {
+    margin-block-end: 0.5rem;
+  }
+
+  .control-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+
+  .control-head output {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .control-note {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-muted);
+  }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-block-size: 44px;
+  }
+
+  .check input {
+    flex: none;
+    inline-size: 1.4rem;
+    block-size: 1.4rem;
+    margin: 0;
+    accent-color: var(--color-accent);
+  }
+
+  .check label {
+    cursor: pointer;
+  }
+
+  input[type="range"] {
+    inline-size: 100%;
+    min-block-size: 44px;
+    margin: 0;
+    accent-color: var(--color-accent);
+  }
+
+  @media (width >= 1024px) {
+    .stack-options {
+      flex-direction: column;
+    }
+
+    .stack-options button {
+      border-inline-end: 0;
+      border-block-end: 1px solid var(--color-rule);
+    }
+
+    .stack-options button:last-child {
+      border-block-end: 0;
+    }
+  }
+
+  textarea {
+    inline-size: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--color-rule);
+    border-radius: 0.4rem;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    resize: vertical;
+  }
+</style>

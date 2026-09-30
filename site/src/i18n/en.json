@@ -9,7 +9,6 @@
   "specimen.title": "Sawa type specimen",
   "specimen.wordmark": "Sawa سوا",
   "specimen.lede": "Sawa is a bilingual Arabic and English type family in serif, sans and mono, where both scripts share one set of proportions and vertical metrics, so a mixed line never changes height.",
-  "specimen.controls": "Specimen controls",
   "specimen.family": "Family",
   "specimen.weight": "Weight",
   "specimen.instances": "Named weights",
@@ -229,5 +228,8 @@
   "font.noto.name": "Noto Naskh Arabic",
   "font.noto.note": "Noto Serif for Latin, Noto Naskh for Arabic",
   "font.noto-sans.name": "Noto Sans Arabic",
-  "font.noto-sans.note": "Noto Sans for Latin, Noto Sans Arabic for Arabic"
+  "font.noto-sans.note": "Noto Sans for Latin, Noto Sans Arabic for Arabic",
+  "controls.heading": "These settings change every sample on this page",
+  "controls.settings": "Settings",
+  "controls.summarySize": "{size} px"
 }

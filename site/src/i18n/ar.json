@@ -9,7 +9,6 @@
   "specimen.title": "معاينة خط سوا",
   "specimen.wordmark": "Sawa سوا",
   "specimen.lede": "سوا عائلة خطوط ثنائية اللغة للعربية والإنجليزية بثلاثة أنماط، Serif وSans وMono، يتقاسم فيها الخطّان التناسب نفسه والمقاييس الرأسية نفسها، فلا يتغير ارتفاع السطر حين يجمع بينهما.",
-  "specimen.controls": "أدوات التحكم في المعاينة",
   "specimen.family": "العائلة",
   "specimen.weight": "الوزن",
   "specimen.instances": "الأوزان المسمّاة",
@@ -229,5 +228,8 @@
   "font.noto.name": "Noto Naskh Arabic",
   "font.noto.note": "Noto Serif للاتينية، وNoto Naskh للعربية",
   "font.noto-sans.name": "Noto Sans Arabic",
-  "font.noto-sans.note": "Noto Sans للاتينية، وNoto Sans Arabic للعربية"
+  "font.noto-sans.note": "Noto Sans للاتينية، وNoto Sans Arabic للعربية",
+  "controls.heading": "تغيّر هذه الإعدادات كل العينات في هذه الصفحة",
+  "controls.settings": "الإعدادات",
+  "controls.summarySize": "{size} بكسل"
 }
