@@ -72,6 +72,26 @@ def attachment_errors(font: TTFont, codepoints: Iterable[int]) -> list[str]:
     return errors
 
 
+def spacing_errors(font: TTFont, codepoints: Iterable[int]) -> list[str]:
+    """Where a mark meant to be a spacing glyph is a GDEF mark, has no
+    advance or is still attached to letters.
+    """
+    from sawa_tools.build.anchors import letter_attached
+
+    cmap = font.getBestCmap() or {}
+    gdef = font["GDEF"].table if "GDEF" in font else None
+    classes = gdef.GlyphClassDef.classDefs if gdef and gdef.GlyphClassDef else {}
+    attached = letter_attached(font)
+    bad = [
+        cp
+        for cp in sorted(cp for cp in codepoints if cp in cmap)
+        if classes.get(cmap[cp]) == _MARK_GLYPH_CLASS
+        or font["hmtx"][cmap[cp]][0] == 0
+        or cmap[cp] in attached
+    ]
+    return [f"not spacing glyphs: {_codepoints(bad)}"] if bad else []
+
+
 def placement_errors(
     data: bytes,
     marks: Iterable[int],

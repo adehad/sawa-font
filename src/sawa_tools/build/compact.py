@@ -25,6 +25,7 @@ the master's own outlines.
    after every mark lookup, that moves the mark and the marks stacked on
    it clear, sideways or vertically, whichever is shorter.
 
+Before step 1, the pause marks become spacing glyphs (pause.py).
 Dots and signs that letters decompose into are marks the harakat stack on,
 so step 3 keeps the same gap from a dot as step 4 keeps from a letter.
 
@@ -62,6 +63,7 @@ from sawa_tools.build.anchors import (
 from sawa_tools.build.clearance import INF, Ink, approach, boxes_apart, moved
 from sawa_tools.build.harfbuzz import Shaper
 from sawa_tools.build.lines import InkTable, Placed, hb_font, mark_glyphs, shape
+from sawa_tools.build.pause import PauseMarks, spacing_masters
 from sawa_tools.corpus import everyday
 
 if TYPE_CHECKING:
@@ -109,6 +111,7 @@ class Params:
     stack_max_move: float
     stack_max_shift: float
     add_stacks: tuple[tuple[int, int], ...]
+    pause: PauseMarks | None
     exempt: str | None
     max_shift: float
     # (codepoints, shift) for marks that may move further sideways.
@@ -120,7 +123,9 @@ class Params:
     patience: int
 
 
-def parse_params(raw: Mapping[str, Any], clearance: float) -> Params:
+def parse_params(
+    raw: Mapping[str, Any], clearance: float, cell_width: int | None = None
+) -> Params:
     """Parameters from a family's merged `compaction` config."""
     from sawa_tools.checks.marks import _parse_codepoints
 
@@ -130,6 +135,7 @@ def parse_params(raw: Mapping[str, Any], clearance: float) -> Params:
     if float(raw["gap"]) <= clearance:
         raise ValueError(f"gap {raw['gap']} is not above the clearance {clearance}")
 
+    pause = raw.get("pauseMarks")
     residual = raw["contexts"]
     return Params(
         gap=float(raw["gap"]),
@@ -150,6 +156,15 @@ def parse_params(raw: Mapping[str, Any], clearance: float) -> Params:
         stack_max_shift=float(raw["stacks"].get("maxShift", 0)),
         add_stacks=tuple(
             (cps([s["mark"]])[0], cps([s["on"]])[0]) for s in raw.get("addStacks", [])
+        ),
+        pause=None
+        if pause is None
+        else PauseMarks(
+            cps(pause["codepoints"]),
+            float(pause["sideBearing"]),
+            cps([pause["mark"]])[0],
+            cps([pause["on"]])[0],
+            cell_width,
         ),
         exempt=raw.get("exempt"),
         max_shift=float(residual["maxShift"]),
@@ -1459,6 +1474,7 @@ class Report:
     """What compaction did, for the build log."""
 
     steps: dict[float, dict[str, int]] = field(default_factory=dict)
+    spacing: int = 0
     rules: int = 0
     lookups: int = 0
     passes: int = 0
@@ -1490,9 +1506,13 @@ def fit_masters(
     pool: ProcessPoolExecutor,
     report: Report,
 ) -> list[Job]:
-    """Steps 1 to 5 on every master. Steps 5 and 6 see the everyday view of
-    `lines`.
+    """The pause marks made spacing, then steps 1 to 5, on every master.
+    Steps 5 and 6 see the everyday view of `lines`.
     """
+    masters = {w: TTFont(io.BytesIO(_bytes(m))) for w, m in masters.items()}
+    if params.pause is not None:
+        spaced = spacing_masters(masters, default, params.pause)
+        report.spacing = len(spaced)
     decided = plan(masters[default], params, lines)
     views = tuple(dict.fromkeys(everyday(t) for t in lines))
     work = [
@@ -1710,7 +1730,7 @@ def _shaped_names(job: Job) -> list[Line]:
 
 # The modules whose code decides a compacted master, beside bidi.py and
 # corpus.py.
-STAGE_MODULES = ("compact.py", "clearance.py", "lines.py")
+STAGE_MODULES = ("compact.py", "clearance.py", "lines.py", "pause.py")
 
 
 @dataclass(frozen=True)

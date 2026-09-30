@@ -13,6 +13,7 @@
     "bottom": { "floor": 0, "maxMove": 0.3 },
     "stacks": { "maxMove": 0.4, "maxShift": 0.05 },
     "addStacks": [],
+    "pauseMarks": { "codepoints": ["U+06D6..U+06DC"], "sideBearing": 0.04, "mark": "U+064E", "on": "U+066E" },
     "contexts": {
       "maxShift": 0.08,
       "markShifts": [

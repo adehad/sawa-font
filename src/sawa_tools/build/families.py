@@ -42,6 +42,7 @@ _CODE_MODULES = (
     "masters.py",
     "merge.py",
     "naming.py",
+    "pause.py",
 )
 
 
@@ -86,6 +87,16 @@ class Family:
     compaction: dict[str, Any] | None = None
     borrow: list[Borrow] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def spacing_marks(self) -> set[int]:
+        """The combining marks the build makes spacing glyphs (pause.py)."""
+        from sawa_tools.checks.marks import _parse_codepoints
+
+        pause = (self.compaction or {}).get("pauseMarks")
+        if not pause:
+            return set()
+        return {cp for spec in pause["codepoints"] for cp in _parse_codepoints(spec)}
 
     @property
     def ps_name(self) -> str:
@@ -330,7 +341,7 @@ def _compaction(family: Family) -> Compaction | None:
     quran = DEFAULT_UTHMANI if family.leading_quran else None
     try:
         lines = texts(corpus(quran)) + mark_samples()
-        params = parse_params(family.compaction, _clearance(family))
+        params = parse_params(family.compaction, _clearance(family), family.cell_width)
     except (CorpusError, KeyError, ValueError) as exc:
         raise FamilyError(f"family '{family.id}' compaction: {exc}") from exc
     return Compaction(family.id, params, lines)
