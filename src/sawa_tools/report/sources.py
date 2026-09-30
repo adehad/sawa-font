@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from sawa_tools.build.families import DEFAULT_FAMILIES, load_config
 from sawa_tools.build.fonts import DEFAULT_CACHE, DEFAULT_MANIFEST
+from sawa_tools.build.harakat import twin_family
 
 if TYPE_CHECKING:
     from sawa_tools.build.families import Family
@@ -33,6 +34,11 @@ class ReportFamily:
     ttf: Path
     upstream: list[Path]
     upstream_names: list[str]
+    # The id of the plain family a Harakat twin colours. A twin shares that
+    # family's upstream fonts and has no test layers or shaping results of its
+    # own: its shapes and positions are the plain family's, which
+    # `sawa check fonts` holds it to.
+    twin_of: str | None = None
 
     @property
     def id(self) -> str:
@@ -40,7 +46,7 @@ class ReportFamily:
 
     @property
     def upstream_id(self) -> str:
-        return "upstream-" + self.family.id.removeprefix("sawa-")
+        return "upstream-" + (self.twin_of or self.id).removeprefix("sawa-")
 
     @property
     def upstream_variations(self) -> dict[str, float]:
@@ -82,6 +88,11 @@ def _extract(source: str, member: str, manifest: dict, cache: Path, out: Path) -
     return dest
 
 
+def layered_families(families: list[ReportFamily]) -> list[ReportFamily]:
+    """The families with test layers and shaping results, which are not twins."""
+    return [family for family in families if family.twin_of is None]
+
+
 def report_families(
     fonts_dir: Path,
     families: Path = DEFAULT_FAMILIES,
@@ -89,10 +100,13 @@ def report_families(
     cache: Path = DEFAULT_CACHE,
     extract_dir: Path = DEFAULT_EXTRACT,
 ) -> list[ReportFamily]:
-    """The Sawa families shown on the site, with their upstream fonts."""
+    """The Sawa families shown on the site, with their upstream fonts, then
+    the Harakat twin of each that has one.
+    """
     config = load_config(families)
     upstream = json.loads(manifest.read_text(encoding="utf-8"))
     result = []
+    twins = []
     for family in config.families:
         if family.generic is None:
             continue
@@ -114,4 +128,12 @@ def report_families(
             for m in members
         ]
         result.append(ReportFamily(family, ttf, paths, names))
-    return result
+        if family.harakat:
+            twin = twin_family(family)
+            twin_ttf = fonts_dir / twin.ttf_name
+            if not twin_ttf.exists():
+                raise SourcesError(
+                    f"{twin_ttf} not found; run `sawa build fonts` first"
+                )
+            twins.append(ReportFamily(twin, twin_ttf, paths, names, family.id))
+    return result + twins

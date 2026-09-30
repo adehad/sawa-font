@@ -433,6 +433,150 @@
           }
         }
       }
+    },
+    "sawa-serif-harakat": {
+      "codepoints": 4182,
+      "blocks": {
+        "Basic Latin": {
+          "supported": 95,
+          "total": 95
+        },
+        "Arabic": {
+          "supported": 256,
+          "total": 256
+        },
+        "Arabic Supplement": {
+          "supported": 48,
+          "total": 48
+        }
+      },
+      "markGroups": {
+        "short": {
+          "supported": 3,
+          "total": 3,
+          "missing": []
+        },
+        "tanween": {
+          "supported": 6,
+          "total": 6,
+          "missing": []
+        },
+        "sukun": {
+          "supported": 3,
+          "total": 3,
+          "missing": []
+        },
+        "shadda": {
+          "supported": 1,
+          "total": 1,
+          "missing": []
+        },
+        "madd": {
+          "supported": 5,
+          "total": 5,
+          "missing": []
+        },
+        "hamza": {
+          "supported": 2,
+          "total": 2,
+          "missing": []
+        },
+        "waqf": {
+          "supported": 7,
+          "total": 7,
+          "missing": []
+        },
+        "other": {
+          "supported": 80,
+          "total": 80,
+          "missing": []
+        }
+      },
+      "glyphSets": {
+        "GF_Latin_Core": {
+          "supported": 319,
+          "total": 319,
+          "missing": []
+        },
+        "GF_Arabic_Core": {
+          "supported": 224,
+          "total": 224,
+          "missing": []
+        }
+      },
+      "upstream": {
+        "id": "upstream-serif",
+        "fonts": ["Noto Serif 2.015", "Noto Naskh Arabic 2.021"],
+        "codepoints": 4182,
+        "blocks": {
+          "Basic Latin": {
+            "supported": 95,
+            "total": 95
+          },
+          "Arabic": {
+            "supported": 256,
+            "total": 256
+          },
+          "Arabic Supplement": {
+            "supported": 48,
+            "total": 48
+          }
+        },
+        "markGroups": {
+          "short": {
+            "supported": 3,
+            "total": 3,
+            "missing": []
+          },
+          "tanween": {
+            "supported": 6,
+            "total": 6,
+            "missing": []
+          },
+          "sukun": {
+            "supported": 3,
+            "total": 3,
+            "missing": []
+          },
+          "shadda": {
+            "supported": 1,
+            "total": 1,
+            "missing": []
+          },
+          "madd": {
+            "supported": 5,
+            "total": 5,
+            "missing": []
+          },
+          "hamza": {
+            "supported": 2,
+            "total": 2,
+            "missing": []
+          },
+          "waqf": {
+            "supported": 7,
+            "total": 7,
+            "missing": []
+          },
+          "other": {
+            "supported": 80,
+            "total": 80,
+            "missing": []
+          }
+        },
+        "glyphSets": {
+          "GF_Latin_Core": {
+            "supported": 319,
+            "total": 319,
+            "missing": []
+          },
+          "GF_Arabic_Core": {
+            "supported": 224,
+            "total": 224,
+            "missing": []
+          }
+        }
+      }
     }
   }
 }

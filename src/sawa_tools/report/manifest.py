@@ -83,6 +83,7 @@ def build_manifest(
                 "name": family.family.name,
                 "file": family.ttf.name,
                 "sha256": sha256_file(family.ttf),
+                **({"twinOf": family.twin_of} if family.twin_of else {}),
                 "upstream": {
                     "id": family.upstream_id,
                     "fonts": [

@@ -18,7 +18,7 @@ from sawa_tools.report.layers import Stacks, write_test
 from sawa_tools.report.manifest import build_manifest
 from sawa_tools.report.metrics import build_metrics
 from sawa_tools.report.shaping import run_shaping
-from sawa_tools.report.sources import report_families
+from sawa_tools.report.sources import layered_families, report_families
 
 DEFAULT_SNAPSHOTS = Path("tests/shaping")
 
@@ -74,7 +74,8 @@ def build_bundle(options: BundleOptions) -> None:
         raise BundleError("; ".join(errors))
     _prepare_out(options.out, options.baseline)
 
-    stacks = Stacks(families)
+    layered = layered_families(families)
+    stacks = Stacks(layered)
     changed = 0
     for test in tests:
         data = write_test(test, stacks, options.out, options.baseline)
@@ -84,7 +85,7 @@ def build_bundle(options: BundleOptions) -> None:
         f"({time.monotonic() - start:.1f}s)"
     )
 
-    shaping = run_shaping(families, tests, options.snapshots)
+    shaping = run_shaping(layered, tests, options.snapshots)
     write_json(options.out / "shaping.json", shaping)
     counts = shaping["summary"]
     print(

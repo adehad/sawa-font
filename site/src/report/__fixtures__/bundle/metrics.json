@@ -107,6 +107,42 @@
           "max": 700.0
         }
       ]
+    },
+    "sawa-serif-harakat": {
+      "unitsPerEm": 1000,
+      "hhea": {
+        "ascender": 1137,
+        "descender": -675,
+        "lineGap": 0
+      },
+      "typo": {
+        "ascender": 1137,
+        "descender": -675,
+        "lineGap": 0
+      },
+      "win": {
+        "ascent": 1498,
+        "descent": 675
+      },
+      "useTypoMetrics": true,
+      "xHeight": 536,
+      "capHeight": 714,
+      "lineBox": {
+        "source": "typo",
+        "ascender": 1.137,
+        "descender": -0.675,
+        "lineGap": 0.0,
+        "height": 1.812,
+        "winHeight": 2.173
+      },
+      "axes": [
+        {
+          "tag": "wght",
+          "min": 400.0,
+          "default": 400.0,
+          "max": 700.0
+        }
+      ]
     }
   }
 }

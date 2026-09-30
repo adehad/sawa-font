@@ -1,10 +1,12 @@
-import type {
-  CoverageCount,
-  CoverageSet,
-  ReportBundle,
-  ReportFamily,
-  Shaping,
-  ShapingStatus,
+import {
+  LAYERED_FAMILIES,
+  type CoverageCount,
+  type CoverageSet,
+  type LayeredFamily,
+  type ReportBundle,
+  type ReportFamily,
+  type Shaping,
+  type ShapingStatus,
 } from "./types";
 
 export const LATIN_CORE = "GF_Latin_Core";
@@ -85,7 +87,23 @@ export function familyName(bundle: ReportBundle, family: ReportFamily): string {
   return bundle.manifest.fonts.find((font) => font.family === family)?.name ?? family;
 }
 
-/** The families the bundle has fonts for, in display order. */
-export function bundleFamilies(bundle: ReportBundle): ReportFamily[] {
+/** The families with test layers and shaping results, in display order. */
+export function bundleFamilies(bundle: ReportBundle): LayeredFamily[] {
+  return bundle.manifest.fonts.flatMap((font) =>
+    font.twinOf === undefined && isLayered(font.family) ? [font.family] : [],
+  );
+}
+
+/** Every family the bundle has fonts for, Harakat twins included. */
+export function tileFamilies(bundle: ReportBundle): ReportFamily[] {
   return bundle.manifest.fonts.map((font) => font.family);
+}
+
+/** Whether the bundle has a Harakat twin, which has no test layers of its own. */
+export function hasTwins(bundle: ReportBundle): boolean {
+  return bundle.manifest.fonts.some((font) => font.twinOf !== undefined);
+}
+
+function isLayered(family: ReportFamily): family is LayeredFamily {
+  return (LAYERED_FAMILIES as readonly string[]).includes(family);
 }

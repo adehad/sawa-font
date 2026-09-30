@@ -40,7 +40,7 @@ test("the summary shows shaping, coverage, metrics and Fontbakery from the bundl
   for (const tile of ["shaping", "coverage", "metrics", "fontbakery"]) {
     await expect(page.locator(`[data-tile="${tile}"]`)).toBeVisible();
   }
-  await expect(page.locator('[data-tile="coverage"] tbody tr')).toHaveCount(3);
+  await expect(page.locator('[data-tile="coverage"] tbody tr')).toHaveCount(5);
   await expect(page.locator("[data-fact=version]")).not.toBeEmpty();
   await expect(page.locator("[data-older-reports]")).toHaveAttribute("href", /^https:\/\//);
 

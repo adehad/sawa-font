@@ -1,6 +1,14 @@
-/** The three Sawa families a report bundle covers, in display order. */
-export const REPORT_FAMILIES = ["sawa-serif", "sawa-sans", "sawa-mono"] as const;
+/** The families with test layers and shaping results, in display order. */
+export const LAYERED_FAMILIES = ["sawa-serif", "sawa-sans", "sawa-mono"] as const;
 
+/** Every family a report bundle covers: the layered ones, then the Harakat twins. */
+export const REPORT_FAMILIES = [
+  ...LAYERED_FAMILIES,
+  "sawa-serif-harakat",
+  "sawa-sans-harakat",
+] as const;
+
+export type LayeredFamily = (typeof LAYERED_FAMILIES)[number];
 export type ReportFamily = (typeof REPORT_FAMILIES)[number];
 
 export type ShapingStatus = "pass" | "fail" | "missing";
@@ -15,6 +23,8 @@ export interface ShapingCounts {
 
 export interface ManifestFont {
   readonly family: ReportFamily;
+  /** Set on a Harakat twin: the plain family it colours. */
+  readonly twinOf?: LayeredFamily;
   readonly name: string;
   readonly file: string;
   readonly sha256: string;
@@ -156,6 +166,6 @@ export interface ReportBundle {
 }
 
 /** The upstream layer each Sawa family is compared with in a test. */
-export function upstreamLayer(family: ReportFamily): string {
+export function upstreamLayer(family: LayeredFamily): string {
   return family.replace(/^sawa-/, "upstream-");
 }

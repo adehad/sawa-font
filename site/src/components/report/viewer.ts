@@ -2,7 +2,7 @@ import { IntlMessageFormat } from "intl-messageformat";
 import { LayerCanvas, type FontLayer, type GuideName } from "./overlay/canvas";
 import { fetchLayer } from "./overlay/svg";
 import { selectedTest } from "./test-list";
-import { upstreamLayer, type ReportFamily } from "../../report/types";
+import { LAYERED_FAMILIES, upstreamLayer, type LayeredFamily } from "../../report/types";
 import type { ViewerData, ViewerTest } from "../../report/viewer-data";
 import { commitReport, readReportState, subscribeReport } from "../../state/store";
 import {
@@ -28,8 +28,8 @@ function isOneOf<T extends string>(options: readonly T[], value: string | undefi
   return value !== undefined && (options as readonly string[]).includes(value);
 }
 
-function isFamily(value: string | undefined): value is ReportFamily {
-  return value === "sawa-serif" || value === "sawa-sans" || value === "sawa-mono";
+function isFamily(value: string | undefined): value is LayeredFamily {
+  return isOneOf(LAYERED_FAMILIES, value);
 }
 
 function update(change: (state: ReportState) => ReportState): void {

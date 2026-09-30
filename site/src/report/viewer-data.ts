@@ -1,4 +1,4 @@
-import { REPORT_FAMILIES, type Box, type Guides, type ReportBundle } from "./types";
+import { LAYERED_FAMILIES, type Box, type Guides, type ReportBundle } from "./types";
 
 export interface ViewerLayer {
   readonly file: string;
@@ -31,7 +31,7 @@ export function viewerTests(bundle: ReportBundle): ViewerTest[] {
     }
     const diffRegions: Record<string, readonly Box[]> = {};
     const diffAgainst: Record<string, string> = {};
-    for (const family of REPORT_FAMILIES) {
+    for (const family of LAYERED_FAMILIES) {
       diffRegions[family] = test.diffRegions[family] ?? [];
       diffAgainst[family] = test.diffAgainst[family] ?? "upstream";
     }

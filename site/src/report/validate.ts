@@ -1,4 +1,5 @@
 import {
+  LAYERED_FAMILIES,
   REPORT_FAMILIES,
   type Box,
   type Coverage,
@@ -135,6 +136,9 @@ function manifestFont(value: Json, path: string): ManifestFont {
   const upstream = object(source.upstream, `${path}.upstream`);
   return {
     family: oneOf(source.family, REPORT_FAMILIES, `${path}.family`),
+    ...(source.twinOf === undefined
+      ? {}
+      : { twinOf: oneOf(source.twinOf, LAYERED_FAMILIES, `${path}.twinOf`) }),
     name: string(source.name, `${path}.name`),
     file: string(source.file, `${path}.file`),
     sha256: string(source.sha256, `${path}.sha256`),

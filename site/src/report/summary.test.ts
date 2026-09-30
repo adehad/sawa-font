@@ -6,8 +6,10 @@ import {
   coverageSummary,
   failedTests,
   familyName,
+  hasTwins,
   ratio,
   testShaping,
+  tileFamilies,
   worstStatus,
 } from "./summary";
 import type { ReportBundle } from "./types";
@@ -80,5 +82,17 @@ describe("family helpers", () => {
     const bundle = fixture();
     expect(bundleFamilies(bundle)).toEqual(["sawa-serif", "sawa-sans", "sawa-mono"]);
     expect(familyName(bundle, "sawa-mono")).toBe("Sawa Mono");
+  });
+
+  it("keeps a Harakat twin out of the layered families but in the tiles", () => {
+    const bundle = fixture();
+    expect(tileFamilies(bundle)).toEqual([
+      "sawa-serif",
+      "sawa-sans",
+      "sawa-mono",
+      "sawa-serif-harakat",
+    ]);
+    expect(hasTwins(bundle)).toBe(true);
+    expect(bundle.manifest.fonts.at(-1)?.twinOf).toBe("sawa-serif");
   });
 });

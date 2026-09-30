@@ -3,7 +3,7 @@ import { t } from "../../i18n/t";
 import type { Locale } from "../../i18n/locales";
 import { BUNDLE_SEGMENT } from "../../report/integration";
 import { COMMIT_URL, OLDER_REPORTS_URL } from "../../report/links";
-import { bundleFamilies, coverageSummary, failedTests, ratio } from "../../report/summary";
+import { coverageSummary, failedTests, hasTwins, ratio, tileFamilies } from "../../report/summary";
 import type { CoverageCount, ReportBundle } from "../../report/types";
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
 const { locale, bundle } = Astro.props;
 const { manifest, metrics, coverage } = bundle;
 const bundleBase = `${import.meta.env.BASE_URL}${BUNDLE_SEGMENT}/`;
-const families = bundleFamilies(bundle);
+const families = tileFamilies(bundle);
 const FONTBAKERY_STATUSES = ["FAIL", "WARN", "PASS"] as const;
 
 const numbers = new Intl.NumberFormat(locale);
@@ -97,6 +97,7 @@ const baseline =
       <p class="tile-note">
         {t(locale, "report.shapingCounts", { ...manifest.shaping })}
       </p>
+      {hasTwins(bundle) && <p class="tile-note">{t(locale, "report.harakatNote")}</p>}
     </article>
 
     <article class="tile" data-tile="coverage">

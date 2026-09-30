@@ -95,10 +95,14 @@ def run_shaping_command(args: argparse.Namespace) -> int:
     from sawa_tools.build.families import FamilyError
     from sawa_tools.report.catalogue import CatalogueError, load_tests
     from sawa_tools.report.shaping import run_shaping, write_snapshots
-    from sawa_tools.report.sources import SourcesError, report_families
+    from sawa_tools.report.sources import (
+        SourcesError,
+        layered_families,
+        report_families,
+    )
 
     try:
-        families = report_families(args.fonts_dir)
+        families = layered_families(report_families(args.fonts_dir))
         tests = load_tests()
     except (CatalogueError, FamilyError, SourcesError) as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -63,6 +63,28 @@
           }
         ]
       }
+    },
+    {
+      "family": "sawa-serif-harakat",
+      "name": "Sawa Serif Harakat",
+      "file": "SawaSerifHarakat[wght].ttf",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "upstream": {
+        "id": "upstream-serif",
+        "fonts": [
+          {
+            "name": "Noto Serif 2.015",
+            "file": "NotoSerif[wdth,wght].ttf",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "name": "Noto Naskh Arabic 2.021",
+            "file": "NotoNaskhArabic[wght].ttf",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "twinOf": "sawa-serif"
     }
   ],
   "tests": ["shadda-kasra-default"],
@@ -120,6 +142,19 @@
         },
         "seconds": 1.0,
         "report": "fontbakery/sawa-mono/index.html"
+      },
+      "sawa-serif-harakat": {
+        "counts": {
+          "PASS": 93,
+          "SKIP": 18,
+          "INFO": 3,
+          "WARN": 11,
+          "FAIL": 2,
+          "FATAL": 0,
+          "ERROR": 0
+        },
+        "seconds": 1.0,
+        "report": "fontbakery/sawa-serif-harakat/index.html"
       }
     }
   }

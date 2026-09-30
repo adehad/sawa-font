@@ -10,6 +10,7 @@ from sawa_tools.report.catalogue import ReportTest
 from sawa_tools.report.manifest import baseline_info, build_manifest, sha256_file
 
 if TYPE_CHECKING:
+    from sawa_tools.build.families import Family
     from sawa_tools.report.sources import ReportFamily
 
 
@@ -22,6 +23,7 @@ def test_manifest_lists_fonts_tests_tools_and_baseline(make_font) -> None:
         upstream_id="upstream-x",
         upstream=[upstream],
         upstream_names=["Up 1.0"],
+        twin_of=None,
     )
     manifest = build_manifest(
         version_name="v0.1",
@@ -76,3 +78,34 @@ def test_fontbakery_json_without_result_raises(monkeypatch, tmp_path: Path) -> N
     monkeypatch.setattr(fontbakery.subprocess, "run", fake_run)
     with pytest.raises(fontbakery.FontbakeryError):
         fontbakery._run_one(tmp_path / "a.ttf", tmp_path / "out" / "index.html")
+
+
+def test_a_harakat_twin_shares_its_plain_upstream_and_has_no_layers(make_font) -> None:
+    from sawa_tools.report.sources import ReportFamily, layered_families
+
+    sawa, upstream = make_font("Sawa"), make_font("Up")
+    plain = ReportFamily(
+        cast("Family", SimpleNamespace(id="sawa-x", name="Sawa X")),
+        sawa,
+        [upstream],
+        ["Up 1.0"],
+    )
+    twin = ReportFamily(
+        cast("Family", SimpleNamespace(id="sawa-x-harakat", name="Sawa X Harakat")),
+        sawa,
+        [upstream],
+        ["Up 1.0"],
+        "sawa-x",
+    )
+    assert twin.upstream_id == plain.upstream_id == "upstream-x"
+    assert layered_families([plain, twin]) == [plain]
+    manifest = build_manifest(
+        version_name="v0.1",
+        families=[plain, twin],
+        tests=[],
+        baseline=None,
+        shaping={"pass": 0, "fail": 0, "missing": 0},
+        fontbakery={"ran": False},
+    )
+    plain_font, twin_font = manifest["fonts"]
+    assert "twinOf" not in plain_font and twin_font["twinOf"] == "sawa-x"
