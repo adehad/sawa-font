@@ -79,16 +79,6 @@ def test_an_anchored_mark_follows_its_letter(arabic_master: Master) -> None:
     assert on_beh[-1].y == 200 - 880
 
 
-def test_a_mark_over_a_letters_ink_is_lifted_clear(arabic_master: Master) -> None:
-    master = arabic_master()
-    anchors.anchor_masters({400.0: master}, 400.0, 0.03)
-    fatha = _shaped(master, "\u0644\u064e")[-1]
-    # lam's ink reaches 1000; fatha's ink bottom is at 800 before the lift.
-    assert 800 + fatha.y >= 1000 + 0.03 * 1000 - 1
-    on_alef = _shaped(master, "\u0627\u064e")[-1]
-    assert on_alef.y == 800 - 780
-
-
 def test_masters_stay_compatible_and_anchors_vary(arabic_master: Master) -> None:
     masters = {400.0: arabic_master(), 700.0: arabic_master(rise=40)}
     anchors.anchor_masters(masters, 400.0, 0.03)

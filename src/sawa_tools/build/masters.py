@@ -23,8 +23,19 @@ if TYPE_CHECKING:
 # The modules whose code decides a master's glyphs, anchors and lookups.
 MASTER_MODULES = ("anchors.py", "borrow.py", "harfbuzz.py", "ink.py", "merge.py")
 
-# Family config keys that change only naming, licensing or publishing.
-_NAMING_KEYS = ("name", "renameFrom", "notice", "licence", "site", "coverageGaps")
+# Family config keys that leave the anchored masters as they are: naming,
+# licensing and publishing, and the stages after anchoring.
+_LATER_KEYS = (
+    "name",
+    "renameFrom",
+    "notice",
+    "licence",
+    "site",
+    "coverageGaps",
+    "leading",
+    "compaction",
+    "metrics",
+)
 
 _INDEX = "masters.json"
 
@@ -36,7 +47,7 @@ def masters_key(family_raw: Mapping[str, Any], input_sha256s: Mapping[str, str])
 
     digest = hashlib.sha256()
     payload = {
-        "family": {k: v for k, v in family_raw.items() if k not in _NAMING_KEYS},
+        "family": {k: v for k, v in family_raw.items() if k not in _LATER_KEYS},
         "inputs": dict(sorted(input_sha256s.items())),
         "fonttools": fonttools_version,
         "uharfbuzz": importlib.metadata.version("uharfbuzz"),
@@ -54,6 +65,14 @@ class MastersCache:
 
     folder: Path
     key: str
+
+    def stage(self, name: str, key: str) -> MastersCache:
+        """The cache of a stage run on these masters, valid while both this
+        cache's key and `key` match.
+        """
+        digest = hashlib.sha256(f"{self.key}\n{key}".encode()).hexdigest()
+        folder = self.folder.with_name(f"{self.folder.name}.{name}")
+        return MastersCache(folder, digest)
 
     def get(self, build: Callable[[], Mapping[float, TTFont]]) -> dict[float, TTFont]:
         """The cached masters, or `build`'s, saved first.

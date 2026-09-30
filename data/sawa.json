@@ -5,6 +5,26 @@
     "copyright": "Sawa modifications Copyright 2026 The Sawa Authors."
   },
   "reservedNames": ["Cascadia", "Noto"],
+  "compaction": {
+    "gap": 0.038,
+    "sampleStep": 0.004,
+    "ownClass": ["U+064B..U+0655"],
+    "top": { "ceiling": 0, "maxMove": 0.4 },
+    "bottom": { "floor": 0, "maxMove": 0.3 },
+    "stacks": { "maxMove": 0.4, "maxShift": 0.05 },
+    "addStacks": [],
+    "contexts": {
+      "maxShift": 0.08,
+      "markShifts": [
+        { "codepoints": ["U+0670"], "maxShift": 0.1 }
+      ],
+      "maxLift": 0.3,
+      "verticalCost": 1.5,
+      "quantum": 0.004,
+      "passes": 24,
+      "patience": 6
+    }
+  },
   "families": {
     "sawa-serif": {
       "name": "Sawa Serif",
@@ -15,6 +35,7 @@
       "wght": { "min": 400, "default": 400, "max": 700 },
       "pinnedAxes": { "wdth": 100 },
       "markClearance": 0.03,
+      "compaction": { "addStacks": [{ "mark": "U+0653", "on": "U+0670" }] },
       "metrics": { "policy": "shared", "ascender": 1137, "descender": -675, "lineGap": 0, "winAscent": 1498, "winDescent": 675 },
       "licence": [
         { "source": "noto_serif", "path": "OFL.txt" },
@@ -31,6 +52,10 @@
       "wght": { "min": 100, "default": 400, "max": 900 },
       "pinnedAxes": { "wdth": 100 },
       "markClearance": 0.03,
+      "compaction": {
+        "bottom": { "maxShift": 0.08 },
+        "contexts": { "passes": 40, "patience": 10, "markShifts": [{ "codepoints": ["U+0670"], "maxShift": 0.1 }, { "codepoints": ["U+0650", "U+064D"], "maxShift": 0.12 }] }
+      },
       "metrics": { "policy": "shared", "ascender": 1374, "descender": -738, "lineGap": 0, "winAscent": 1539, "winDescent": 738 },
       "licence": [
         { "source": "noto_sans", "path": "OFL.txt" },
@@ -48,6 +73,10 @@
       "metrics": { "policy": "source", "ascender": 1900, "descender": -480, "lineGap": 0, "winAscent": 2226, "winDescent": 480 },
       "cellWidth": 1200,
       "markClearance": 0.03,
+      "leading": { "quran": false },
+      "compaction": {
+        "exempt": "^_|rlig|[.]alt$|[.]alt[.]|[.]short"
+      },
       "borrow": [
         {
           "source": "noto_sans_arabic",
@@ -81,6 +110,10 @@
       "metrics": { "policy": "source", "ascender": 1900, "descender": -480, "lineGap": 0, "winAscent": 2226, "winDescent": 480 },
       "cellWidth": 1200,
       "markClearance": 0.03,
+      "leading": { "quran": false },
+      "compaction": {
+        "exempt": "^_|rlig|[.]alt$|[.]alt[.]|[.]short"
+      },
       "borrow": [
         {
           "source": "noto_sans_arabic",

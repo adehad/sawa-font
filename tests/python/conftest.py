@@ -101,18 +101,38 @@ feature mkmk {
     pos mark fatha <anchor 100 {stack_y}> mark @TOP;
 } mkmk;
 table GDEF {
-    GlyphClassDef [alef beh lam], , [fatha kasra smallhightah], ;
+    GlyphClassDef [alef beh lam space], , [fatha kasra smallhightah], ;
+} GDEF;
+"""
+
+# Teh decomposes into beh and a dot, drawn at its origin, that fatha stacks
+# on; smallhighsad (U+06D6) is a pause mark in fatha's class.
+EXTRA_FEATURES = """
+markClass dotabove <anchor 40 0> @DOT;
+feature ccmp {
+    sub teh by beh dotabove;
+} ccmp;
+feature mark {
+    pos base beh <anchor 300 230> mark @DOT;
+} mark;
+feature mkmk {
+    pos mark dotabove <anchor 40 200> mark @TOP;
+} mkmk;
+table GDEF {
+    GlyphClassDef [alef beh lam teh space], ,
+        [fatha kasra smallhightah dotabove smallhighsad], ;
 } GDEF;
 """
 
 
-def _arabic_master(rise: int = 0, stack_y: int = 880) -> Any:
+def _arabic_master(rise: int = 0, stack_y: int = 880, extra: bool = False) -> Any:
     """A static Arabic master for the mark stages: alef and lam are tall
     bars (lam's top anchor sits inside its ink), beh a low box; fatha and
     kasra are anchored marks and smallhightah (U+0615) a mark drawn high
     with no anchor at all.
     `rise` moves smallhightah's outline up, as a heavier master might;
-    `stack_y` is the height of fatha's mark-to-mark anchor.
+    `stack_y` is the height of fatha's mark-to-mark anchor; `extra` adds
+    EXTRA_FEATURES' teh, dot and pause mark.
     """
     from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
     from fontTools.fontBuilder import FontBuilder
@@ -127,8 +147,16 @@ def _arabic_master(rise: int = 0, stack_y: int = 880) -> Any:
         "fatha": _box(0, 800, 200, 860),
         "kasra": _box(0, -100, 200, -40),
         "smallhightah": _box(0, 900 + rise, 150, 1100 + rise),
+        "space": TTGlyphPen(None).glyph(),
     }
+    if extra:
+        glyphs |= {
+            "teh": _box(50, -150, 550, 150),
+            "dotabove": _box(0, 0, 80, 60),
+            "smallhighsad": _box(0, 900, 120, 1000),
+        }
     cmap = {
+        0x20: "space",
         0x0627: "alef",
         0x0628: "beh",
         0x0644: "lam",
@@ -136,6 +164,8 @@ def _arabic_master(rise: int = 0, stack_y: int = 880) -> Any:
         0x0650: "kasra",
         0x0615: "smallhightah",
     }
+    if extra:
+        cmap |= {0x062A: "teh", 0x06D6: "smallhighsad"}
     builder = FontBuilder(unitsPerEm=1000, isTTF=True)
     builder.setupGlyphOrder(list(glyphs))
     builder.setupCharacterMap(cmap)
@@ -143,7 +173,7 @@ def _arabic_master(rise: int = 0, stack_y: int = 880) -> Any:
     glyf = builder.font["glyf"]
     for glyph in glyphs.values():
         glyph.recalcBounds(glyf)
-    widths = {"alef": 300, "beh": 600, "lam": 300}
+    widths = {"alef": 300, "beh": 600, "lam": 300, "teh": 600, "space": 250}
     builder.setupHorizontalMetrics(
         {
             g: (widths.get(g, 0), getattr(glyph, "xMin", 0))
@@ -154,9 +184,14 @@ def _arabic_master(rise: int = 0, stack_y: int = 880) -> Any:
     builder.setupNameTable({"familyName": "Anchors", "styleName": "Regular"})
     builder.setupOS2(sTypoAscender=1100, sTypoDescender=-300, version=4)
     builder.setupPost()
-    addOpenTypeFeaturesFromString(
-        builder.font, ARABIC_FEATURES.replace("{stack_y}", str(stack_y))
-    )
+    features = ARABIC_FEATURES.replace("{stack_y}", str(stack_y))
+    if extra:
+        features = features.split("table GDEF")[0] + EXTRA_FEATURES
+        features = features.replace(
+            "markClass kasra",
+            "markClass smallhighsad <anchor 60 900> @TOP;\nmarkClass kasra",
+        )
+    addOpenTypeFeaturesFromString(builder.font, features)
     buffer = io.BytesIO()
     builder.font.save(buffer)
     buffer.seek(0)
@@ -166,3 +201,31 @@ def _arabic_master(rise: int = 0, stack_y: int = 880) -> Any:
 @pytest.fixture
 def arabic_master() -> Callable[..., Any]:
     return _arabic_master
+
+
+def compact_params(ceiling: float = 0.7, pause: Any = None) -> Any:
+    """Compaction parameters for the fixture masters: top anchors above
+    `ceiling` em move, and `pause` is the pauseMarks config.
+    """
+    from sawa_tools.build import compact
+
+    return compact.parse_params(
+        {
+            "gap": 0.032,
+            "sampleStep": 0.002,
+            "ownClass": ["U+064E"],
+            "top": {"ceiling": ceiling, "maxMove": 0.4},
+            "bottom": {"floor": -0.42, "maxMove": 0.3},
+            "stacks": {"maxMove": 0.4},
+            "pauseMarks": pause,
+            "contexts": {
+                "maxShift": 0.08,
+                "maxLift": 0.3,
+                "verticalCost": 1.5,
+                "quantum": 0.004,
+                "passes": 4,
+                "patience": 2,
+            },
+        },
+        0.03,
+    )

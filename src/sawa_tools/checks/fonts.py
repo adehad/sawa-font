@@ -321,8 +321,11 @@ def check_family(
         placement_errors,
         stack_errors,
     )
+    from sawa_tools.corpus import EVERYDAY_MARKS
 
     errors += attachment_errors(font, marks)
+    # Niche marks' placement is reported by `sawa check leading`.
+    marks = set(marks) & EVERYDAY_MARKS
     errors += placement_errors(
         data, checked_marks(cmap, marks), weights, max_gap_em=max_mark_gap
     )

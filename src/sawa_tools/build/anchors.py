@@ -1,4 +1,4 @@
-"""Makes every Arabic mark follow its letter and clear its ink, per master.
+"""Makes every Arabic mark follow its letter, per master.
 
 Runs on each static master before varLib.build, in three steps that key off
 the font's own mark classes: the MarkBase subtables that position fatha
@@ -12,15 +12,12 @@ the font's own mark classes: the MarkBase subtables that position fatha
 2. Unanchored letters: a glyph HarfBuzz shapes an Arabic letter to that no
    reference subtable of a side has as a base joins it, with an anchor at
    the median offset existing Arabic bases keep from their ink.
-3. Clearance: where HarfBuzz puts a cmap mark over a letter's ink (the
-   letter glyph and any dots or signs it is decomposed into), a contextual
-   adjustment appended after every mark lookup moves the mark away until it
-   clears that ink by the family's mark clearance. Before that, every
-   mark-to-mark anchor moves out until the marks that stack on it clear its
-   ink by the same clearance.
+3. Stacks: every mark-to-mark anchor moves out until the marks that stack
+   on it clear its ink box by the family's mark clearance.
 
-Which glyphs join and which marks move where is decided once for all masters, so
-the masters keep one anchor and lookup structure; only the values differ.
+Which glyphs join is decided once for all masters, so the masters keep one
+anchor and lookup structure; only the values differ. compact.py then moves
+the anchors against the marks' and letters' ink.
 """
 
 from __future__ import annotations
@@ -30,12 +27,10 @@ import unicodedata
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from fontTools.otlLib.builder import buildValue
 from fontTools.pens.boundsPen import BoundsPen
 from fontTools.ttLib.tables import otTables as _otTables
 
-from sawa_tools.build import ink
-from sawa_tools.build.harfbuzz import Placed, Shaper
+from sawa_tools.build.harfbuzz import Shaper
 from sawa_tools.checks.marks import ARABIC_BLOCKS
 
 if TYPE_CHECKING:
@@ -58,7 +53,6 @@ SIDES: tuple[Side, Side] = ("top", "bottom")
 Role = Literal["base", "lig", "mark1", "mark2"]
 Bounds = tuple[float, float, float, float]
 Point = tuple[float, float]
-ClearanceKey = tuple[Side, tuple[str, ...], str, str]
 
 ALEF = 0x0627
 REFERENCE_MARKS: dict[Side, int] = {"top": 0x064E, "bottom": 0x0650}
@@ -75,7 +69,6 @@ LETTER_BLOCKS = ARABIC_BLOCKS[:3]
 _MARK_GLYPH_CLASS = 3
 _USE_MARK_FILTERING_SET = 0x0010
 _MARK_ATTACHMENT_TYPE = 0xFF00
-_Y_PLACEMENT = 0x0002
 _GDEF_MARK_SETS_VERSION = 0x00010002
 
 
@@ -547,288 +540,6 @@ def side_marks(font: TTFont) -> dict[Side, dict[int, str]]:
     return result
 
 
-@dataclass(frozen=True)
-class Clearance:
-    """Signed y shifts keyed (side, letter sequence, mark), and per side the
-    marks the clearance lookup must see rather than skip: the side's cmap
-    marks and the dots and signs letters are decomposed into on that side.
-    A letter sequence is the letter glyph and those of its dots and signs on
-    the mark's side, in logical order.
-    """
-
-    shifts: dict[ClearanceKey, float]
-    members: dict[Side, set[str]]
-
-
-def _stack_anchors(
-    font: TTFont,
-) -> tuple[dict[Side, dict[str, Point]], dict[Side, dict[str, Point]]]:
-    """Per side, each mark's mark2 and mark1 anchor in the first reference
-    mark-to-mark subtable that has one.
-    """
-    parents: dict[Side, dict[str, Point]] = {"top": {}, "bottom": {}}
-    children: dict[Side, dict[str, Point]] = {"top": {}, "bottom": {}}
-    for slot in slots(font):
-        if slot.role in ("mark1", "mark2"):
-            found = parents if slot.role == "mark2" else children
-            for glyph, anchor in _existing(slot):
-                found[slot.side].setdefault(glyph, _anchor_xy(anchor))
-    return parents, children
-
-
-def clearance_shifts(font: TTFont, letters: Letters, clearance_em: float) -> Clearance:
-    """How far each cmap mark must move off each letter it overlaps, from
-    HarfBuzz shaping each letter context with it, keyed with no child; and
-    how far it must move, with the mark stacked on it, where that child mark
-    would overlap the letter, keyed with the child.
-    """
-    shaper = Shaper.of(font)
-    upem = table(font, "head").unitsPerEm
-    clearance = clearance_em * upem
-    step = upem / 250
-    order = font.getGlyphOrder()
-    classes = _glyph_classes(font)
-    marks_by_side = side_marks(font)
-    members: dict[Side, set[str]] = {
-        side: set(marks.values()) for side, marks in marks_by_side.items()
-    }
-    shifts: dict[ClearanceKey, float] = {}
-    placed: list[tuple[Side, tuple[str, ...], ink.Filled, Any, Any]] = []
-    filled: dict[tuple[tuple[int, float, float], ...], ink.Filled] = {}
-    for side, marks in marks_by_side.items():
-        for text, index in letters.contexts:
-            for cp in marks:
-                letter, added = shaper.split(text, index, chr(cp))
-                bases = [
-                    g for g in letter if classes.get(order[g.gid]) != _MARK_GLYPH_CLASS
-                ]
-                if len(bases) != 1 or len(added) != 1:
-                    continue
-                base_box = shaper.box(bases)
-                sequence = []
-                for glyph in letter:
-                    own = shaper.box([glyph])
-                    if glyph is bases[0]:
-                        sequence.append(order[glyph.gid])
-                    elif own is not None and base_box is not None:
-                        above = (own[1] + own[3]) > (base_box[1] + base_box[3])
-                        if above == (side == "top"):
-                            members[side].add(order[glyph.gid])
-                            sequence.append(order[glyph.gid])
-                letter_box, mark_box = shaper.box(letter), shaper.box(added)
-                if letter_box is None or mark_box is None:
-                    continue
-                shape = tuple((g.gid, g.x, g.y) for g in letter)
-                if shape not in filled:
-                    filled[shape] = ink.Filled(shaper.edges(letter), upem / 1000)
-                letter_ink = filled[shape]
-                placed.append((side, tuple(sequence), letter_ink, letter_box, added[0]))
-                if ink.box_gap(letter_box, mark_box) > 0:
-                    continue
-                letter_edges, mark_edges = letter_ink.edges, shaper.edges(added)
-                if not letter_ink.overlaps(mark_edges, 0):
-                    continue
-                amount = ink.lift(letter_edges, mark_edges, side, clearance, step)
-                key = (side, tuple(sequence), order[added[0].gid], "")
-                shifts[key] = max(shifts.get(key, 0.0), amount)
-    parents, children = _stack_anchors(font)
-    for side, sequence, letter_ink, letter_box, mark in placed:
-        name = order[mark.gid]
-        parent = parents[side].get(name)
-        if parent is None:
-            continue
-        single = shifts.get((side, sequence, name, ""), 0.0)
-        rise = single if side == "top" else -single
-        for child, child_anchor in children[side].items():
-            if child == name or child not in members[side]:
-                continue
-            stacked = Placed(
-                font.getGlyphID(child),
-                mark.x + parent[0] - child_anchor[0],
-                mark.y + rise + parent[1] - child_anchor[1],
-                mark.cluster,
-            )
-            child_box = shaper.box([stacked])
-            if child_box is None or ink.box_gap(letter_box, child_box) > 0:
-                continue
-            child_edges = shaper.edges([stacked])
-            if not letter_ink.overlaps(child_edges, 0):
-                continue
-            lift = ink.lift(letter_ink.edges, child_edges, side, clearance, step)
-            key = (side, sequence, name, child)
-            shifts[key] = max(shifts.get(key, 0.0), single + lift)
-    return Clearance(
-        {key: amount if key[0] == "top" else -amount for key, amount in shifts.items()},
-        members,
-    )
-
-
-def _filtering_set(font: TTFont, glyphs: Iterable[str]) -> int:
-    gdef = font["GDEF"].table
-    if getattr(gdef, "MarkGlyphSetsDef", None) is None:
-        gdef.MarkGlyphSetsDef = ot.MarkGlyphSetsDef()
-        gdef.MarkGlyphSetsDef.MarkSetTableFormat = 1
-        gdef.MarkGlyphSetsDef.Coverage = []
-    gdef.Version = max(gdef.Version, _GDEF_MARK_SETS_VERSION)
-    coverage = ot.Coverage()
-    coverage.glyphs = sorted(set(glyphs), key=font.getGlyphID)
-    gdef.MarkGlyphSetsDef.Coverage.append(coverage)
-    gdef.MarkGlyphSetsDef.MarkSetCount = len(gdef.MarkGlyphSetsDef.Coverage)
-    return gdef.MarkGlyphSetsDef.MarkSetCount - 1
-
-
-def _coverage(font: TTFont, glyphs: Iterable[str]) -> Any:
-    coverage = ot.Coverage()
-    coverage.glyphs = sorted(set(glyphs), key=font.getGlyphID)
-    return coverage
-
-
-# Keeps each contextual lookup's subtable offsets within 16 bits.
-_SEQUENCES_PER_LOOKUP = 40
-
-
-def _single_pos(font: TTFont, values: Mapping[str, float]) -> Any:
-    """A lookup moving each glyph in `values` up by its value."""
-    sub = ot.SinglePos()
-    sub.Format = 2
-    sub.Coverage = _coverage(font, values)
-    sub.ValueFormat = _Y_PLACEMENT
-    sub.Value = [
-        buildValue({"YPlacement": round(values[glyph])})
-        for glyph in sub.Coverage.glyphs
-    ]
-    sub.ValueCount = len(sub.Value)
-    return _lookup(1, 0, [sub])
-
-
-def _lookup(kind: int, flag: int, subtables: list[Any]) -> Any:
-    lookup = ot.Lookup()
-    lookup.LookupType, lookup.LookupFlag = kind, flag
-    lookup.SubTable = subtables
-    lookup.SubTableCount = len(subtables)
-    return lookup
-
-
-def _plain_last(item: tuple[str, Any]) -> tuple[bool, str]:
-    return item[0] == "", item[0]
-
-
-def _chain_rule(
-    font: TTFont,
-    sequence: tuple[str, ...],
-    marks: Iterable[str],
-    index: int,
-    child: str | None = None,
-) -> Any:
-    """Matches `sequence`, then one of `marks`, then `child` if given, and
-    moves the mark through lookup `index`.
-    """
-    sub = ot.ChainContextPos()
-    sub.Format = 3
-    sub.BacktrackGlyphCount = 0
-    sub.BacktrackCoverage = []
-    sub.LookAheadCoverage = [] if child is None else [_coverage(font, [child])]
-    sub.LookAheadGlyphCount = len(sub.LookAheadCoverage)
-    sub.InputCoverage = [_coverage(font, [g]) for g in sequence] + [
-        _coverage(font, marks)
-    ]
-    sub.InputGlyphCount = len(sub.InputCoverage)
-    record = ot.PosLookupRecord()
-    record.SequenceIndex, record.LookupListIndex = len(sequence), index
-    sub.PosLookupRecord = [record]
-    sub.PosCount = 1
-    return sub
-
-
-def _restack(font: TTFont, sub: Any, parents: set[str]) -> Any:
-    """A copy of mark-to-mark subtable `sub` keeping only `parents` as mark2."""
-    copy = ot.MarkMarkPos()
-    copy.Format = 1
-    copy.Mark1Coverage = _coverage(font, sub.Mark1Coverage.glyphs)
-    copy.Mark1Array = sub.Mark1Array
-    copy.ClassCount = sub.ClassCount
-    kept = [
-        (g, r)
-        for g, r in zip(
-            sub.Mark2Coverage.glyphs, sub.Mark2Array.Mark2Record, strict=True
-        )
-        if g in parents
-    ]
-    copy.Mark2Coverage = _coverage(font, [g for g, _ in kept])
-    copy.Mark2Array = ot.Mark2Array()
-    copy.Mark2Array.Mark2Record = [r for _, r in kept]
-    copy.Mark2Array.Mark2Count = len(kept)
-    return copy
-
-
-def add_clearance(
-    font: TTFont,
-    shifts: Mapping[ClearanceKey, float],
-    members: Mapping[Side, set[str]],
-) -> None:
-    """Appends, per side, to every `mark` feature after every lookup there:
-    contextual lookups that move each listed mark by its shift where it
-    follows its letter sequence, then a copy of the side's mark-to-mark
-    lookups that stacks marks again on the marks just moved.
-
-    HarfBuzz fixes a stacked mark's offset from its parent's when the
-    mark-to-mark lookup applies, so a moved mark would leave its stack
-    behind. The copy sees only the side's cmap marks, so it cannot pull a
-    moved mark back onto the dots or signs of its letter. The contextual
-    lookups see only `members` of the side among marks, so a letter sequence
-    matches whatever the other side carries.
-    """
-    gpos = table(font, "GPOS").table
-    lookups = gpos.LookupList.Lookup
-    added = []
-    cmap_marks = side_marks(font)
-    for side in ("top", "bottom"):
-        by_sequence: dict[tuple[str, ...], dict[str, dict[str, float]]] = {}
-        for (s, sequence, mark, child), shift in shifts.items():
-            if s == side:
-                by_child = by_sequence.setdefault(sequence, {})
-                by_child.setdefault(child, {})[mark] = shift
-        if not by_sequence:
-            continue
-        filtering = _filtering_set(font, members[side])
-        sequences = sorted(by_sequence.items())
-        for start in range(0, len(sequences), _SEQUENCES_PER_LOOKUP):
-            rules = []
-            for sequence, by_child in sequences[start : start + _SEQUENCES_PER_LOOKUP]:
-                # A mark's rules with a child come first, being the more
-                # specific; all of a sequence's rules share one contextual
-                # lookup, so no mark matches twice.
-                for child, values in sorted(by_child.items(), key=_plain_last):
-                    lookups.append(_single_pos(font, values))
-                    rules.append(
-                        _chain_rule(
-                            font, sequence, values, len(lookups) - 1, child or None
-                        )
-                    )
-            chain = _lookup(8, _USE_MARK_FILTERING_SET, rules)
-            chain.MarkFilteringSet = filtering
-            lookups.append(chain)
-            added.append(len(lookups) - 1)
-        parents = set(cmap_marks[side].values())
-        restack = _lookup(
-            6,
-            _USE_MARK_FILTERING_SET,
-            [
-                _restack(font, slot.subtable, parents)
-                for slot in slots(font)
-                if slot.side == side and slot.role == "mark1"
-            ],
-        )
-        restack.MarkFilteringSet = _filtering_set(font, parents)
-        lookups.append(restack)
-        added.append(len(lookups) - 1)
-    gpos.LookupList.LookupCount = len(lookups)
-    for record in gpos.FeatureList.FeatureRecord:
-        if record.FeatureTag == "mark":
-            record.Feature.LookupListIndex += added
-            record.Feature.LookupCount = len(record.Feature.LookupListIndex)
-
-
 def _same_keys(
     planned: Mapping[float, Mapping[tuple[int, str], Any]], default: float, what: str
 ) -> None:
@@ -884,15 +595,3 @@ def anchor_masters(
         attach_bases(master, base_plans[location])
         clearance = clearance_em * table(master, "head").unitsPerEm
         clear_stacks(master, stacking, clearance)
-    found = {w: clearance_shifts(m, letters, clearance_em) for w, m in masters.items()}
-    keys = sorted({key for c in found.values() for key in c.shifts})
-    members: dict[Side, set[str]] = {
-        side: set().union(*(c.members[side] for c in found.values()))
-        for side in ("top", "bottom")
-    }
-    for location, master in masters.items():
-        own = found[location].shifts
-        # A mark moved for its child in another master still moves at least
-        # as far as it does alone here.
-        shifts = {key: own.get(key, own.get((*key[:3], ""), 0.0)) for key in keys}
-        add_clearance(master, shifts, members)

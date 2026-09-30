@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    from sawa_tools.build.compact import Compaction
     from sawa_tools.build.masters import MastersCache
     from sawa_tools.build.merge import LineMetrics, WghtRange
     from sawa_tools.build.naming import Release
@@ -32,9 +33,12 @@ _GENERICS = ("serif", "sans-serif", "monospace")
 _CODE_MODULES = (
     "anchors.py",
     "borrow.py",
+    "clearance.py",
+    "compact.py",
     "families.py",
     "harfbuzz.py",
     "ink.py",
+    "lines.py",
     "masters.py",
     "merge.py",
     "naming.py",
@@ -78,6 +82,8 @@ class Family:
     notice: str | None = None
     cell_width: int | None = None
     coverage_gaps: list[str] = field(default_factory=list)
+    leading_quran: bool = True
+    compaction: dict[str, Any] | None = None
     borrow: list[Borrow] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 
@@ -130,7 +136,9 @@ def _parse_borrow(raw: Any, context: str) -> Borrow:
     )
 
 
-def _parse_family(family_id: str, raw: Any) -> Family:
+def _parse_family(
+    family_id: str, raw: Any, compaction: dict[str, Any] | None = None
+) -> Family:
     from sawa_tools.build.merge import LineMetrics, WghtRange
 
     context = f"family '{family_id}'"
@@ -191,9 +199,25 @@ def _parse_family(family_id: str, raw: Any) -> Family:
         notice=_get(raw, "notice", context) if kind == "rename" else None,
         cell_width=raw.get("cellWidth"),
         coverage_gaps=list(raw.get("coverageGaps", [])),
+        leading_quran=bool(raw.get("leading", {}).get("quran", True)),
+        compaction=_compaction_config(compaction, raw),
         borrow=borrow,
         raw=raw,
     )
+
+
+def _compaction_config(
+    defaults: dict[str, Any] | None, raw: Any
+) -> dict[str, Any] | None:
+    """The shared compaction defaults updated by the family's own
+    `compaction`; None without defaults or when the family's is null.
+    """
+    from sawa_tools.build.compact import merged
+
+    own = raw.get("compaction", {})
+    if defaults is None or own is None:
+        return None
+    return merged(defaults, own)
 
 
 def load_config(path: Path) -> FamilyConfig:
@@ -217,7 +241,10 @@ def load_config(path: Path) -> FamilyConfig:
     return FamilyConfig(
         release=release,
         reserved_names=list(data.get("reservedNames", [])),
-        families=[_parse_family(fid, raw) for fid, raw in families_raw.items()],
+        families=[
+            _parse_family(fid, raw, data.get("compaction"))
+            for fid, raw in families_raw.items()
+        ],
         raw_release=release_raw,
     )
 
@@ -289,6 +316,26 @@ def _clearance(family: Family) -> float:
     return family.mark_clearance
 
 
+def _compaction(family: Family) -> Compaction | None:
+    """The compaction stage's parameters and corpus: the Quran text, unless
+    `leading.quran` is false, then the stress strings and mixed sentences,
+    and the mark samples `sawa check fonts` shapes.
+    """
+    if family.compaction is None:
+        return None
+    from sawa_tools.build.compact import Compaction, parse_params
+    from sawa_tools.corpus import CorpusError, corpus, mark_samples, texts
+    from sawa_tools.tanzil import DEFAULT_UTHMANI
+
+    quran = DEFAULT_UTHMANI if family.leading_quran else None
+    try:
+        lines = texts(corpus(quran)) + mark_samples()
+        params = parse_params(family.compaction, _clearance(family))
+    except (CorpusError, KeyError, ValueError) as exc:
+        raise FamilyError(f"family '{family.id}' compaction: {exc}") from exc
+    return Compaction(family.id, params, lines)
+
+
 def _build_merge(
     family: Family,
     release: Release,
@@ -326,6 +373,7 @@ def _build_merge(
         metrics=family.metrics,
         clearance_em=_clearance(family),
         masters_cache=masters_cache,
+        compaction=_compaction(family),
     )
     if result.derived != family.metrics:
         raise FamilyError(
@@ -403,6 +451,7 @@ def _build_rename(
             family.cell_width,
             _clearance(family),
             masters_cache,
+            _compaction(family),
         )
         derived_from += ", with marks from " + " and ".join(
             _describe(sources, entry.member) for entry in family.borrow
@@ -450,12 +499,11 @@ def build_family(
     woff2 = fonts_dir / family.woff2_name if family.generic else None
     outputs = [ttf] if woff2 is None else [ttf, woff2]
     stamp_path = fonts_dir / f"{family.id}.stamp"
-    digest = stamp_digest(
-        family.raw,
-        config.raw_release,
-        {m.source: sources[m.source]["sha256"] for m in family.inputs.values()},
-        code_version(),
-    )
+    inputs = {m.source: sources[m.source]["sha256"] for m in family.inputs.values()}
+    compaction = _compaction(family)
+    if compaction is not None:
+        inputs["compaction"] = compaction.key()
+    digest = stamp_digest(family.raw, config.raw_release, inputs, code_version())
     if not force and is_fresh(stamp_path, digest, outputs):
         return BuiltFamily(family, ttf, woff2, rebuilt=False)
 

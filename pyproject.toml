@@ -19,6 +19,7 @@ dev = [
 ]
 build = [
     "fonttools[woff]",
+    "numpy>=2.1",
     "uharfbuzz>=0.56.2",
 ]
 report = [
