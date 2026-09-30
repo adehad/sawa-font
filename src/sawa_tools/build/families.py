@@ -3,8 +3,9 @@
 A family is either `merge` (an Arabic and a Latin variable font merged under
 one wght axis, see merge.py) or `rename` (one variable font renamed). Either
 way its anchored static masters are finished here before varLib builds them,
-compacted by the family's fitted compaction (fitted.py), and the masters and
-the variable font are fixed where Fontbakery fails them (polish.py). Each
+compacted by the family's fitted compaction (fitted.py), given U+A7DC
+(lambda_stroke.py), and the masters and the variable font are fixed where
+Fontbakery fails them (polish.py). Each
 build writes a
 stamp next to its output; a later run whose inputs, config, fitted
 compaction and build code hash to the same stamp reuses the output.
@@ -48,6 +49,7 @@ _CODE_MODULES = (
     "fitted.py",
     "harfbuzz.py",
     "ink.py",
+    "lambda_stroke.py",
     "lines.py",
     "masters.py",
     "merge.py",
@@ -542,10 +544,12 @@ def _finish(
 ) -> Finish:
     def finish(masters: dict[float, TTFont]) -> dict[float, TTFont]:
         from sawa_tools.build.fitted import compacted
+        from sawa_tools.build.lambda_stroke import add_capital_lambda_with_stroke
         from sawa_tools.build.polish import finish_masters
 
         if compaction is not None and fitted is not None:
             masters = compacted(masters, family.wght.default, compaction, fitted, refit)
+        add_capital_lambda_with_stroke(masters, family.wght.default)
         finish_masters(masters)
         return masters
 
@@ -614,13 +618,14 @@ def build_family(
     cache = None
     if masters_dir is not None:
         cache = MastersCache(masters_dir / family.id, anchored_key)
+    from sawa_tools.build.lambda_stroke import StrokeError
     from sawa_tools.build.polish import PolishError, finish_font
 
     finish = _finish(family, compaction, fitted, refit)
     try:
         font = builder(family, config.release, sources, read, cache, finish)
         finish_font(font)
-    except (FitError, PolishError) as exc:
+    except (FitError, PolishError, StrokeError) as exc:
         raise FamilyError(f"family '{family.id}': {exc}") from exc
     fonts_dir.mkdir(parents=True, exist_ok=True)
     stamp_path.unlink(missing_ok=True)
