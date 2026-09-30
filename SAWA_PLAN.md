@@ -18,6 +18,8 @@ Family members, built by `sawa build fonts` from `data/sawa.json` (first review 
 | Sawa Sans | Noto Sans Arabic 2.013 + Noto Sans 2.015, Arabic scale 1.000 | wght 400 to 700 |
 | Sawa Mono | Cascadia Mono 2407.24 (OFL, Reserved Font Name "Cascadia Code"), renamed, plus 30 marks and letters from Noto Sans Arabic 2.013 and Noto Sans 2.015 (below) | wght 400 to 700 |
 | Sawa Mono NF | Cascadia Mono NF 2407.24, renamed, with the same additions; TTF only, not on the site | wght 400 to 700 |
+| Sawa Serif Harakat | Sawa Serif with its tashkeel coloured by mark group (COLR/CPAL, below) | wght 400 to 700 |
+| Sawa Sans Harakat | Sawa Sans, coloured the same way | wght 400 to 700 |
 
 Every family has the same weight axis, wght 400 to 700 with default 400, and the named instances Regular (400, elidable in STAT), Medium, SemiBold and Bold. The merged families instance their sources inside that range only; Sawa Mono cuts Cascadia's axis to it before anything else (fontTools' instancer, which keeps avar and the `rvrn` feature variations consistent) and then writes its fvar instances and STAT the way the merged families do.
 
@@ -31,7 +33,7 @@ Every family adds U+A7DC LATIN CAPITAL LETTER LAMBDA WITH STROKE, the capital of
 
 Before varLib, `build/polish.py` flattens nested composites on every master (Cascadia has 593) and makes U+0674 ARABIC HIGH HAMZA a spacing base where the source classes it as a mark (Cascadia); on the variable font it classes Noto Serif's five zero-width ties and overlines (U+203F, U+2040, U+2054, U+2E12, U+AB5B) as GDEF marks, switches on smart dropout control in prep (a new prep and gasp, as gftools fix-nonhinting writes them, in the unhinted Serif and Sans; appended to Cascadia's own prep in Sawa Mono) and drops the Macintosh name records.
 
-The mono, gray and mark-group palettes will later be COLR/CPAL palettes inside each family, not separate builds.
+The gray and mark-group palettes live in separate Harakat builds (`build/harakat.py`, `"harakat": true` in `data/sawa.json`), made from the finished variable font after polish: the plain family stays free of colour tables, and the mono palette is the plain family itself. Every glyph that only a group of `data/mark-groups.json` reaches is a COLRv0 base glyph whose one layer is itself, so it keeps following gvar; a ligature of marks from two groups (four shadda ligatures in Serif, two in Sans) is split into one layer glyph per group, each with its slice of the gvar deltas. COLRv0 because a single-colour layer is all the marks need, and v0 renders wherever COLR does. A mark glyph a letter decomposes into (the hamza of U+0623 to U+0626, the madda of U+0622, the small v and superscript alef of letters such as U+06CE and U+06C8, seven glyphs) gets a copy for the letter that GSUB, GPOS and GDEF treat exactly as the mark, so letters keep the text colour and shaping gives the plain family's glyphs and positions. CPAL v1 holds four palettes in `data/palettes.json` order: Groups (light), Groups (dark), Gray (light), Gray (dark), typed light and dark and labelled in the name table, with eight entries in mark-group order. `data/palettes.json` is also where the site's `--mark-*` tokens come from; each colour keeps 3:1 against the site's light and dark backgrounds. The names are the family's with " Harakat" (name IDs 1, 3, 4, 6, 16, 17, 25, the instance PostScript names), with the same licence metadata. The twin adds about 7 KB of TTF and 2 KB of woff2 (Serif 636,764 to 638,684 bytes, Sans 576,080 to 577,700). Sawa Mono has no Harakat build: its borrowed Quranic marks are a placeholder for a Mono mark redesign (§13).
 
 This repo's first deliverable is the **specimen website plus the report pipeline**.
 
@@ -186,6 +188,7 @@ Language switch links carry the current query string. Use `history.replaceState`
 |---|---|---|---|
 | `sawa-serif` | Sawa Serif | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 400 to 700; headings (`--font-display`) |
 | `sawa-sans` | Sawa Sans | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 400 to 700; UI text (`--font-ui`) |
+| `sawa-serif-harakat`, `sawa-sans-harakat` | Sawa Serif Harakat, Sawa Sans Harakat | built by `sawa build fonts` with their plain family, OFL | Not roster entries of their own: the gray and groups palettes show a Sawa Serif or Sans pane, and the Specimen's Al-Fatiha and mark legend, in the twin (§1) |
 | `sawa-mono` | Sawa Mono | built by `sawa build fonts` from `data/sawa.json`, OFL | Variable wght 400 to 700; code and codepoints (`--font-mono`). Line box 1.260 em, for code, not Quran text (§13). Its Quranic marks missing from Cascadia come from Noto Sans Arabic, U+02BE, U+02BF from Noto Sans (§1); its OFL.txt carries both Noto licences after Cascadia's. The borrowed glyphs carry no TrueType hinting instructions; Cascadia's own glyphs keep theirs |
 | `status` | Status quo | `data/upstream.json` via `sawa build fonts`, OFL, **no Arabic** | Must fall back to the system Arabic font; that's the point. Stays live, so each visitor sees their own fallback. Labelled "Your system's Arabic fallback"; the page does not try to detect which font that is. The Specimen page also shows one static image of the same paragraph on Windows, macOS and Android fallbacks, captured once by hand |
 | `amiri` | Amiri | `data/upstream.json` via `sawa build fonts`, OFL | upstream base. Pinned: aliftype/amiri release 1.003, `Amiri-1.003.zip`, SHA-256 `81af0aff7d2086d8af24cea7202f7546130997982534691373485cd96744d05e`, recorded in `data/upstream.json`. Not google/fonts: its Amiri is 1.002 with broken Latin kerning |
@@ -195,7 +198,7 @@ Language switch links carry the current query string. Use `history.replaceState`
 | `noto-sans` | Noto Sans Arabic + Noto Sans | `data/upstream.json` via `sawa build fonts`, OFL | Sawa Sans's sources, unmerged (static Regular and Bold) |
 | `local` | user file | `FontFace` from a file input | Loaded in the browser only; never uploaded. This is how fonts we may not redistribute (e.g. KFGQPC) get compared, so never add a download for them |
 
-Self-host every font (no third-party font CDN), with `font-display: swap`. Palettes are chosen with `@font-palette-values` + `font-palette`; ship light and dark palette variants.
+Self-host every font (no third-party font CDN), with `font-display: swap`. Palettes are chosen with `@font-palette-values` + `font-palette`: `--sawa-groups-light`, `--sawa-groups-dark`, `--sawa-gray-light` and `--sawa-gray-dark` name the twins' CPAL palettes by their index in `data/palettes.json`. The dark palette must be named: Chrome keeps `font-palette: normal` on palette 0 in dark mode whatever its CPAL type, so the site sets the dark palette under `prefers-color-scheme: dark` and inside a Compare stage with `bg=dark`, and the light one inside `bg=light`.
 
 `sawa build fonts` also writes `<out>/fonts.json`, read from each TTF before its woff2 conversion: per font id, its CSS family stack and, per family, its faces (family/weight/style/file) and real metrics (`unitsPerEm`, hhea/typo/win, x-height, cap-height), GSUB/GPOS feature and script tags, and COLR/CPAL info. The site loads this at build time (`site/src/fonts/`) to write the `@font-face` rules and the `--font-ui` stack, and will later drive the feature panel, metrics overlay and palette control from it. The site never fakes any of this: a font with no CPAL table reports `cpal: null`, and the palette control must say the font has no colour palettes rather than showing an empty or default one.
 
@@ -325,7 +328,7 @@ Testing split:
 
 **M2 — Specimen + Compare**
 - Done: font loading, roster toggles, both layouts, all controls, URL state, local font loading (TTF/OTF/WOFF metrics and features read in the browser; WOFF2 loads but reports its metrics as unavailable), OpenType feature panel, metrics overlay.
-- Remaining: palettes. No Sawa family has a CPAL table yet, so the palette controls only say so; the legend on the Specimen page shows the planned grouping. The palette switch and per-pane palette selects need re-checking once COLR/CPAL palettes land.
+- ✅ Palettes: gray and groups set Sawa Serif and Sans in their Harakat twins and colour the marks from the fonts' own palettes, light or dark with the theme; other fonts' palette selects are disabled with a note: `harakat.spec.ts`.
 - ✅ Every control round-trips through the URL (reload restores the exact view): `compare.spec.ts` "every control round-trips through the URL" and "the shared and per-pane palettes round-trip through the URL"; Specimen controls in `specimen.spec.ts`.
 - ✅ In the Arabic UI, side-by-side panes run right to left; specimen text direction is unchanged: `compare.spec.ts` "in the Arabic UI the side-by-side columns run right to left".
 - ✅ The status quo pairing visibly uses the system Arabic fallback: `compare.spec.ts` "the status quo pane uses Source Sans with the system's own Arabic" (its stack has no Arabic web font, and alef's width changes with the fallback after Source Sans while Latin's doesn't).
@@ -353,6 +356,8 @@ Testing split:
 - Sawa Mono column (replaces the Kawkab placeholder).
 
 ## 13. Open decisions (ask, don't decide)
+
+Resolved: palettes. Gray and groups are CPAL palettes of separate Harakat builds of Sawa Serif and Sans (§1), COLRv0 with each mark its own layer; the site names the dark palette itself in a dark theme (§7). Sawa Mono gets no Harakat build.
 
 Resolved: Kawkab Mono is OFL (Reserved Font Name "Source", by Abdullah Arif) but is not used; Sawa Mono comes from Cascadia.
 
