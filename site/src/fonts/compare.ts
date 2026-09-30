@@ -3,8 +3,8 @@ import { lineMetrics, type LineMetrics, type WeightAxis } from "./specimen";
 import type { FamilyInfo, FontsData } from "./types";
 import type { FontId } from "./roster";
 
-/** The Compare weight slider's range: the widest wght axis on the roster (Sawa Sans). */
-export const COMPARE_WEIGHT: WeightAxis = { min: 100, default: 400, max: 900 };
+/** The Compare weight slider's range: the wght axis every Sawa family shares. */
+export const COMPARE_WEIGHT: WeightAxis = { min: 400, default: 400, max: 700 };
 
 /** A font's vertical metrics plus the guide heights the metrics overlay draws. */
 export interface GuideMetrics extends LineMetrics {

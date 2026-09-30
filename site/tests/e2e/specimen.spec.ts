@@ -56,15 +56,15 @@ test("the weight slider follows the selected family's own axis from fonts.json",
 }) => {
   await page.goto(`${SPECIMEN}?fam=sawa-sans`);
   const slider = page.locator("[data-weight]");
-  await expect(slider).toHaveAttribute("min", "100");
-  await expect(slider).toHaveAttribute("max", "900");
-
-  await page.locator('[data-for-family="sawa-sans"] [data-instance-wght="900"]').click();
-  expect(search(page).get("wght")).toBe("900");
-
-  await page.locator('[data-family-button="sawa-serif"]').click();
+  await expect(slider).toHaveAttribute("min", "400");
   await expect(slider).toHaveAttribute("max", "700");
-  expect(search(page).get("wght")).toBe("700");
+
+  await page.locator('[data-for-family="sawa-sans"] [data-instance-wght="600"]').click();
+  expect(search(page).get("wght")).toBe("600");
+
+  await page.locator('[data-family-button="sawa-mono"]').click();
+  await expect(slider).toHaveAttribute("max", "700");
+  expect(search(page).get("wght")).toBe("600");
 });
 
 test("a weight outside the axis is clamped, and the default weight is omitted", async ({

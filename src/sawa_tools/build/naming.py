@@ -160,9 +160,27 @@ def finalize_merged(
     ).items():
         name.setName(text, name_id, *WINDOWS_ENGLISH)
 
+    font["fvar"].axes[0].axisNameID = name.addName(
+        "Weight", platforms=(WINDOWS_ENGLISH,)
+    )
+    set_named_weights(font, family, wght)
+    _set_release(font, release)
+    os2 = table(font, "OS/2")
+    os2.usWeightClass = int(wght.default)
+    # REGULAR and USE_TYPO_METRICS on; ITALIC, BOLD and OBLIQUE off.
+    os2.fsSelection = (os2.fsSelection & ~0b1000100001) | (1 << 6) | (1 << 7)
+    table(font, "head").macStyle = 0
+    os2.recalcUnicodeRanges(font)
+    os2.recalcCodePageRanges(font)
+
+
+def set_named_weights(font: TTFont, family: str, wght: WghtRange) -> None:
+    """Rewrites the fvar instances and STAT: one named weight per hundred
+    in `wght`, Regular elidable and linked to Bold.
+    """
+    name = font["name"]
     platforms = (WINDOWS_ENGLISH,)
     fvar = font["fvar"]
-    fvar.axes[0].axisNameID = name.addName("Weight", platforms=platforms)
     weights = named_weights(wght.minimum, wght.maximum)
     fvar.instances = []
     for weight in weights:
@@ -193,15 +211,6 @@ def finalize_merged(
         windowsNames=True,
         macNames=False,
     )
-
-    _set_release(font, release)
-    os2 = table(font, "OS/2")
-    os2.usWeightClass = int(wght.default)
-    # REGULAR and USE_TYPO_METRICS on; ITALIC, BOLD and OBLIQUE off.
-    os2.fsSelection = (os2.fsSelection & ~0b1000100001) | (1 << 6) | (1 << 7)
-    table(font, "head").macStyle = 0
-    os2.recalcUnicodeRanges(font)
-    os2.recalcCodePageRanges(font)
 
 
 def rename_family(

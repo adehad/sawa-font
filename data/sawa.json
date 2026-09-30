@@ -50,14 +50,15 @@
       "latin": { "source": "noto_sans", "path": "NotoSans/unhinted/variable-ttf/NotoSans[wdth,wght].ttf" },
       "arabic": { "source": "noto_sans_arabic", "path": "NotoSansArabic/unhinted/variable-ttf/NotoSansArabic[wdth,wght].ttf" },
       "arabicScale": 1.0,
-      "wght": { "min": 100, "default": 400, "max": 900 },
+      "wght": { "min": 400, "default": 400, "max": 700 },
       "pinnedAxes": { "wdth": 100 },
       "markClearance": 0.03,
       "compaction": {
+        "gap": 0.04,
         "bottom": { "maxShift": 0.08 },
-        "contexts": { "passes": 40, "patience": 10, "markShifts": [{ "codepoints": ["U+0670"], "maxShift": 0.1 }, { "codepoints": ["U+0650", "U+064D"], "maxShift": 0.12 }] }
+        "contexts": { "passes": 40, "patience": 10, "markShifts": [{ "codepoints": ["U+0670"], "maxShift": 0.1 }, { "codepoints": ["U+0650", "U+064D"], "maxShift": 0.16 }] }
       },
-      "metrics": { "policy": "shared", "ascender": 1392, "descender": -720, "lineGap": 0, "winAscent": 1539, "winDescent": 956 },
+      "metrics": { "policy": "shared", "ascender": 1366, "descender": -690, "lineGap": 0, "winAscent": 1488, "winDescent": 957 },
       "licence": [
         { "source": "noto_sans", "path": "OFL.txt" },
         { "source": "noto_sans_arabic", "path": "OFL.txt" }
@@ -70,7 +71,7 @@
       "input": { "source": "cascadia", "path": "ttf/CascadiaMono.ttf" },
       "renameFrom": "Cascadia Mono",
       "notice": "Sawa Mono is derived from Cascadia Mono (OFL 1.1, Copyright (c) 2019 - Present, Microsoft Corporation, with Reserved Font Name Cascadia Code), with Quranic marks from Noto Sans Arabic and U+02BE, U+02BF from Noto Sans (OFL 1.1, Copyright 2022 The Noto Project Authors).",
-      "wght": { "min": 200, "default": 400, "max": 700 },
+      "wght": { "min": 400, "default": 400, "max": 700 },
       "metrics": { "policy": "box", "ascender": 1759, "descender": -821, "lineGap": 0, "winAscent": 2862, "winDescent": 1702 },
       "cellWidth": 1200,
       "markClearance": 0.03,
@@ -107,7 +108,7 @@
       "input": { "source": "cascadia", "path": "ttf/CascadiaMonoNF.ttf" },
       "renameFrom": "Cascadia Mono NF",
       "notice": "Sawa Mono NF is derived from Cascadia Mono NF (OFL 1.1, Copyright (c) 2019 - Present, Microsoft Corporation, with Reserved Font Name Cascadia Code), with Quranic marks from Noto Sans Arabic and U+02BE, U+02BF from Noto Sans (OFL 1.1, Copyright 2022 The Noto Project Authors).",
-      "wght": { "min": 200, "default": 400, "max": 700 },
+      "wght": { "min": 400, "default": 400, "max": 700 },
       "metrics": { "policy": "box", "ascender": 1759, "descender": -821, "lineGap": 0, "winAscent": 2862, "winDescent": 1702 },
       "cellWidth": 1200,
       "markClearance": 0.03,

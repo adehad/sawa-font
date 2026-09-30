@@ -431,6 +431,29 @@ def _instances_extent(font: Any, wght: WghtRange) -> tuple[float, float]:
     return min(e[0] for e in extents), max(e[1] for e in extents)
 
 
+def _limited(font: Any, family: Family) -> Any:
+    """`font` with its wght axis cut to the family's range, which must lie
+    inside it and share its default.
+    """
+    from fontTools.varLib import instancer
+
+    from sawa_tools.build.merge import axis_range
+
+    axis, wght = axis_range(font, "wght"), family.wght
+    if axis == wght:
+        return font
+    if not axis.minimum <= wght.minimum <= wght.maximum <= axis.maximum or (
+        axis.default != wght.default
+    ):
+        raise FamilyError(
+            f"family '{family.id}': wght {wght} is not inside the input's "
+            f"{axis.minimum:g}..{axis.maximum:g} with its default {axis.default:g}"
+        )
+    return instancer.instantiateVariableFont(
+        font, {"wght": (wght.minimum, wght.default, wght.maximum)}
+    )
+
+
 def _build_rename(
     family: Family,
     release: Release,
@@ -438,14 +461,10 @@ def _build_rename(
     read: ReadMember,
     masters_cache: MastersCache | None = None,
 ) -> Any:
-    from sawa_tools.build.merge import axis_range
-    from sawa_tools.build.naming import rename_family
+    from sawa_tools.build.naming import rename_family, set_named_weights
 
     member = family.inputs["input"]
-    font = _open(read(member.source, member.path))
-    context = f"family '{family.id}'"
-    if axis_range(font, "wght") != family.wght:
-        raise FamilyError(f"{context}: input wght axis differs from {family.wght}")
+    font = _limited(_open(read(member.source, member.path)), family)
     assert family.rename_from is not None and family.notice is not None
     derived_from = _describe(sources, member, family.rename_from)
     lenders = []
@@ -480,6 +499,8 @@ def _build_rename(
         derived_from=derived_from,
         borrowed_copyrights=[_copyright(lender) for lender in lenders],
     )
+    set_named_weights(font, family.name, family.wght)
+    font["name"].removeUnusedNames(font)
     # A digital signature over the upstream bytes no longer matches.
     if "DSIG" in font:
         del font["DSIG"]
@@ -487,7 +508,7 @@ def _build_rename(
 
     errors = win_errors(family.metrics, _instances_extent(font, family.wght))
     if errors:
-        raise FamilyError(f"{context}: " + "; ".join(errors))
+        raise FamilyError(f"family '{family.id}': " + "; ".join(errors))
     apply_metrics(font, family.metrics, font["OS/2"])
     return font
 
