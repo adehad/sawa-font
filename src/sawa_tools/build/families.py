@@ -2,8 +2,10 @@
 
 A family is either `merge` (an Arabic and a Latin variable font merged under
 one wght axis, see merge.py) or `rename` (one variable font renamed). Either
-way its anchored static masters are finished here before varLib builds them:
-compacted by the family's fitted compaction (fitted.py). Each build writes a
+way its anchored static masters are finished here before varLib builds them,
+compacted by the family's fitted compaction (fitted.py), and the masters and
+the variable font are fixed where Fontbakery fails them (polish.py). Each
+build writes a
 stamp next to its output; a later run whose inputs, config, fitted
 compaction and build code hash to the same stamp reuses the output.
 """
@@ -51,6 +53,7 @@ _CODE_MODULES = (
     "merge.py",
     "naming.py",
     "pause.py",
+    "polish.py",
 )
 
 
@@ -532,12 +535,19 @@ def _save_atomic(font: Any, dest: Path) -> None:
 
 
 def _finish(
-    family: Family, compaction: Compaction, fitted: FittedFile, refit: bool
+    family: Family,
+    compaction: Compaction | None,
+    fitted: FittedFile | None,
+    refit: bool,
 ) -> Finish:
     def finish(masters: dict[float, TTFont]) -> dict[float, TTFont]:
         from sawa_tools.build.fitted import compacted
+        from sawa_tools.build.polish import finish_masters
 
-        return compacted(masters, family.wght.default, compaction, fitted, refit)
+        if compaction is not None and fitted is not None:
+            masters = compacted(masters, family.wght.default, compaction, fitted, refit)
+        finish_masters(masters)
+        return masters
 
     return finish
 
@@ -604,12 +614,13 @@ def build_family(
     cache = None
     if masters_dir is not None:
         cache = MastersCache(masters_dir / family.id, anchored_key)
-    finish = None
-    if compaction is not None and fitted is not None:
-        finish = _finish(family, compaction, fitted, refit)
+    from sawa_tools.build.polish import PolishError, finish_font
+
+    finish = _finish(family, compaction, fitted, refit)
     try:
         font = builder(family, config.release, sources, read, cache, finish)
-    except FitError as exc:
+        finish_font(font)
+    except (FitError, PolishError) as exc:
         raise FamilyError(f"family '{family.id}': {exc}") from exc
     fonts_dir.mkdir(parents=True, exist_ok=True)
     stamp_path.unlink(missing_ok=True)

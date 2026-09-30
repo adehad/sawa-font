@@ -27,6 +27,8 @@ Line boxes (typo and hhea, no line gap) are sized so that no two lines of everyd
 
 Sawa Mono borrows U+0657, U+0659, U+065C to U+065E, U+06D6 to U+06DC, U+06DF to U+06E1, U+06E3 to U+06E7, U+06E9 to U+06ED and U+08F0 to U+08F2 from Noto Sans Arabic, and U+02BE, U+02BF from Noto Sans (both OFL 1.1, Copyright 2022 The Noto Project Authors), instanced at each Cascadia master (wght 400 and 700), scaled to Cascadia's own glyphs (2.070, i.e. 2048/1000 times 1.011, from fatha and damma heights; 3.061 for U+02BE, U+02BF, from U+02BC) and rebuilt with varLib; spacing ones (U+02BE, U+02BF, U+06E5, U+06E6, U+06E9) take the cell width, centred. Name IDs 0 and 5 and the family's OFL.txt credit Noto.
 
+Before varLib, `build/polish.py` flattens nested composites on every master (Cascadia has 593) and makes U+0674 ARABIC HIGH HAMZA a spacing base where the source classes it as a mark (Cascadia); on the variable font it classes Noto Serif's five zero-width ties and overlines (U+203F, U+2040, U+2054, U+2E12, U+AB5B) as GDEF marks, switches on smart dropout control in prep (a new prep and gasp, as gftools fix-nonhinting writes them, in the unhinted Serif and Sans; appended to Cascadia's own prep in Sawa Mono) and drops the Macintosh name records.
+
 The mono, gray and mark-group palettes will later be COLR/CPAL palettes inside each family, not separate builds.
 
 This repo's first deliverable is the **specimen website plus the report pipeline**.
@@ -360,7 +362,17 @@ Resolved: the per-letter clearance lookups of `build/anchors.py` are replaced by
 - Niche Quranic marks (U+0610 to U+061A, U+0656 to U+065F, U+06DF to U+06ED, U+08D3 to U+08FF and the rest) still touch letters and other marks in places; `sawa check leading` counts them. They could borrow Amiri Quran's outlines (OFL, pinned in `data/upstream.json`) scaled to each family's fatha.
 - Vendor ID, version and copyright holder in `data/sawa.json` are placeholders.
 - Known limit: Tanzil text writes a pause mark after a space, and UAX #14 lets a line break before it (a combining mark after a space breaks like a letter), so a wrapped verse can start a line with a pause mark. The Tanzil text stays verbatim, so it gets no no-break space. The site's own samples would put U+00A0 before a pause mark that follows a space; none does today.
-- Intended: Fontbakery warns that the pause marks U+06D6 to U+06DC are GDEF bases while Unicode calls them nonspacing marks (`gdef_mark_chars`, `gdef_non_mark_chars`); they are spacing glyphs on purpose (§1).
+- Fontbakery's universal profile (without `ttx_roundtrip`) fails only `case_mapping`: in Sawa Mono and Mono NF, Cascadia has U+023A, U+023B, U+023E, U+026A, U+026C, U+1E30 and U+1E6E without their other case (U+2C65, U+023C, U+2C66, U+A7AE, U+A7AD, U+1E31, U+1E6F); and, with Unicode 16 case data (Python 3.14), every family has U+019B without U+A7DC and U+0264 without U+A7CB. Decide whether Sawa Mono borrows the missing letters from Noto Sans, as it does its Quranic marks, or leaves them out.
+- Fontbakery warnings kept on purpose:
+  - `gdef_mark_chars`: the pause marks U+06D6 to U+06DC are spacing glyphs (§1); U+031A, U+1ACC to U+1ACE and Cascadia's U+0315, U+0340 to U+0342 and U+05C7 are spacing or unclassed in the sources.
+  - `gdef_non_mark_chars`: the five ties and overlines in Sawa Serif are marks so that their zero advance is a mark's (§1); U+0385, U+FB2C, U+FB2D and U+FB49 are Cascadia's own marks.
+  - `gdef_spacing_marks` (Mono): Cascadia's unencoded mark components keep the cell width.
+  - `arabic_high_hamza` (Mono): Cascadia draws U+0674 smaller than its U+0621; a design question for the Mono Arabic redesign.
+  - `monospace` (Mono): hhea.numberOfHMetrics is Cascadia's glyph count, as varLib writes it.
+  - `typoascender_exceeds_Agrave` (Mono): the code line box is sized for the mixed sentences, not accented capitals (§7).
+  - `mandatory_avar_table` (Serif, Sans): the Noto sources have no avar either.
+  - `file_size`: every family carries both scripts in full.
+  - `alt_caron`, `caps_vertically_centered`, `math_signs_width`, `overlapping_path_segments`, `soft_hyphen`, `stylisticset_description`, `unreachable_glyphs`, `valid_glyphnames`: the sources' own outlines, glyph set and names, kept as they ship.
 - Whether older Amiri releases declared a Reserved Font Name (1.003 does not).
 - Trademark check on "Sawa" (UK IPO, WIPO) before public release.
 - TODO: the Read the Docs project doesn't exist yet. The report page's "Older reports on Read the Docs" link points at a placeholder, `OLDER_REPORTS_URL` in `site/src/report/links.ts` (`https://sawa-font.readthedocs.io/`); confirm the real URL once the project is created.
