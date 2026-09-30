@@ -59,6 +59,8 @@ const pageCss = [
 </Base>
 
 <script>
+  import { highlightControls } from "../../components/controls/dock";
+  import { activeSection, controlsFor } from "../../components/specimen/sections";
   import { loadFontsData } from "../../fonts/load";
   import { effectiveWeight, normalizeSelection, specimenFamilies } from "../../fonts/specimen";
   import { commit, readState, subscribe } from "../../state/store";
@@ -80,6 +82,34 @@ const pageCss = [
       landing.style.setProperty("--wght", String(effectiveWeight(state.weight, family.axis)));
       landing.style.setProperty("--specimen-size", `${clampSize(state.size)}px`);
     });
+
+    const sections = [...landing.querySelectorAll<HTMLElement>("[data-section]")];
+    const order = sections.map((section) => section.dataset.section ?? "");
+    const intersecting = new Set<string>();
+    let current: string | undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = entry.target instanceof HTMLElement ? entry.target.dataset.section : undefined;
+          if (id === undefined) {
+            continue;
+          }
+          if (entry.isIntersecting) {
+            intersecting.add(id);
+          } else {
+            intersecting.delete(id);
+          }
+        }
+        const next = activeSection(order, intersecting);
+        if (next !== current) {
+          current = next;
+          highlightControls(controlsFor(next));
+        }
+      },
+      // A thin band a third of the way down the viewport, where reading happens.
+      { rootMargin: "-30% 0px -60% 0px" },
+    );
+    sections.forEach((section) => observer.observe(section));
   }
 </script>
 

@@ -231,6 +231,11 @@ const anyPalettes = SPECIMEN_FAMILIES.some((id) => families[id].hasPalettes);
       if (paletteSwitch) {
         paletteSwitch.hidden = !family.hasPalettes;
       }
+      document
+        .querySelectorAll<HTMLElement>('[data-reveal-control="palette"]')
+        .forEach((chip) => {
+          chip.hidden = !family.hasPalettes;
+        });
       paletteButtons.forEach((button) => {
         button.setAttribute("aria-pressed", String(button.dataset.palette === state.palette));
       });
@@ -307,8 +312,9 @@ const anyPalettes = SPECIMEN_FAMILIES.some((id) => families[id].hasPalettes);
     font-weight: 600;
   }
 
+  /* A floated legend becomes an ordinary grid item, so a highlighted group's background covers it. */
   .control legend {
-    margin-block-end: 0.5rem;
+    float: inline-start;
   }
 
   .control-head {

@@ -231,5 +231,12 @@
   "font.noto-sans.note": "Noto Sans للاتينية، وNoto Sans Arabic للعربية",
   "controls.heading": "تغيّر هذه الإعدادات كل العينات في هذه الصفحة",
   "controls.settings": "الإعدادات",
-  "controls.summarySize": "{size} بكسل"
+  "controls.summarySize": "{size} بكسل",
+  "controls.controlledBy": "الإعدادات المؤثرة هنا",
+  "controls.name.family": "العائلة",
+  "controls.name.weight": "الوزن",
+  "controls.name.size": "الحجم",
+  "controls.name.sample": "نص العينة",
+  "controls.name.palette": "لوحة الألوان",
+  "controls.name.grid": "شبكة الأسطر"
 }

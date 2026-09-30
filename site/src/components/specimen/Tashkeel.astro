@@ -1,4 +1,5 @@
 ---
+import ControlledBy from "./ControlledBy.astro";
 import { t, type MessageKey } from "../../i18n/t";
 import type { Locale } from "../../i18n/locales";
 import type { SpecimenFamilyInfo } from "../../fonts/specimen";
@@ -28,9 +29,10 @@ const GROUP_NAMES: Record<MarkGroupId, MessageKey> = {
 };
 ---
 
-<section class="tashkeel" aria-labelledby="tashkeel-title" data-tashkeel>
+<section class="tashkeel" aria-labelledby="tashkeel-title" data-tashkeel data-section="tashkeel">
   <h2 id="tashkeel-title">{t(locale, "tashkeel.h2")}</h2>
   <p class="section-intro">{t(locale, "tashkeel.intro")}</p>
+  <ControlledBy locale={locale} section="tashkeel" />
 
   <div
     class="fatiha"

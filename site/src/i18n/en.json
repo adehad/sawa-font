@@ -231,5 +231,12 @@
   "font.noto-sans.note": "Noto Sans for Latin, Noto Sans Arabic for Arabic",
   "controls.heading": "These settings change every sample on this page",
   "controls.settings": "Settings",
-  "controls.summarySize": "{size} px"
+  "controls.summarySize": "{size} px",
+  "controls.controlledBy": "Controlled by",
+  "controls.name.family": "Family",
+  "controls.name.weight": "Weight",
+  "controls.name.size": "Size",
+  "controls.name.sample": "Sample text",
+  "controls.name.palette": "Palette",
+  "controls.name.grid": "Line grid"
 }

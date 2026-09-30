@@ -1,4 +1,5 @@
 ---
+import ControlledBy from "./ControlledBy.astro";
 import { t } from "../../i18n/t";
 import type { Locale } from "../../i18n/locales";
 import { defaultState } from "../../state/url";
@@ -13,11 +14,12 @@ const initial = defaultState();
 const initialSample = specimenSample(initial.preset, initial.text);
 ---
 
-<section class="hero" aria-labelledby="hero-title" data-hero>
+<section class="hero" aria-labelledby="hero-title" data-hero data-section="hero">
   <h1 id="hero-title" class="hero-wordmark in-family" dir="auto">
     {t(locale, "specimen.wordmark")}
   </h1>
   <p class="hero-lede">{t(locale, "specimen.lede")}</p>
+  <ControlledBy locale={locale} section="hero" />
   <p class="hero-specimen in-family" dir="auto" data-specimen>{initialSample}</p>
 </section>
 

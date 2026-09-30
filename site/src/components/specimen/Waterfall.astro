@@ -1,4 +1,5 @@
 ---
+import ControlledBy from "./ControlledBy.astro";
 import { t } from "../../i18n/t";
 import type { Locale } from "../../i18n/locales";
 import { defaultState } from "../../state/url";
@@ -14,9 +15,10 @@ const initial = defaultState();
 const initialSample = specimenSample(initial.preset, initial.text);
 ---
 
-<section class="waterfall" aria-labelledby="waterfall-title" data-waterfall>
+<section class="waterfall" aria-labelledby="waterfall-title" data-waterfall data-section="waterfall">
   <h2 id="waterfall-title">{t(locale, "waterfall.h2")}</h2>
   <p class="section-intro">{t(locale, "waterfall.intro")}</p>
+  <ControlledBy locale={locale} section="waterfall" />
   <div class="waterfall-rows">
     {
       SIZES.map((size) => (
