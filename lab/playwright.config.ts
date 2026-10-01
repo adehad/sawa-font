@@ -4,7 +4,7 @@ const PORT = 4412;
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  reporter: process.env.CI ? "list" : "html",
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "html",
   use: { baseURL: `http://localhost:${PORT}/` },
   projects: [
     {

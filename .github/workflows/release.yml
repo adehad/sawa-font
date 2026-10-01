@@ -155,6 +155,51 @@ jobs:
         with:
           path: site/dist
 
+  lab:
+    name: Sawa Lab checks and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lab
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - uses: actions/cache@v6
+        with:
+          path: .cache/downloads
+          key: font-downloads-${{ hashFiles('data/upstream.json') }}
+      - name: Build the calibration fonts and expected shaping
+        working-directory: .
+        run: uv run --locked --group build sawa lab fonts
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-lab-${{ runner.os }}-${{ hashFiles('lab/bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run fmt:check
+      # Includes the parity test against uharfbuzz, which fails if the fonts are missing.
+      - run: bun run test
+      - run: bun run build
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-lab-${{ runner.os }}-${{ hashFiles('lab/bun.lock') }}
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lab-playwright-report
+          path: lab/playwright-report
+          retention-days: 7
+
   release:
     name: Attach the fonts and report to the release
     if: github.ref_type == 'tag'
