@@ -1,7 +1,7 @@
 import argparse
 from collections.abc import Sequence
 
-from sawa_tools import rtd
+from sawa_tools import lab, rtd
 from sawa_tools.build import fonts
 from sawa_tools.checks import fonts as fonts_check
 from sawa_tools.checks import i18n, leading, marks
@@ -12,6 +12,7 @@ GROUPS = {
     "report": "Produce the build report bundle",
     "check": "Repository checks run in CI",
     "rtd": "Read the Docs report-only build steps",
+    "lab": "Sawa Lab, the glyph workbench",
 }
 
 
@@ -34,6 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
             marks.add_parser(commands)
         if name == "rtd":
             rtd.add_parsers(commands)
+        if name == "lab":
+            lab.add_parsers(commands)
     return parser
 
 
