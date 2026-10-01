@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }],
+    // The lab narrows parsed JSON after validating it and DOM values to the
+    // options it rendered; each assertion sits next to that check.
+    "typescript/no-unsafe-type-assertion": "off"
+  },
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    "public/fonts/",
+    "playwright-report/",
+    "test-results/"
+  ],
+  "overrides": [
+    {
+      "files": ["tests/e2e/**"],
+      "jsPlugins": [{ "name": "playwright", "specifier": "eslint-plugin-playwright" }],
+      "rules": {
+        "playwright/no-wait-for-timeout": "error",
+        "playwright/valid-expect": "error"
+      }
+    }
+  ]
+}

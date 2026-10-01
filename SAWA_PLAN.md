@@ -83,6 +83,7 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 │  │                         #   render.py (SVG layers), raster.py + diff.py (diff regions), layers.py,
 │  │                         #   shaping.py, metrics.py, coverage.py, fontbakery.py, manifest.py, bundle.py
 │  ├─ checks/                # i18n.py (i18n parity), marks.py (mark-group coverage), fonts.py (`sawa check fonts`)
+│  ├─ lab.py                 # `sawa lab fonts`: Sawa Lab's calibration fonts, matrix and expected shaping (§14)
 │  └─ rtd.py                 # fetch-bundle, base-path, copy-tree
 ├─ tests/python/             # pytest suite for sawa_tools
 ├─ .cache/                   # downloaded font archives, git-ignored
@@ -107,6 +108,13 @@ This repo's first deliverable is the **specimen website plus the report pipeline
 │  ├─ tests/e2e/                          # Playwright specs
 │  ├─ .stylelintrc.json                   # logical-properties rule + overlay allow-list
 │  └─ public/fonts/                       # fonts copied in by CI
+├─ lab/                     # Sawa Lab (§14): Vite + TypeScript, harfbuzzjs, bun
+│  ├─ src/main.ts                         # matrix, envelope, inspector, notes
+│  ├─ src/cells.ts, geometry.ts           # shaped cells, ink, clash gap
+│  ├─ src/store.ts, state.ts, summary.ts  # annotations/overrides files, URL state, chat summary
+│  ├─ src/parity.test.ts                  # harfbuzzjs against uharfbuzz's expected-shaping.json
+│  ├─ tests/e2e/                          # Playwright smoke test
+│  └─ public/fonts/                       # written by `sawa lab fonts`, git-ignored
 ├─ .github/workflows/release.yml
 ├─ .readthedocs.yaml
 ├─ pyproject.toml            # uv project; ruff + ty config
@@ -384,3 +392,14 @@ Resolved: the per-letter clearance lookups of `build/anchors.py` are replaced by
 - Whether older Amiri releases declared a Reserved Font Name (1.003 does not).
 - Trademark check on "Sawa" (UK IPO, WIPO) before public release.
 - TODO: the Read the Docs project doesn't exist yet. The report page's "Older reports on Read the Docs" link points at a placeholder, `OLDER_REPORTS_URL` in `site/src/report/links.ts` (`https://sawa-font.readthedocs.io/`); confirm the real URL once the project is created.
+
+## 14. Sawa Lab
+
+Sawa Lab (`lab/`, run as its README says) is where the owner checks letters and leaves feedback, rather than reacting to static proofs (retro of 30 September). It renders one calibration build, Sawa Sans 400 with the Arabic at 1.15 and Noto's original mark placement, beside the unscaled Noto sources. `sawa lab fonts --arabic-scale` rebuilds it at another scale.
+
+- A matrix of letters by form with one mark sequence at a time, or every everyday mark at once, each cell with its clash status (0.03 em) and ink extent.
+- A vertical envelope, always visible: Latin ink against every plausible everyday cell's (1.503 to -0.799 em at 1.15), the line box both need, and the approved 2.36 em line box. Implausible combinations (shadda on alef, hamza below on yeh and the like) are left out unless asked for.
+- An inspector at 300 px per em on the Latin grid, with context and reading sizes, draggable marks and pinned notes.
+- Notes and proposed offsets export as `annotations.json` and `overrides.json` (schemas in `lab/README.md`), each keyed by letter, form, mark sequence and build id.
+
+The lab and the build must shape alike: harfbuzzjs is pinned to the HarfBuzz that the locked uharfbuzz ships, and a parity test compares every cell. Offsets are proposals only; turning accepted ones into per-master overrides in `sawa build fonts` is the next step of the loop.

@@ -43,3 +43,15 @@ repos:
         language: system
         files: ^site/
         pass_filenames: false
+      - id: lab-oxlint
+        name: oxlint (lab)
+        entry: bun run --cwd lab lint
+        language: system
+        files: ^lab/
+        pass_filenames: false
+      - id: lab-oxfmt-check
+        name: oxfmt --check (lab)
+        entry: bun run --cwd lab fmt:check
+        language: system
+        files: ^lab/
+        pass_filenames: false

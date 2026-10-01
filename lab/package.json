@@ -1,0 +1,33 @@
+{
+  "name": "sawa-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsgo --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "check:ts": "tsgo --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "oxlint --deny-warnings",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check"
+  },
+  "dependencies": {
+    "harfbuzzjs": "1.6.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^26.6.2",
+    "@typescript/native-preview": "^7.0.0-dev.20260707.2",
+    "eslint-plugin-playwright": "^2.12.0",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
+    "oxlint-tsgolint": "^7.0.2003",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.3"
+  },
+  "packageManager": "bun@1.4.0"
+}

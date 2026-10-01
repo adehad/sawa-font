@@ -17,3 +17,6 @@ node_modules/
 /site/test-results/
 /site/playwright-report/
 /site/.no-report-*/
+/lab/dist/
+/lab/test-results/
+/lab/playwright-report/
