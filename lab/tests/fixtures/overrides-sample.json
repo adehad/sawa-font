@@ -1,43 +1,142 @@
 {
   "schema": "sawa-lab/overrides",
-  "version": 2,
-  "glyphs": [
+  "version": 3,
+  "edits": [
     {
-      "glyph": "uni066E.init",
+      "id": "outline:uni066E.init:body",
+      "mechanism": "outline",
+      "scope": "outline",
+      "target": { "glyph": "uni066E.init", "part": "body" },
+      "lookup": null,
+      "values": { "400": { "dx": 0, "dy": 60 }, "700": null },
       "usedBy": ["beh initial", "noon initial", "yeh hamza above initial"],
       "build": "fixture",
-      "wght": 400,
-      "body": { "dx": 0, "dy": 60 },
-      "dots": [{ "part": "dotbelowar", "dx": 30, "dy": -40 }],
       "updated": "2026-10-02T12:00:00.000Z"
     },
     {
-      "glyph": "uni0645",
+      "id": "outline:uni066E.init:dotbelowar",
+      "mechanism": "outline",
+      "scope": "outline",
+      "target": { "glyph": "uni066E.init", "part": "dotbelowar" },
+      "lookup": null,
+      "values": { "400": { "dx": 30, "dy": -40 }, "700": null },
+      "usedBy": ["beh initial", "noon initial", "yeh hamza above initial"],
+      "build": "fixture",
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "id": "outline:uni0645:body",
+      "mechanism": "outline",
+      "scope": "outline",
+      "target": { "glyph": "uni0645", "part": "body" },
+      "lookup": null,
+      "values": { "400": { "dx": 0, "dy": 120 }, "700": null },
       "usedBy": ["meem isolated"],
       "build": "fixture",
-      "wght": 400,
-      "body": { "dx": 0, "dy": 120 },
-      "dots": [],
       "updated": "2026-10-02T12:00:00.000Z"
     },
     {
-      "glyph": "uni0649",
+      "id": "outline:uni0649:twodotshorizontalbelowar",
+      "mechanism": "outline",
+      "scope": "outline",
+      "target": { "glyph": "uni0649", "part": "twodotshorizontalbelowar" },
+      "lookup": null,
+      "values": { "400": { "dx": 0, "dy": 50 }, "700": null },
       "usedBy": ["yeh isolated", "alef maksura isolated", "yeh hamza above isolated"],
       "build": "fixture",
-      "wght": 400,
-      "body": { "dx": 0, "dy": 0 },
-      "dots": [{ "part": "twodotshorizontalbelowar", "dx": 0, "dy": 50 }],
       "updated": "2026-10-02T12:00:00.000Z"
     },
     {
-      "glyph": "uni066E.medi.wide",
+      "id": "outline:uni066E.medi.wide:body",
+      "mechanism": "outline",
+      "scope": "all-forms",
+      "target": { "glyph": "uni066E.medi.wide", "part": "body" },
+      "lookup": null,
+      "values": { "400": { "dx": -20, "dy": 30 }, "700": null },
       "usedBy": ["teh medial", "theh medial", "yeh medial"],
       "build": "fixture",
-      "wght": 400,
-      "body": { "dx": -20, "dy": 30 },
-      "dots": [{ "part": "twodotshorizontalabovear", "dx": 10, "dy": 25 }],
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "id": "outline:uni066E.medi.wide:twodotshorizontalabovear",
+      "mechanism": "outline",
+      "scope": "outline",
+      "target": { "glyph": "uni066E.medi.wide", "part": "twodotshorizontalabovear" },
+      "lookup": null,
+      "values": { "400": { "dx": 10, "dy": 25 }, "700": null },
+      "usedBy": ["teh medial", "theh medial", "yeh medial"],
+      "build": "fixture",
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "id": "anchor:uni0647:27.0",
+      "mechanism": "anchor",
+      "scope": "mark-class",
+      "target": { "glyph": "uni0647", "class": "27.0" },
+      "lookup": 27,
+      "values": { "400": { "dx": -15, "dy": 40 }, "700": null },
+      "usedBy": ["heh isolated"],
+      "build": "fixture",
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "id": "split-class:uni066E:27.0:uni064E",
+      "mechanism": "split-class",
+      "scope": "mark-group",
+      "target": { "glyph": "uni066E", "class": "27.0", "marks": ["uni064E"] },
+      "lookup": 27,
+      "values": { "400": { "dx": 15, "dy": 30 }, "700": null },
+      "usedBy": ["beh isolated", "teh isolated", "theh isolated"],
+      "build": "fixture",
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "id": "pair:uni0644.init:uni0650",
+      "mechanism": "pair",
+      "scope": "pair",
+      "target": { "base": "uni0644.init", "mark": "uni0650" },
+      "lookup": "new",
+      "values": { "400": { "dx": 20, "dy": -25 }, "700": null },
+      "usedBy": [],
+      "build": "fixture",
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "id": "pair:uni062D.init:uni0651",
+      "mechanism": "pair",
+      "scope": "pair",
+      "target": { "base": "uni062D.init", "mark": "uni0651" },
+      "lookup": "new",
+      "values": { "400": { "dx": 0, "dy": 35 }, "700": null },
+      "usedBy": [],
+      "build": "fixture",
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "id": "mkmk-anchor:uni0651:35.0",
+      "mechanism": "mkmk-anchor",
+      "scope": "mark-class",
+      "target": { "glyph": "uni0651", "class": "35.0" },
+      "lookup": 35,
+      "values": { "400": { "dx": 0, "dy": 20 }, "700": null },
+      "usedBy": [],
+      "build": "fixture",
       "updated": "2026-10-02T12:00:00.000Z"
     }
   ],
-  "marks": []
+  "requests": [
+    {
+      "id": "U+062B|initial|U+0651+U+064D",
+      "mechanism": "substitution",
+      "scope": "cell",
+      "target": {
+        "key": { "letter": "U+062B", "form": "initial", "marks": ["U+0651", "U+064D"] },
+        "glyphs": ["space", "uni064D", "uni0651", "threedotsupabovear", "uni066E.init"]
+      },
+      "reason": "Shadda and kasratan pile up over the three dots",
+      "change": "A lower shadda-kasratan combination over the dots",
+      "build": "fixture",
+      "created": "2026-10-02T12:00:00.000Z"
+    }
+  ]
 }

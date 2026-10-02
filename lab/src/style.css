@@ -1028,3 +1028,44 @@ dialog {
 .cell-edit .glyph-name {
   flex-basis: auto;
 }
+
+.rule {
+  margin-block: 8px;
+}
+
+.rule-text {
+  margin: 4px 0;
+}
+
+.fea {
+  margin: 4px 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  font:
+    12px/1.4 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fea code {
+  white-space: inherit;
+}
+
+.request-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.request-form textarea {
+  inline-size: 100%;
+}
+
+.alternates .arabic {
+  font-family: "Sawa Lab Calibrated", sans-serif;
+  font-size: 1.3em;
+}

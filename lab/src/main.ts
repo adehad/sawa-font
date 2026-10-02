@@ -12,8 +12,11 @@ import {
   type Target,
   moveBy,
   offsetOf,
+  request,
+  requestId,
   reset,
   targetId,
+  withdraw,
 } from "./edits";
 import { em, lineBox } from "./envelope";
 import { arrowStep, leftToRight } from "./forms";
@@ -21,6 +24,7 @@ import { bounds } from "./geometry";
 import { HbFont, harfbuzzVersion } from "./hb";
 import { type Baked, type Cell, Model, cellId, cellKey } from "./model";
 import { NO_POSITIONING, type Positioning, markClass } from "./positioning";
+import { type Rule, ruleFor } from "./rules";
 import { type Handle, type ScopeOption, blastRadius, scopeOptions } from "./scope";
 import { DRAG_MODES, type DragMode, type View, parseState, serializeState } from "./state";
 import {
@@ -46,6 +50,7 @@ import {
 } from "./store";
 import { summary } from "./summary";
 import { type EdgeLine, type FontChoice, type Form, type LabData, NO_MARK } from "./types";
+import { formOf } from "./forms";
 
 const BASE = import.meta.env.BASE_URL;
 /** Inspector scale: 0.3 px per font unit puts the em at 300 px, shrunk to fit every form. */
@@ -632,7 +637,13 @@ class App {
       "Export overrides.json",
     );
     exportOverrides.addEventListener("click", () =>
-      download("overrides.json", overridesFile(this.model.edits)),
+      download(
+        "overrides.json",
+        overridesFile(this.model.edits, (edit) => {
+          const { text, fea } = this.rule(edit.target, edit.dx, edit.dy);
+          return { text, fea };
+        }),
+      ),
     );
     const file = h("input", {
       type: "file",
@@ -692,10 +703,16 @@ class App {
   }
 
   private async copySummary(): Promise<void> {
-    const text = summary(this.model.notes, this.model.edits, this.model.data.build, {
-      letter: (cp) => this.model.letters.get(cp)?.name ?? cp,
-      marks: (cps) => this.model.markLabel(cps),
-    });
+    const text = summary(
+      this.model.notes,
+      this.model.edits,
+      this.model.data.build,
+      {
+        letter: (cp) => this.model.letters.get(cp)?.name ?? cp,
+        marks: (cps) => this.model.markLabel(cps),
+      },
+      (edit) => this.rule(edit.target, edit.dx, edit.dy).text,
+    );
     try {
       await navigator.clipboard.writeText(text);
       this.announce("Summary copied");
@@ -1295,6 +1312,19 @@ class App {
       ? this.model.data.matrix.everyday.find((m) => m.codepoints.join() === `U+${cp}`)
       : undefined;
     return mark ? `${name} (${mark.label})` : name;
+  }
+
+  private rule(target: Target, dx: number, dy: number): Rule {
+    return ruleFor(target, dx, dy, this.model.positioning);
+  }
+
+  /** The rule an edit becomes: plain words, feature syntax and the lookup it lands in. */
+  private ruleView(rule: Rule): HTMLElement[] {
+    return [
+      h("p", { class: "rule-text" }, rule.text),
+      h("pre", { class: "fea" }, h("code", {}, rule.fea)),
+      h("p", { class: "muted small" }, `Lands in ${rule.lookup}.`),
+    ];
   }
 
   /** A mark class's name for feature syntax, "top_27". */
@@ -2045,12 +2075,25 @@ class App {
               option
                 ? h("div", { class: "offset-row" }, field("x"), field("y"), resetButton)
                 : null,
+              option && target
+                ? h(
+                    "section",
+                    {
+                      class: "rule",
+                      "aria-labelledby": "rule-title",
+                      "data-testid": "rule-preview",
+                    },
+                    h("h4", { id: "rule-title" }, "Font rule"),
+                    ...this.ruleView(this.rule(target, ...offsetOf(model.edits, target))),
+                  )
+                : null,
               h("div", { class: "row" }, undo, redo),
             ]),
         h("p", { class: "muted small" }, hint),
       ),
       this.blastPanel(option),
       this.cellEdits(cell),
+      this.requestPanel(cell, choice),
       this.noteForm(cell, choice, parts),
       this.cellNotes(cell),
     );
@@ -2081,6 +2124,120 @@ class App {
       default:
         return `Where marks of ${this.className(handle.cls)} stack on ${handle.glyph}.`;
     }
+  }
+
+  /**
+   * Alternates: the GSUB lookups the cell's glyphs come from, the letter's
+   * other alternates in this form, and a request for a glyph of its own,
+   * which the agent derives later.
+   */
+  private requestPanel(cell: Cell, choice: FontChoice): HTMLElement {
+    const model = this.model;
+    const key = cellKey(cell);
+    const glyphs = model.layout("calib", cell).pieces.map((p) => p.name);
+    const made = glyphs
+      .toReversed()
+      .filter((g, i, all) => all.indexOf(g) === i && model.positioning.alternates[g]);
+    const others = (model.data.lines[cell.letter.codepoint]?.lines ?? []).filter(
+      (line) => line.kind === "font" && line.glyph && formOf(line.glyph) === cell.form,
+    );
+    const existing = model.edits.requests.find((r) => requestId(r.key) === requestId(key));
+    const editable = model.editing(choice) && !model.showsBaked(choice);
+    let action: HTMLElement;
+    if (existing) {
+      const remove = h("button", { type: "button", "data-focus-id": "withdraw" }, "Withdraw");
+      remove.addEventListener("click", () => this.commit(model.edits, withdraw(model.edits, key)));
+      action = h(
+        "div",
+        { class: "request", "data-testid": "request" },
+        h("p", {}, h("strong", {}, "Requested: "), existing.reason || "no reason given"),
+        existing.change ? h("p", {}, `Change: ${existing.change}`) : null,
+        h(
+          "p",
+          { class: "muted small" },
+          `Glyphs now: ${existing.glyphs.join(" ")}. Not baked: the agent derives the glyph.`,
+        ),
+        remove,
+      );
+    } else {
+      const reason = h("textarea", {
+        id: "request-reason",
+        rows: 2,
+        "data-focus-id": "request-reason",
+      });
+      const change = h("textarea", {
+        id: "request-change",
+        rows: 2,
+        "data-focus-id": "request-change",
+      });
+      const save = h(
+        "button",
+        { type: "submit", disabled: !editable },
+        "Request a form of its own",
+      );
+      action = h(
+        "form",
+        { class: "request-form" },
+        h("label", { for: "request-reason" }, "Why no anchor or pair rule does it ", reason),
+        h("label", { for: "request-change" }, "The form you want ", change),
+        save,
+      );
+      action.addEventListener("submit", (event) => {
+        event.preventDefault();
+        this.commit(
+          model.edits,
+          request(model.edits, {
+            key,
+            glyphs,
+            reason: reason.value.trim(),
+            change: change.value.trim(),
+            build: model.data.build,
+            created: new Date().toISOString(),
+          }),
+        );
+        this.announce("Request recorded");
+      });
+    }
+    return h(
+      "section",
+      { class: "alternates", "aria-labelledby": "alternates-title" },
+      h("h3", { id: "alternates-title" }, "Needs its own form"),
+      h(
+        "p",
+        { class: "muted small" },
+        "When no move of an anchor or a mark fixes a cell, the font can swap in a glyph drawn for it with a contextual substitution in GSUB, as lam-alef is.",
+      ),
+      made.length
+        ? h(
+            "ul",
+            { class: "small" },
+            ...made.map((g) => {
+              const alt = model.positioning.alternates[g];
+              return h(
+                "li",
+                {},
+                h("span", { class: "glyph-name" }, g),
+                ` from GSUB lookup ${alt?.lookup} (${alt?.feature})${alt?.context ? `, ${alt.context}` : ""}`,
+              );
+            }),
+          )
+        : null,
+      others.length
+        ? h(
+            "ul",
+            { class: "small" },
+            ...others.map((line) =>
+              h(
+                "li",
+                {},
+                h("span", { class: "arabic", lang: "ar" }, line.text),
+                ` ${line.glyph} from GSUB lookup ${line.lookup} (${line.feature})`,
+              ),
+            ),
+          )
+        : null,
+      action,
+    );
   }
 
   /** The cells the active edit changes: how many, and the first few drawn live. */
@@ -2176,6 +2333,12 @@ class App {
                 ),
                 " ",
                 remove,
+                h(
+                  "details",
+                  {},
+                  h("summary", {}, "Font rule"),
+                  ...this.ruleView(this.rule(edit.target, edit.dx, edit.dy)),
+                ),
               );
             }),
           )

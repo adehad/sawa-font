@@ -81,16 +81,40 @@ The overlay is the lab's own drawing. To see the real thing, export `overrides.j
 uv run --group build sawa lab preview --overrides overrides.json
 ```
 
-It writes `calib-preview.ttf`, a copy of the calibrated font with the glyph overrides baked in with fontTools, and `calib-preview.json`, what it baked. A body offset moves the glyph's outline and its mark-attachment anchors; composites built from the glyph are compensated so they stay put. A dot group inside a glyph moves its component or contours. A dot glyph `ccmp` splits off gets a copy with the outline moved and its anchors kept, swapped in after that base glyph only by a contextual substitution in `calt`, the last Arabic GSUB stage, so marks stacked on the dots stay where they were. It reads version 2 files; anchor, split class, pair and mark-to-mark edits are not baked yet.
+It writes `calib-preview.ttf`, a copy of the calibrated font with every edit baked in with fontTools, and `calib-preview.json`, what it baked. Version 1 and 2 files are migrated first, as the lab does.
 
-"Show baked preview" then draws the calibrated font from that file, shaped by HarfBuzz, with no overlay, and says when the file was baked from moves other than the ones you have now. The two must match: `src/baked.test.ts` sets every form and edge-case line of each baked glyph both ways and fails on the first glyph whose ink differs. CI bakes `tests/fixtures/overrides-sample.json` for it.
+- **Outline**: a body offset moves the glyph's outline and its mark-attachment anchors; composites built from the glyph are compensated so they stay put. A dot group inside a glyph moves its component or contours. A dot glyph `ccmp` splits off gets a copy with the outline moved and its anchors kept, swapped in after that base glyph only by a contextual substitution in `calt`, the last Arabic GSUB stage, so marks stacked on the dots stay where they were.
+- **Anchor**: the glyph's anchor in that class of that lookup moves, after any outline move of the glyph.
+- **Split class**: the marks get a class of their own in the lookup (one per combination of splits that name them); every base and ligature gets an anchor for it, a copy of the old class's, and the split's glyph gets its offset on top.
+- **Mark-to-mark anchor**: the mark's anchor in that mark-to-mark lookup moves.
+- **Pair**: one chained contextual positioning lookup per mark, with a GDEF mark filtering set of that mark alone so the other marks are skipped, each rule calling a single adjustment; the lookups go after every other GPOS lookup, in `mark`. HarfBuzz applies them after attachment, so a mark stacked on the adjusted mark keeps its height; it does take the adjustment's x (HarfBuzz 14.5), and the lab draws it that way.
+- **Requests** for a form of its own are listed in `calib-preview.json`, not baked.
+
+"Show baked preview" then draws the calibrated font from that file, shaped by HarfBuzz, with no overlay, and says when the file was baked from edits other than the ones you have now. The two must match: `src/baked.test.ts` sets every form and edge-case line of each glyph the edits touch, and every cell with a mark they name, both ways and fails on the first glyph whose ink differs. CI bakes `tests/fixtures/overrides-sample.json`, which holds an edit of every mechanism, for it; `tests/python/test_lab_preview.py` checks each mechanism lands where the overlay puts it, to the unit.
+
+## Rule preview
+
+Each edit says what it becomes in the font, under "Font rule" for the handle you are moving and in "Edits on this cell" for the rest: a sentence, the feature syntax, and the lookup it lands in. For a pair rule on fatha after initial beh:
+
+```fea
+lookup lab_pair_uni064E {
+  lookupflag UseMarkFilteringSet [uni064E];
+  pos uni066E.init uni064E' <0 -40 0 0>;
+} lab_pair_uni064E;
+```
+
+Anchor moves are written as the `pos base` (or `pos ligature`, `pos mark`) line with the new anchor, split classes as their `markClass` lines and the base's anchor for the new class, and outline moves as a glyf note with the anchors it carries. The exported `overrides.json` holds each rule too, for reading.
+
+## Needs its own form
+
+Some cells no anchor or adjustment fixes, and a font gives them a glyph of their own with a contextual substitution, as lam-alef is, or as Amiri draws stacked marks over some letters as ligatures. The panel lists the GSUB lookup each of the cell's glyphs comes from (from `positioning.json`, such as Noto's own combined shadda-kasratan `uni0651064D`), the letter's other alternates in this form with the string that reaches each, and a form to record a request: why moving things does not do it, and the form you want. Requests export with the edits as mechanism `substitution`; the agent derives the glyphs later.
 
 ## The feedback loop
 
-1. Pin notes on the cells that look wrong, and drag letters, dots and marks to show what you mean.
+1. Pin notes on the cells that look wrong, and drag letters, dots, marks and anchors to show what you mean, at the smallest scope that does it.
 2. Export `annotations.json` and `overrides.json`, or press "Copy summary" for a short text version to paste into chat.
 3. The agent proposes a change for each note and sets its status to `proposed`. You set it to `accepted` or `rejected`.
-4. Accepted offsets become per-master overrides (400 and 700) in the font build, and the everyday clash check confirms the rule still holds. The build does not read `overrides.json` yet.
+4. Accepted edits become per-master rules (400 and 700) in the font build, each by the mechanism it names, and the everyday clash check confirms the rule still holds. The build does not read `overrides.json` yet.
 
 ## File formats
 

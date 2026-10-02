@@ -24,3 +24,11 @@ export function arrowStep(key: string, rtl: boolean): [number, number] | null {
   };
   return steps[key] ?? null;
 }
+
+/** The form a glyph is drawn for, from its name's suffix, as `sawa lab fonts` reads it. */
+export function formOf(glyph: string): Form {
+  if (glyph.includes(".init")) return "initial";
+  if (glyph.includes(".medi")) return "medial";
+  if (glyph.includes(".fina")) return "final";
+  return "isolated";
+}

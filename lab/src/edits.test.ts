@@ -152,6 +152,12 @@ describe("placements for each mechanism", () => {
   it("moves one mark after its base with a pair rule, leaving what stacks on it", () => {
     expect(placed({ mechanism: "pair", base: "beh.init", mark: "shadda" })).toEqual([0, 10, 0, 0]);
     expect(placed(PAIR)).toEqual([10, 0, 0, 0]);
+    const across = setOffset(NO_EDITS, { ...PAIR, mark: "shadda" }, "pair", [7, 10], STAMP);
+    const moved = placements(cell, at, movesOf(across.edits)).map((p) => [p.dx, p.dy]);
+    expect(moved.slice(0, 2)).toEqual([
+      [7, 0],
+      [7, 10],
+    ]);
     expect(placed({ mechanism: "pair", base: "beh.medi", mark: "fatha" })).toEqual([0, 0, 0, 0]);
   });
 });

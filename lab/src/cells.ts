@@ -222,7 +222,9 @@ export function contextBase(pieces: readonly Piece[], i: number): number | undef
  * to: it follows that glyph and the anchor it attaches by, which an outline
  * move, an anchor move, a split class or a mark-to-mark anchor shifts; the
  * marks stacked on it follow in turn. A pair rule and a moved split-off dot
- * come after attachment, so they move that one mark alone.
+ * come after attachment and move that one mark, except that HarfBuzz
+ * (14.5) carries the x of a pair adjustment on to the marks stacked on it,
+ * though not the y.
  */
 export function placements(
   cell: Layout,
@@ -231,6 +233,12 @@ export function placements(
 ): Placement[] {
   const pieces = cell.pieces;
   const origins: (Offset | undefined)[] = [];
+  const pairOf = (i: number): Offset => {
+    const base = contextBase(pieces, i);
+    const before = base === undefined ? undefined : pieces[base];
+    const piece = pieces[i];
+    return before && piece?.gdefMark ? moves.pair(before.name, piece.name) : ZERO;
+  };
   const origin = (i: number, depth: number): Offset => {
     const known = origins[i];
     if (known) return known;
@@ -240,6 +248,7 @@ export function placements(
     if (link && parent && depth < pieces.length) {
       const [px, py] = origin(link.parent, depth + 1);
       const name = pieces[i]?.name ?? "";
+      const carried = link.kind === "mark" ? pairOf(link.parent)[0] : 0;
       const shifts =
         link.kind === "mark"
           ? [moves.mkmk(parent.name, link.cls)]
@@ -248,7 +257,7 @@ export function placements(
               moves.anchor(parent.name, link.cls),
               moves.split(parent.name, link.cls, name),
             ];
-      at = shifts.reduce<Offset>((sum, [x, y]) => [sum[0] + x, sum[1] + y], [px, py]);
+      at = shifts.reduce<Offset>((sum, [x, y]) => [sum[0] + x, sum[1] + y], [px + carried, py]);
     }
     origins[i] = at;
     return at;
@@ -259,13 +268,9 @@ export function placements(
       return { dx, dy, parts: moves.inline(piece.name) };
     }
     let [dx, dy] = origin(i, 0);
-    const base = contextBase(pieces, i);
-    const before = base === undefined ? undefined : pieces[base];
-    if (before) {
-      const [px, py] = moves.pair(before.name, piece.name);
-      dx += px;
-      dy += py;
-    }
+    const [px, py] = pairOf(i);
+    dx += px;
+    dy += py;
     const owner = piece.adjacent ? pieces[piece.owner] : undefined;
     const dot = owner ? moves.dot(owner.name, piece.name) : undefined;
     if (dot) {
