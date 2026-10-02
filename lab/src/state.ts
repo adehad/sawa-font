@@ -1,6 +1,6 @@
 import { FORMS, type FontChoice, type Form } from "./types";
 
-export const VIEWS = ["matrix", "overview", "notes"] as const;
+export const VIEWS = ["matrix", "overview", "notes", "primer"] as const;
 export type View = (typeof VIEWS)[number];
 
 /** What dragging on the inspector moves: a mark, the whole letter, one dot group, or an anchor. */

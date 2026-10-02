@@ -48,6 +48,9 @@ import {
   saveNotes,
   saveOverrides,
 } from "./store";
+import primerSource from "../../content/primer/en.md?raw";
+import { parsePrimer } from "./primer";
+import { PrimerView } from "./primer-view";
 import { summary } from "./summary";
 import { type EdgeLine, type FontChoice, type Form, type LabData, NO_MARK } from "./types";
 import { formOf } from "./forms";
@@ -412,10 +415,16 @@ class App {
     this.affected = this.activeBlast();
     const active = document.activeElement as HTMLElement | null;
     const activeId = active?.dataset.focusId;
+    const view = this.state.view;
     this.root.replaceChildren(
       this.header(),
-      this.envelopePanel(),
-      h("main", { id: "main" }, this.state.view === "notes" ? null : this.inspector(), this.body()),
+      ...(view === "primer" ? [] : [this.envelopePanel()]),
+      h(
+        "main",
+        { id: "main" },
+        view === "notes" || view === "primer" ? null : this.inspector(),
+        this.body(),
+      ),
       h(
         "footer",
         {},
@@ -470,6 +479,7 @@ class App {
       ["matrix", "Matrix"],
       ["overview", "All everyday marks"],
       ["notes", `Notes (${this.model.notes.length})`],
+      ["primer", "Primer"],
     ];
     const markSelect = h(
       "select",
@@ -917,6 +927,8 @@ class App {
 
   private body(): HTMLElement {
     if (this.state.view === "notes") return this.notesView();
+    if (this.state.view === "primer")
+      return new PrimerView(this.model, parsePrimer(primerSource)).render();
     return this.matrix(this.state.view === "overview");
   }
 
@@ -1381,7 +1393,7 @@ class App {
   /** The cells the active handle's edit, at its scope, changes. */
   private activeBlast(): Map<string, Cell> {
     const cell = this.model.selected();
-    if (!cell || this.state.view === "notes") return new Map();
+    if (!cell || this.state.view === "notes" || this.state.view === "primer") return new Map();
     const part = this.activePart(cell);
     const option = part ? this.option(cell, part) : undefined;
     if (!option) return new Map();

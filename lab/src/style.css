@@ -1051,10 +1051,6 @@ dialog {
   overflow-wrap: anywhere;
 }
 
-.fea code {
-  white-space: inherit;
-}
-
 .request-form {
   display: flex;
   flex-direction: column;
@@ -1068,4 +1064,141 @@ dialog {
 .alternates .arabic {
   font-family: "Sawa Lab Calibrated", sans-serif;
   font-size: 1.3em;
+}
+
+.primer {
+  max-inline-size: 980px;
+  margin: 0 auto;
+  padding: 8px 16px 40px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.primer h3 {
+  margin-block: 28px 8px;
+  font-size: 19px;
+}
+
+.primer-toc ol {
+  columns: 2;
+  margin: 0 0 12px;
+}
+
+.demo {
+  margin: 12px 0 20px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.demo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  direction: rtl;
+}
+
+.demo-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  direction: ltr;
+  min-inline-size: 140px;
+}
+
+.demo-cell.changes {
+  outline: 2px solid var(--affected);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.demo-cell .arabic {
+  font-family: "Sawa Lab Calibrated", sans-serif;
+  font-size: 1.4em;
+}
+
+.demo-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-end: 8px;
+}
+
+.primer-svg {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+.primer-svg .ink-base {
+  fill: var(--ink);
+}
+
+.primer-svg .ink-mark {
+  fill: var(--mark);
+}
+
+.primer-svg .ink-dot {
+  fill: var(--approved);
+}
+
+.primer-svg .ghost path {
+  fill: var(--line);
+}
+
+.glyph-list {
+  max-inline-size: 190px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: center;
+  font:
+    11px/1.35 ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
+.demo-cell > .small {
+  max-inline-size: 200px;
+  text-align: center;
+}
+
+.flag-changes {
+  color: var(--affected);
+  font-weight: 600;
+}
+
+.primer-line {
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  stroke: var(--grid);
+}
+
+.primer-line.line-base {
+  stroke: var(--ink);
+}
+
+.primer-line.line-box {
+  stroke: var(--grid-box);
+  stroke-dasharray: 6 4;
+}
+
+.primer-line.line-approved {
+  stroke: var(--approved);
+  stroke-width: 2;
+}
+
+.primer-label,
+.primer-caption {
+  fill: var(--muted);
+  font-family: var(--sans);
+}
+
+.primer-caption {
+  fill: var(--ink);
+}
+
+.fea code {
+  white-space: inherit;
 }

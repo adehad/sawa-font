@@ -175,3 +175,29 @@ test("show every form right to left and compare with the baked preview", async (
   await baked.uncheck();
   await expect(page.locator(".handle").first()).not.toHaveClass(/disabled/);
 });
+
+test("open the primer and move the anchor in its demo", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "Primer" }).click();
+  await expect(page).toHaveURL(/view=primer/);
+  await expect(page.locator("#primer-title")).toHaveText("How Arabic marks are placed in a font");
+  await expect(page.locator(".primer-section")).toHaveCount(8);
+  await expect(page.locator(".primer-toc li")).toHaveCount(8);
+
+  const demo = page.locator('figure[data-demo="anchor"]');
+  const readout = demo.locator(".readout");
+  await expect(readout).toContainText("(559, 343)");
+  const handle = page.getByTestId("primer-anchor");
+  await handle.scrollIntoViewIfNeeded();
+  await drag(page, handle, 30, -40);
+  await expect(readout).not.toContainText("(559, 343)");
+  await demo.getByRole("button", { name: "Reset" }).click();
+  await expect(readout).toContainText("(559, 343)");
+  await handle.focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(readout).toContainText("(559, 353)");
+
+  const pair = page.locator('figure[data-demo="pair"]');
+  await expect(pair.locator(".demo-cell.changes")).toHaveCount(2);
+  await expect(page.locator('figure[data-demo="envelope"]')).toContainText("2.06 em");
+});
