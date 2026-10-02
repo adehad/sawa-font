@@ -17,10 +17,18 @@ import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from sawa_tools import lab_lines
+from sawa_tools.corpus import DEFAULT_MIXED, DEFAULT_STRESS
+from sawa_tools.tanzil import DEFAULT_UTHMANI
+
 if TYPE_CHECKING:
     from fontTools.ttLib import TTFont
 
 DEFAULT_OUT = Path("lab/public/fonts")
+TANZIL_CREDIT = (
+    "Quran text from the Tanzil Project (tanzil.net), used verbatim under its"
+    " terms of use."
+)
 FAMILY_ID = "sawa-sans"
 DEFAULT_SCALE = 1.15
 WGHT = 400.0
@@ -310,10 +318,12 @@ def _hb_font(font_bytes: bytes) -> Any:
 
 
 def expected_shaping(
-    fonts: dict[str, bytes], definition: dict[str, Any]
+    fonts: dict[str, bytes],
+    definition: dict[str, Any],
+    lines: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Every cell shaped by uharfbuzz in each of `fonts`, for the lab's
-    parity test against harfbuzzjs.
+    """Every cell and edge-case line shaped by uharfbuzz in each of
+    `fonts`, for the lab's parity test against harfbuzzjs.
     """
     shaped = []
     for cell in cells(definition):
@@ -321,7 +331,24 @@ def expected_shaping(
         shaped.append(
             cell | {"glyphs": {key: shape(raw, cps) for key, raw in fonts.items()}}
         )
-    return {"harfbuzz": harfbuzz_versions(), "clusterLevel": 1, "cells": shaped}
+    texts = sorted(
+        {line["text"] for entry in (lines or {}).values() for line in entry["lines"]}
+    )
+    return {
+        "harfbuzz": harfbuzz_versions(),
+        "clusterLevel": 1,
+        "cells": shaped,
+        "lines": [
+            {
+                "text": text,
+                "glyphs": {
+                    key: shape(raw, [ord(c) for c in text])
+                    for key, raw in fonts.items()
+                },
+            }
+            for text in texts
+        ],
+    }
 
 
 def harfbuzz_versions() -> dict[str, str]:
@@ -391,9 +418,12 @@ def build_lab_fonts(
     manifest: Path,
     families: Path,
     cache_dir: Path,
+    quran: Path | None = DEFAULT_UTHMANI,
 ) -> dict[str, Any]:
     """Writes calib.ttf, noto-arabic.ttf, noto-sans.ttf, lab.json and
     expected-shaping.json into `out_dir`; returns what lab.json holds.
+    `quran` is the Tanzil text the real words come from after the
+    project's own sentences, or None for those alone.
     """
     import io
 
@@ -436,19 +466,31 @@ def build_lab_fonts(
     calib.save(out_dir / "calib.ttf")
     noto_arabic.save(out_dir / "noto-arabic.ttf")
     noto_sans.save(out_dir / "noto-sans.ttf")
+    calib_bytes = (out_dir / "calib.ttf").read_bytes()
+    saved = TTFont(out_dir / "calib.ttf")
+    forms = letter_forms(saved, calib_bytes, definition)
+    words = lab_lines.project_words(DEFAULT_STRESS, DEFAULT_MIXED)
+    if quran is not None:
+        words += lab_lines.quran_words(quran)
+    lines = lab_lines.edge_lines(saved, calib_bytes, definition, forms, words)
+    used = {name for form in forms.values() for name in form["glyphs"]}
+    used |= {
+        line["glyph"]
+        for entry in lines.values()
+        for line in entry["lines"]
+        if "glyph" in line
+    }
     shaping = expected_shaping(
         {
-            "calib": (out_dir / "calib.ttf").read_bytes(),
+            "calib": calib_bytes,
             "notoArabic": (out_dir / "noto-arabic.ttf").read_bytes(),
         },
         definition,
+        lines,
     )
     (out_dir / "expected-shaping.json").write_text(
         json.dumps(shaping, separators=(",", ":")) + "\n", encoding="utf-8"
     )
-    saved = TTFont(out_dir / "calib.ttf")
-    forms = letter_forms(saved, (out_dir / "calib.ttf").read_bytes(), definition)
-    used = {name for form in forms.values() for name in form["glyphs"]}
     shas = sorted(sources[name]["sha256"] for name in names)
     lab = {
         "build": build_id(shas, scale),
@@ -467,6 +509,8 @@ def build_lab_fonts(
         "matrix": definition,
         "letterForms": forms,
         "glyphs": glyph_table(saved, used),
+        "lines": lines,
+        "credits": {"tanzil": TANZIL_CREDIT},
     }
     (out_dir / "lab.json").write_text(
         json.dumps(lab, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -493,6 +537,12 @@ def add_parsers(subparsers: argparse._SubParsersAction) -> None:
         default=DEFAULT_LINE_BOX,
         help="The approved line box in em the lab draws (default: %(default)s)",
     )
+    parser.add_argument(
+        "--quran",
+        type=lambda value: Path(value) if value else None,
+        default=DEFAULT_UTHMANI,
+        help="Tanzil text real words come from, '' for none (default: %(default)s)",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--families", type=Path, default=DEFAULT_FAMILIES)
@@ -508,6 +558,7 @@ def run(args: argparse.Namespace) -> int:
             out_dir=args.out,
             scale=args.arabic_scale,
             line_box=args.line_box,
+            quran=args.quran,
             manifest=args.manifest,
             families=args.families,
             cache_dir=args.cache,

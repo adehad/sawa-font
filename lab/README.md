@@ -17,6 +17,14 @@ bun run dev                              # http://localhost:4410/
 
 `lab.json` also splits each letter form into the parts the lab can move. `letterForms["U+0628|initial"]` names the form's body glyph and its parts: the body, and each dot group with its position (above, below or inside) and number of dots. In Noto Sans Arabic a dot group is a glyph of its own, which `ccmp` splits off the letter; a dot drawn inside the body glyph, as a component named like a dot or a small outer contour, is a part too. `glyphs` holds every such glyph's advance, GDEF class, parts with their SVG paths in font units, and GPOS anchors.
 
+`lines` holds each letter's edge-case lines, short strings labelled with what they test:
+
+- **font**: each alternate glyph the font's Arabic GSUB lookups can turn the letter into (`ccmp`, `isol`, `init`, `medi`, `fina`, `rlig`, `calt`, `liga`, `clig`, contextual lookups followed into the lookups they call), with the shortest string of the letter and at most one neighbour each side that triggers it, checked by shaping. An alternate no such string reaches, and no real word either, is listed under `unreached` with its lookup and context.
+- **situational**: the letter after the non-joining letters ا د ذ ر ز و, between tall letters and between descenders, after letters with tails, with lam and lam-alef, beside shadda with a vowel, and with kashida (U+0640).
+- **word**: a real word with the letter in each of its forms and with each alternate a word reaches, from the project's own sentences (`tests/strings/mixed.json` and the Arabic purposes in `stress.json`) first, then the Tanzil Quran text. A Quran word is a whole token of its verse, never changed, and the lab credits Tanzil wherever one is shown.
+
+`sawa lab fonts --quran ''` leaves the Quran words out.
+
 Checks: `bun run lint`, `bun run fmt:check`, `bun run test` (unit tests and the HarfBuzz parity test), `bun run build`, `bun run test:e2e` (Playwright smoke test against the built lab).
 
 ## What is on screen

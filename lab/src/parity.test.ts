@@ -19,6 +19,7 @@ interface ExpectedCell {
 interface Expected {
   harfbuzz: { harfbuzz: string; uharfbuzz: string };
   cells: ExpectedCell[];
+  lines: { text: string; glyphs: Record<string, number[][]> }[];
 }
 
 const present = existsSync(EXPECTED);
@@ -55,6 +56,17 @@ describe.skipIf(!present)("harfbuzzjs matches uharfbuzz", () => {
           .shape(cell.codepoints.map((cp) => Number.parseInt(cp.slice(2), 16)))
           .map((g) => [g.gid, g.cluster, g.xAdvance, g.xOffset, g.yOffset]);
         expect(shaped, `${name} in ${key} shapes differently (${versions})`).toEqual(glyphs);
+      }
+    }
+    expect(expected.lines.length).toBeGreaterThan(0);
+    for (const line of expected.lines) {
+      const codepoints: number[] = [];
+      for (const char of line.text) codepoints.push(char.codePointAt(0) ?? 0);
+      for (const [key, glyphs] of Object.entries(line.glyphs)) {
+        const shaped = fonts[key]
+          ?.shape(codepoints)
+          .map((g) => [g.gid, g.cluster, g.xAdvance, g.xOffset, g.yOffset]);
+        expect(shaped, `"${line.text}" in ${key} shapes differently (${versions})`).toEqual(glyphs);
       }
     }
   });
