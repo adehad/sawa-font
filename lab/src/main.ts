@@ -12,9 +12,10 @@ import {
   resetPart,
 } from "./edits";
 import { em, lineBox } from "./envelope";
+import { arrowStep, leftToRight } from "./forms";
 import { bounds } from "./geometry";
 import { HbFont, harfbuzzVersion } from "./hb";
-import { type Cell, Model, cellKey } from "./model";
+import { type Baked, type Cell, Model, cellKey } from "./model";
 import { DRAG_MODES, type DragMode, type View, parseState, serializeState } from "./state";
 import {
   type Note,
@@ -42,8 +43,10 @@ import { summary } from "./summary";
 import { type EdgeLine, type FontChoice, type Form, type LabData, NO_MARK } from "./types";
 
 const BASE = import.meta.env.BASE_URL;
-/** Inspector scale: 0.3 px per font unit puts the em at 300 px. */
+/** Inspector scale: 0.3 px per font unit puts the em at 300 px, shrunk to fit every form. */
 const INSPECTOR_SCALE = 0.3;
+const MIN_INSPECTOR_SCALE = 0.16;
+const CANVAS_WIDTH = 1080;
 const CONTEXT_SCALE = 0.11;
 /** Edge-case lines at reading size (24 px per em) and large (64 px per em). */
 const READING_SCALE = 0.024;
@@ -59,6 +62,20 @@ async function fetchBytes(path: string): Promise<ArrayBuffer> {
   const response = await fetch(`${BASE}fonts/${path}`);
   if (!response.ok) throw new Error(`${path}: ${response.status}`);
   return response.arrayBuffer();
+}
+
+/** calib-preview.ttf and what was baked into it, when `sawa lab preview` has run. */
+async function loadPreview(): Promise<{ font: ArrayBuffer; baked: Baked } | null> {
+  try {
+    const [font, baked] = await Promise.all([
+      fetch(`${BASE}fonts/calib-preview.ttf`),
+      fetch(`${BASE}fonts/calib-preview.json`),
+    ]);
+    if (!font.ok || !baked.ok) return null;
+    return { font: await font.arrayBuffer(), baked: (await baked.json()) as Baked };
+  } catch {
+    return null;
+  }
 }
 
 async function load(): Promise<Model> {
@@ -81,16 +98,19 @@ async function load(): Promise<Model> {
     ).map(([family, bytes]) => new FontFace(family, bytes.slice(0)).load()),
   );
   for (const face of faces) document.fonts.add(face);
+  const preview = await loadPreview();
   return new Model(
     data,
     {
       calib: new HbFont(calib),
       notoArabic: new HbFont(notoArabic),
       notoSans: new HbFont(notoSans),
+      ...(preview ? { preview: new HbFont(preview.font) } : {}),
     },
     parseState(location.search),
     loadNotes(),
     loadOverrides(),
+    preview?.baked ?? null,
   );
 }
 
@@ -158,6 +178,9 @@ interface CellParts {
 interface Drawn {
   cell: Cell;
   x: number;
+  /** The cell's extent on the canvas, in font units. */
+  x0: number;
+  x1: number;
   layout: Layout;
   parts: CellParts;
   glyphs: SVGGElement;
@@ -463,6 +486,20 @@ class App {
       this.model.invalidate();
       this.setState({ offsets: offsets.checked });
     });
+    const preview = this.model.fonts.preview !== undefined;
+    const baked = h("input", {
+      type: "checkbox",
+      id: "baked",
+      checked: state.baked && preview,
+      disabled: !preview,
+      "data-focus-id": "baked",
+    });
+    baked.addEventListener("change", () => this.setState({ baked: baked.checked }));
+    const bakedNote = !preview
+      ? "run `sawa lab preview --overrides overrides.json` to bake one"
+      : this.model.bakedMatches()
+        ? `baked from ${this.model.baked?.source}`
+        : `baked from ${this.model.baked?.source}, which differs from your current moves`;
     const tabs = h(
       "nav",
       { class: "tabs", "aria-label": "Views" },
@@ -512,6 +549,17 @@ class App {
           { title: "Draw the letters, dots and marks you moved" },
           offsets,
           " Proposed offsets",
+        ),
+        h(
+          "label",
+          {
+            title:
+              "Draw the calibrated font from calib-preview.ttf, the overrides baked in and shaped by HarfBuzz",
+            class: preview && !this.model.bakedMatches() ? "warn" : null,
+          },
+          baked,
+          " Show baked preview ",
+          h("span", { class: "muted small" }, `(${bakedNote})`),
         ),
       ),
       this.fileActions(),
@@ -680,6 +728,7 @@ class App {
             { class: "muted" },
             choice === "calib" ? "calibrated" : "source",
             this.state.impossible ? ", impossible combinations included" : "",
+            model.showsBaked(choice) ? ", baked preview" : "",
             edited ? ", with your edits" : "",
           ),
         ),
@@ -861,6 +910,7 @@ class App {
       {
         class: overview ? "matrix overview" : "matrix",
         role: "grid",
+        dir: "rtl",
         "aria-label": overview
           ? "Letters by form with every everyday mark"
           : `Letters by form with ${mark.label}`,
@@ -878,7 +928,7 @@ class App {
       h("tbody", {}, ...rows),
     );
     table.addEventListener("keydown", (event) => this.matrixKeys(event));
-    return h("section", { class: "matrix-wrap", "aria-label": "Matrix" }, table);
+    return h("section", { class: "matrix-wrap", "aria-label": "Matrix", dir: "rtl" }, table);
   }
 
   private verticalRange(choice: FontChoice): { top: number; bottom: number } {
@@ -1019,13 +1069,7 @@ class App {
   private matrixKeys(event: KeyboardEvent): void {
     const target = (event.target as HTMLElement).closest<HTMLElement>("[data-cell]");
     if (!target) return;
-    const moves: Record<string, [number, number]> = {
-      ArrowUp: [-1, 0],
-      ArrowDown: [1, 0],
-      ArrowLeft: [0, -1],
-      ArrowRight: [0, 1],
-    };
-    const move = moves[event.key];
+    const move = arrowStep(event.key, true);
     if (!move) return;
     event.preventDefault();
     const [letterCp, form] = (target.dataset.cell ?? "").split("|") as [string, Form];
@@ -1179,7 +1223,15 @@ class App {
       h(
         "div",
         { class: "inspector-body" },
-        this.canvas([cell], choice, readout),
+        this.canvas(
+          leftToRight(cell.letter.forms).map((form) => ({
+            letter: cell.letter,
+            mark: cell.mark,
+            form,
+          })),
+          choice,
+          readout,
+        ),
         this.sidePanel(cell, choice),
       ),
       this.edgeLines(cell, choice),
@@ -1270,10 +1322,20 @@ class App {
     const model = this.model;
     const latinFont = model.latinFont(choice);
     const range = this.verticalRange(choice);
-    const top = range.top + 120;
     const bottom = range.bottom - 60;
-    const labels = 520;
-    const editable = model.editing(choice);
+    const editable = model.editing(choice) && !model.showsBaked(choice);
+    const latinAdvance = latinFont
+      .shape(codepointsOf("Hxgy"))
+      .reduce((sum, g) => sum + g.xAdvance, 0);
+    const content = cells.reduce((sum, cell) => {
+      const box = model.box(choice, cell, false);
+      const advance = model.layout(choice, cell).advance;
+      return sum + Math.max(advance, box?.x1 ?? 0) - Math.min(0, box?.x0 ?? 0) + 260;
+    }, latinAdvance + 180);
+    const fit = (gutter: number) =>
+      Math.max(MIN_INSPECTOR_SCALE, Math.min(INSPECTOR_SCALE, CANVAS_WIDTH / (content + gutter)));
+    // The label gutter grows with the labels, which grow as the canvas shrinks.
+    const labels = 520 * (INSPECTOR_SCALE / fit(520));
     const drawn: Drawn[] = [];
     let x = labels + 120;
     for (const cell of cells) {
@@ -1283,6 +1345,8 @@ class App {
       drawn.push({
         cell,
         x: cellX,
+        x0: x - 130,
+        x1: cellX + Math.max(cellLayout.advance, box?.x1 ?? 0) + 130,
         layout: cellLayout,
         parts: this.cellParts(choice, cell),
         glyphs: s("g", {}),
@@ -1293,19 +1357,52 @@ class App {
     const latinX = x - 60;
     const latin = this.drawText(latinFont, model.fontKey(choice, "latin"), "Hxgy", latinX);
     const width = latinX + latin.advance + 120;
-    const height = top - bottom;
     const selected = model.selected();
+    const scale = fit(labels);
+    /** Grows labels and handles as the canvas shrinks, so they keep their size on screen. */
+    const k = INSPECTOR_SCALE / scale;
+    const top = range.top + (cells.length > 1 ? 150 * k : 120);
+    const height = top - bottom;
     const svg = s("svg", {
       viewBox: `0 ${-top} ${width} ${height}`,
-      width: Math.round(width * INSPECTOR_SCALE),
-      height: Math.round(height * INSPECTOR_SCALE),
+      width: Math.round(width * scale),
+      height: Math.round(height * scale),
       class: "big",
       role: "img",
       "aria-label": `${cells.map((c) => model.cellName(c)).join(", ")} at 300 px per em on the Latin grid. Click to pin a note.`,
     });
     const glyphs = s("g", { transform: "scale(1 -1)" }, latin.group);
     for (const d of drawn) glyphs.append(d.glyphs);
-    svg.append(this.gridLines(width, 0, choice));
+    const isSelected = (d: Drawn) =>
+      selected !== null && keyId(cellKey(d.cell)) === keyId(cellKey(selected));
+    for (const d of drawn) {
+      if (cells.length > 1 && isSelected(d))
+        svg.append(
+          s("rect", {
+            x: d.x0,
+            y: -top,
+            width: d.x1 - d.x0,
+            height,
+            class: "form-selected",
+          }),
+        );
+    }
+    svg.append(this.gridLines(width, 0, choice, 34 * k));
+    if (cells.length > 1)
+      for (const d of drawn)
+        svg.append(
+          s(
+            "text",
+            {
+              x: (d.x0 + d.x1) / 2,
+              y: -top + 70 * k,
+              "text-anchor": "middle",
+              class: `form-label${isSelected(d) ? " strong" : ""}`,
+              "font-size": 44 * k,
+            },
+            d.cell.form,
+          ),
+        );
     for (const d of drawn) svg.append(d.ink);
     svg.append(glyphs);
     const handleLayer = s("g", { class: "handles" });
@@ -1321,7 +1418,7 @@ class App {
     const redraw = () => {
       for (const d of drawn) {
         d.glyphs.replaceChildren(this.drawCell(choice, d.cell, d.x), this.anchorMarks(choice, d));
-        d.ink.replaceChildren(...this.inkLines(choice, d));
+        d.ink.replaceChildren(...this.inkLines(choice, d, k));
       }
       for (const { el, drawn: d, part } of handles) {
         const at = this.partCenter(d, part, choice);
@@ -1336,13 +1433,14 @@ class App {
       for (const part of this.handlesFor(d)) {
         const id = refId(part.ref);
         const handle = s("circle", {
-          r: 34,
+          r: 34 * k,
           class: `handle handle-${part.kind}${editable ? "" : " disabled"}`,
           tabindex: editable ? 0 : -1,
           role: "button",
           "data-focus-id": `handle-${id}`,
           "data-handle": part.ref.kind === "mark" ? part.ref.index : null,
           "data-part": id,
+          "data-form": d.cell.form,
           "aria-label": `${part.kind === "body" ? "Letter" : part.kind === "dots" ? "Dots" : "Mark"} ${part.label} of ${model.cellName(d.cell)}: drag or use arrow keys to move it; offset ${offsetOf(model.overrides, part.ref).join(", ")}`,
         });
         handles.push({ el: handle, drawn: d, part });
@@ -1363,7 +1461,7 @@ class App {
             class: `pin sev-${note.severity}`,
             transform: `translate(${(home?.x ?? 0) + note.x} ${-note.y})`,
           },
-          s("circle", { r: 30 }),
+          s("circle", { r: 30 * k }),
           s("text", { "text-anchor": "middle", y: 12 }, String(i + 1)),
         );
         pin.addEventListener("click", (event) => {
@@ -1377,7 +1475,7 @@ class App {
           s("circle", {
             cx: home.x + this.pending.x,
             cy: -this.pending.y,
-            r: 30,
+            r: 30 * k,
             class: "pin pending",
           }),
         );
@@ -1385,6 +1483,12 @@ class App {
       svg.addEventListener("click", (event) => {
         if ((event.target as Element).closest(".handle, .pin")) return;
         const [fx, fy] = toFont(event);
+        const hit = drawn.find((d) => d.x0 <= fx && fx <= d.x1);
+        if (hit && !isSelected(hit)) {
+          this.pending = null;
+          this.setState({ form: hit.cell.form });
+          return;
+        }
         if (!home) return;
         const nx = Math.round(fx - home.x);
         const ny = Math.round(fy);
@@ -1422,9 +1526,34 @@ class App {
     return { kind: "mark", glyph: ref.glyph, index: ref.index };
   }
 
-  /** The refs an edit to `ref` moves together. */
-  protected linked(ref: PartRef): PartRef[] {
-    return [ref];
+  /** The cells of the selected letter in every form it has, with the current mark. */
+  private formCells(cell: Cell): Cell[] {
+    return cell.letter.forms.map((form) => ({ letter: cell.letter, mark: cell.mark, form }));
+  }
+
+  /**
+   * The refs an edit to `ref` moves together: just `ref`, or with forms
+   * linked, the same part in every form of the letter (the body, the dot
+   * group in the same place in the list, the mark at the same index).
+   */
+  private linked(ref: PartRef): PartRef[] {
+    const cell = this.model.selected();
+    if (!this.state.link || !cell) return [ref];
+    const choice = this.state.font;
+    const forms = this.formCells(cell).map((c) => this.cellParts(choice, c));
+    const id = refId(ref);
+    let pick: ((parts: CellParts) => CellPart | undefined) | null = null;
+    for (const parts of forms) {
+      if (parts.body && refId(parts.body.ref) === id) pick = (p) => p.body;
+      const dot = parts.dots.findIndex((d) => refId(d.ref) === id);
+      if (dot >= 0) pick = (p) => p.dots[dot];
+      const mark = parts.marks.findIndex((m) => refId(m.ref) === id);
+      if (mark >= 0) pick = (p) => p.marks[mark];
+      if (pick) break;
+    }
+    if (!pick) return [ref];
+    const choose = pick;
+    return [ref, ...forms.flatMap((parts) => choose(parts)?.ref ?? [])];
   }
 
   private wireHandle(
@@ -1474,7 +1603,7 @@ class App {
   }
 
   /** Dashed lines at the cell's ink top and bottom, labelled in em. */
-  private inkLines(choice: FontChoice, drawn: Drawn): SVGElement[] {
+  private inkLines(choice: FontChoice, drawn: Drawn, k = 1): SVGElement[] {
     const box = this.model.box(choice, drawn.cell);
     if (!box) return [];
     const x0 = drawn.x + Math.min(0, box.x0) - 40;
@@ -1495,9 +1624,9 @@ class App {
         "text",
         {
           x: x0,
-          y: -(y as number) + (label === "ink top" ? -12 : 40),
+          y: -(y as number) + (label === "ink top" ? -12 : 40) * k,
           class: "ink-label",
-          "font-size": 30,
+          "font-size": 30 * k,
         },
         `${label} ${em(y as number, upm)}`,
       ),
@@ -1529,7 +1658,7 @@ class App {
 
   private sidePanel(cell: Cell, choice: FontChoice): HTMLElement {
     const model = this.model;
-    const editable = model.editing(choice);
+    const editable = model.editing(choice) && !model.showsBaked(choice);
     const parts = this.cellParts(choice, cell);
     const modes = h(
       "fieldset",
@@ -1615,7 +1744,16 @@ class App {
       ? "Drag a handle, or focus it and use the arrow keys (Shift for 25 units). Moving the letter moves its glyph with its dots and marks, as the font's anchors would; moving dots moves only them. Offsets are in font units at wght 400. Ctrl+Z undoes, Ctrl+Shift+Z redoes."
       : choice === "source"
         ? "Offsets apply to the calibrated font."
-        : "Turn on proposed offsets to edit them.";
+        : model.showsBaked(choice)
+          ? "Showing the baked preview: the font itself, shaped by HarfBuzz, with no overlay. Turn it off to edit."
+          : "Turn on proposed offsets to edit them.";
+    const link = h("input", {
+      type: "checkbox",
+      id: "link-forms",
+      checked: this.state.link,
+      "data-focus-id": "link-forms",
+    });
+    link.addEventListener("change", () => this.setState({ link: link.checked }));
     return h(
       "aside",
       { class: "side" },
@@ -1624,32 +1762,49 @@ class App {
         { "aria-labelledby": "offsets-title" },
         h("h3", { id: "offsets-title" }, "Move parts"),
         modes,
-        h("h4", {}, "Letter"),
-        body
-          ? rowFor(body, "body", body.label)
-          : h("p", { class: "muted small" }, "No body glyph."),
-        shared.length > 1
-          ? h(
-              "p",
-              { class: "muted small shared" },
-              `This glyph is also ${shared.filter((u) => u !== `${cell.letter.name} ${cell.form}`).join(", ")}: moving it moves those too.`,
-            )
-          : null,
-        h("h4", {}, "Dots"),
-        parts.dots.length
-          ? h("div", {}, ...parts.dots.map((part, i) => rowFor(part, `dot-${i}`, part.label)))
-          : h("p", { class: "muted small" }, "No dots."),
-        h("h4", {}, "Marks"),
-        parts.marks.length
-          ? h(
-              "div",
-              {},
-              ...parts.marks.map((part) =>
-                rowFor(part, `offset-${part.ref.kind === "mark" ? part.ref.index : 0}`, part.label),
-              ),
-            )
-          : h("p", { class: "muted" }, "This cell has no mark."),
-        h("div", { class: "row" }, undo, redo),
+        h(
+          "label",
+          {
+            class: "link-forms",
+            title: "Apply each move to the same part in every form, as for a baseline shift",
+          },
+          link,
+          " Link forms: move the same part in every form",
+        ),
+        ...(model.showsBaked(choice)
+          ? []
+          : [
+              h("h4", {}, "Letter"),
+              body
+                ? rowFor(body, "body", body.label)
+                : h("p", { class: "muted small" }, "No body glyph."),
+              shared.length > 1
+                ? h(
+                    "p",
+                    { class: "muted small shared" },
+                    `This glyph is also ${shared.filter((u) => u !== `${cell.letter.name} ${cell.form}`).join(", ")}: moving it moves those too.`,
+                  )
+                : null,
+              h("h4", {}, "Dots"),
+              parts.dots.length
+                ? h("div", {}, ...parts.dots.map((part, i) => rowFor(part, `dot-${i}`, part.label)))
+                : h("p", { class: "muted small" }, "No dots."),
+              h("h4", {}, "Marks"),
+              parts.marks.length
+                ? h(
+                    "div",
+                    {},
+                    ...parts.marks.map((part) =>
+                      rowFor(
+                        part,
+                        `offset-${part.ref.kind === "mark" ? part.ref.index : 0}`,
+                        part.label,
+                      ),
+                    ),
+                  )
+                : h("p", { class: "muted" }, "This cell has no mark."),
+              h("div", { class: "row" }, undo, redo),
+            ]),
         h("p", { class: "muted small" }, hint),
       ),
       this.noteForm(cell, choice, parts),

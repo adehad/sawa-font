@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sawa_tools import lab_lines
+from sawa_tools import lab_lines, lab_preview
 from sawa_tools.corpus import DEFAULT_MIXED, DEFAULT_STRESS
 from sawa_tools.tanzil import DEFAULT_UTHMANI
 
@@ -548,6 +548,7 @@ def add_parsers(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument("--families", type=Path, default=DEFAULT_FAMILIES)
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
     parser.set_defaults(handler=run)
+    lab_preview.add_parser(subparsers)
 
 
 def run(args: argparse.Namespace) -> int:

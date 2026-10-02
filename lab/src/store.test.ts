@@ -131,6 +131,8 @@ describe("URL state", () => {
       niche: true,
       impossible: true,
       drag: "dot" as const,
+      link: true,
+      baked: true,
     };
     expect(parseState(serializeState(state))).toEqual(state);
   });

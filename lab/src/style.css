@@ -859,6 +859,38 @@ dialog {
   color: var(--muted);
 }
 
+.form-selected {
+  fill: color-mix(in srgb, var(--accent) 7%, transparent);
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.form-label {
+  fill: var(--muted);
+  font-family: var(--sans);
+  text-transform: capitalize;
+}
+
+.form-label.strong {
+  fill: var(--accent);
+  font-weight: 600;
+}
+
+.link-forms {
+  display: block;
+  margin-block: 4px 2px;
+}
+
+.matrix[dir="rtl"] .cell,
+.matrix[dir="rtl"] th .name,
+.matrix[dir="rtl"] th .cp {
+  direction: ltr;
+}
+
+.matrix[dir="rtl"] tbody th {
+  text-align: right;
+}
+
 @media (width < 900px) {
   .envelope {
     position: static;

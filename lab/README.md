@@ -8,6 +8,7 @@ What it shows is one calibration build: Sawa Sans 400, with Noto Sans Arabic sca
 
 ```sh
 uv run --group build sawa lab fonts      # writes lab/public/fonts/
+uv run --group build sawa lab preview --overrides overrides.json   # optional: bakes your moves
 cd lab
 bun install
 bun run dev                              # http://localhost:4410/
@@ -25,14 +26,14 @@ bun run dev                              # http://localhost:4410/
 
 `sawa lab fonts --quran ''` leaves the Quran words out.
 
-Checks: `bun run lint`, `bun run fmt:check`, `bun run test` (unit tests and the HarfBuzz parity test), `bun run build`, `bun run test:e2e` (Playwright smoke test against the built lab).
+Checks: `bun run lint`, `bun run fmt:check`, `bun run test` (unit tests, the HarfBuzz parity test and the baked-preview test), `bun run build`, `bun run test:e2e` (Playwright smoke test against the built lab).
 
 ## What is on screen
 
-- **Matrix**: letters by form (isolated, initial, medial, final, forced with ZWJ) with one mark or mark sequence. Each cell has a clash badge and its ink top and bottom in em. A clash is mark ink closer than 0.03 em to the letter, its dots or another mark, measured on the drawn outlines. Arrow keys move between cells.
+- **Matrix**: letters by form, right to left as Arabic reads (isolated at the right, then initial, medial and final; each forced with ZWJ), with one mark or mark sequence. Each cell has a clash badge and its ink top and bottom in em. A clash is mark ink closer than 0.03 em to the letter, its dots or another mark, measured on the drawn outlines. Arrow keys move between cells the way they point.
 - **All everyday marks**: every everyday mark on every letter and form at once, with clashing ones outlined.
 - **Vertical envelope** (always visible): the Latin ink range (top of É and Å, bottom of g, y, j and p) against the range of every everyday cell, the line box both need, and the approved line box. It is worked out from the glyphs as you have moved them, live while you drag, next to the envelope as built and the change in the line box. The five tallest and deepest cells are links.
-- **Inspector**: the cell at 300 px per em on the Latin grid, then "Hxgy", its edge-case lines, in context and at 16 and 24 px. The cell's ink top and bottom are drawn as dashed lines that follow your edits. Click anywhere else on the large glyph to pin a note, and pick which part it is about.
+- **Inspector**: the letter's forms side by side, right to left, on the Latin grid with the current mark, then "Hxgy", the letter's edge-case lines, the cell in context and at 16 and 24 px. The selected form is outlined; click another to switch. Each form is its own glyph, so a move changes only the form you drag, and the others stay for comparison. The cell's ink top and bottom are drawn as dashed lines that follow your edits. Click anywhere else on the large glyph to pin a note, and pick which part it is about.
 - **Notes**: every note with filters for status, tag and severity, and the proposed offsets.
 
 The Font switch swaps between the calibrated font and the unscaled Noto sources. Proposed offsets apply to the calibrated font only, and only in this preview. Text at reading size is set by the browser from the font files, so it never shows them; the edge-case lines are drawn by the lab and do.
@@ -45,6 +46,8 @@ The Font switch swaps between the calibrated font and the unscaled Noto sources.
 - **Whole letter**: the form's body glyph, with its dots and every mark on it, as moving the outline and its anchors does in the font. This is how you try a letter off the baseline, such as a meem that starts higher so its tail reaches less far down. The glyph's anchors are drawn as small crosses. A body glyph can serve several letters (Noto draws beh, noon and yeh hamza initial with one dotless body); the inspector says which, since moving it moves them all.
 - **Dots**: one dot group on its own. Marks stacked on the dots stay where they are, as the dot glyph's own anchors don't move.
 
+"Link forms" applies a move to the same part in every form of the letter (the body, the dot group in the same place, the mark at the same index), for things like a baseline shift.
+
 Each part also has x and y fields in font units and a Reset button. Ctrl+Z undoes and Ctrl+Shift+Z (or Ctrl+Y) redoes, as do the Undo and Redo buttons.
 
 The edge-case lines under the canvas, at 24 and 64 px per em, are drawn with every move applied, so a change shows in context straight away. When one comes from the Quran text, Tanzil is credited under the list.
@@ -54,6 +57,18 @@ By default the matrix and envelope hold only combinations ordinary spelling uses
 For the calibrated font the plausible everyday envelope is 1.503 em to -0.799 em, from theh initial with shadda and kasratan down to yeh isolated with kasratan; `src/envelope.fonts.test.ts` holds it there. The owner's approved line box, 2.36 em (that envelope plus 0.05 em), is drawn centred on it in the envelope panel and on the inspector grid.
 
 The URL holds the view, mark, cell, font and toggles, so a link reproduces what you see. Notes and offsets stay in this browser's local storage until you export them.
+
+## Baked preview
+
+The overlay is the lab's own drawing. To see the real thing, export `overrides.json` and run
+
+```sh
+uv run --group build sawa lab preview --overrides overrides.json
+```
+
+It writes `calib-preview.ttf`, a copy of the calibrated font with the glyph overrides baked in with fontTools, and `calib-preview.json`, what it baked. A body offset moves the glyph's outline and its mark-attachment anchors; composites built from the glyph are compensated so they stay put. A dot group inside a glyph moves its component or contours. A dot glyph `ccmp` splits off gets a copy with the outline moved and its anchors kept, swapped in after that base glyph only by a contextual substitution in `calt`, the last Arabic GSUB stage, so marks stacked on the dots stay where they were. Per-cell mark offsets are not baked.
+
+"Show baked preview" then draws the calibrated font from that file, shaped by HarfBuzz, with no overlay, and says when the file was baked from moves other than the ones you have now. The two must match: `src/baked.test.ts` sets every form and edge-case line of each baked glyph both ways and fails on the first glyph whose ink differs. CI bakes `tests/fixtures/overrides-sample.json` for it.
 
 ## The feedback loop
 

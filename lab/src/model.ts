@@ -19,7 +19,14 @@ import { type Envelope, type Extent, envelope } from "./envelope";
 import { type Box, type Contour, bounds, flatten, parsePath, translate } from "./geometry";
 import { HbFont } from "./hb";
 import type { ViewState } from "./state";
-import { type CellKey, type Note, type Override, type Overrides, keyId } from "./store";
+import {
+  type CellKey,
+  type DotOffset,
+  type Note,
+  type Override,
+  type Overrides,
+  keyId,
+} from "./store";
 import {
   type FontChoice,
   type Form,
@@ -41,6 +48,28 @@ export interface Fonts {
   calib: HbFont;
   notoArabic: HbFont;
   notoSans: HbFont;
+  /** calib-preview.ttf from `sawa lab preview`, when it has been written. */
+  preview?: HbFont;
+}
+
+/** What `sawa lab preview` baked into calib-preview.ttf. */
+export interface Baked {
+  build: string;
+  source: string;
+  glyphs: { glyph: string; body: { dx: number; dy: number }; dots: DotOffset[] }[];
+}
+
+/** The glyph offsets of a set of overrides, comparable with what was baked. */
+export function glyphOffsets(glyphs: Baked["glyphs"]): string {
+  return JSON.stringify(
+    glyphs
+      .map((g) => ({
+        glyph: g.glyph,
+        body: [g.body.dx, g.body.dy],
+        dots: g.dots.map((d) => `${d.part} ${d.dx} ${d.dy}`).toSorted((a, b) => a.localeCompare(b)),
+      }))
+      .toSorted((a, b) => a.glyph.localeCompare(b.glyph)),
+  );
 }
 
 export interface LatinEnvelope {
@@ -103,6 +132,7 @@ export class Model {
     public state: ViewState,
     public notes: Note[],
     overrides: Overrides,
+    readonly baked: Baked | null = null,
   ) {
     this.letters = new Map(data.matrix.letters.map((l) => [l.codepoint, l]));
     this.marks = new Map(
@@ -130,7 +160,13 @@ export class Model {
     return this.data.clearance * this.upm;
   }
 
+  /** Whether the calibrated font is drawn from the baked preview. */
+  showsBaked(choice: FontChoice): boolean {
+    return choice === "calib" && this.state.baked && this.fonts.preview !== undefined;
+  }
+
   arabicFont(choice: FontChoice): HbFont {
+    if (this.showsBaked(choice) && this.fonts.preview) return this.fonts.preview;
     return choice === "calib" ? this.fonts.calib : this.fonts.notoArabic;
   }
 
@@ -139,7 +175,8 @@ export class Model {
   }
 
   fontKey(choice: FontChoice, script: "arabic" | "latin"): string {
-    if (choice === "calib") return "calib";
+    if (choice === "calib")
+      return script === "arabic" && this.showsBaked(choice) ? "preview" : "calib";
     return script === "arabic" ? "notoArabic" : "notoSans";
   }
 
@@ -152,9 +189,21 @@ export class Model {
     };
   }
 
-  /** Whether glyph overrides are drawn: on the calibrated font, with offsets shown. */
+  /** Whether offsets are drawn and editable: on the calibrated font, with offsets shown. */
   editing(choice: FontChoice): boolean {
     return choice === "calib" && this.state.offsets;
+  }
+
+  /** Glyph moves drawn as an overlay; the baked preview already has them in its outlines. */
+  private glyphMovesFor(choice: FontChoice): GlyphMoves {
+    return this.editing(choice) && !this.showsBaked(choice) ? this.moves : NO_MOVES;
+  }
+
+  /** Whether the baked preview holds the same glyph offsets as the lab. */
+  bakedMatches(): boolean {
+    return (
+      this.baked !== null && glyphOffsets(this.baked.glyphs) === glyphOffsets(this.overrides.glyphs)
+    );
   }
 
   selected(): Cell | null {
@@ -183,7 +232,7 @@ export class Model {
   }
 
   layout(choice: FontChoice, cell: Cell): Layout {
-    const id = `${choice}|${cellId(cell)}`;
+    const id = `${this.fontKey(choice, "arabic")}|${cellId(cell)}`;
     let result = this.layouts.get(id);
     if (!result) {
       const font = this.arabicFont(choice);
@@ -196,7 +245,7 @@ export class Model {
   }
 
   lineLayout(choice: FontChoice, text: string): Layout {
-    const id = `${choice}|line|${text}`;
+    const id = `${this.fontKey(choice, "arabic")}|line|${text}`;
     let result = this.layouts.get(id);
     if (!result) {
       const font = this.arabicFont(choice);
@@ -222,12 +271,15 @@ export class Model {
   }
 
   placements(choice: FontChoice, cell: Cell): Placement[] {
-    const moves = this.editing(choice) ? this.moves : NO_MOVES;
-    return placements(this.layout(choice, cell), moves, this.markOffsets(choice, cell));
+    return placements(
+      this.layout(choice, cell),
+      this.glyphMovesFor(choice),
+      this.markOffsets(choice, cell),
+    );
   }
 
   linePlacements(choice: FontChoice, line: Layout): Placement[] {
-    return placements(line, this.editing(choice) ? this.moves : NO_MOVES);
+    return placements(line, this.glyphMovesFor(choice));
   }
 
   /** One part's outline from the glyph table, placed at (x, y). */
@@ -264,7 +316,7 @@ export class Model {
   }
 
   analysis(choice: FontChoice, cell: Cell): Analysis {
-    const id = `${choice}|${cellId(cell)}|${this.state.offsets}`;
+    const id = `${this.fontKey(choice, "arabic")}|${cellId(cell)}|${this.state.offsets}`;
     let result = this.analyses.get(id);
     if (!result) {
       result = analyse(
@@ -329,7 +381,7 @@ export class Model {
     choice: FontChoice,
     includeImpossible = this.state.impossible,
   ): Envelope & { cells: Map<string, Cell> } {
-    const id = `${choice}|${includeImpossible}`;
+    const id = `${this.fontKey(choice, "arabic")}|${includeImpossible}`;
     let result = this.fontEnvelopes.get(id);
     if (!result) {
       result = this.arabicEnvelope(choice, includeImpossible, false);
@@ -343,7 +395,10 @@ export class Model {
    * everyday envelope as drawn by the font itself.
    */
   approvedLineBox(): { top: number; bottom: number; height: number } {
+    const state = this.state;
+    this.state = { ...state, baked: false };
     const env = this.fontEnvelope("calib", false);
+    this.state = state;
     const height = this.data.approvedLineBox.height * this.upm;
     const extra = (height - (env.top - env.bottom)) / 2;
     return { top: env.top + extra, bottom: env.bottom - extra, height };

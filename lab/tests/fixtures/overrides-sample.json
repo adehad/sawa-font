@@ -1,0 +1,43 @@
+{
+  "schema": "sawa-lab/overrides",
+  "version": 2,
+  "glyphs": [
+    {
+      "glyph": "uni066E.init",
+      "usedBy": ["beh initial", "noon initial", "yeh hamza above initial"],
+      "build": "fixture",
+      "wght": 400,
+      "body": { "dx": 0, "dy": 60 },
+      "dots": [{ "part": "dotbelowar", "dx": 30, "dy": -40 }],
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "glyph": "uni0645",
+      "usedBy": ["meem isolated"],
+      "build": "fixture",
+      "wght": 400,
+      "body": { "dx": 0, "dy": 120 },
+      "dots": [],
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "glyph": "uni0649",
+      "usedBy": ["yeh isolated", "alef maksura isolated", "yeh hamza above isolated"],
+      "build": "fixture",
+      "wght": 400,
+      "body": { "dx": 0, "dy": 0 },
+      "dots": [{ "part": "twodotshorizontalbelowar", "dx": 0, "dy": 50 }],
+      "updated": "2026-10-02T12:00:00.000Z"
+    },
+    {
+      "glyph": "uni066E.medi.wide",
+      "usedBy": ["teh medial", "theh medial", "yeh medial"],
+      "build": "fixture",
+      "wght": 400,
+      "body": { "dx": -20, "dy": 30 },
+      "dots": [{ "part": "twodotshorizontalabovear", "dx": 10, "dy": 25 }],
+      "updated": "2026-10-02T12:00:00.000Z"
+    }
+  ],
+  "marks": []
+}
