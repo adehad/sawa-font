@@ -3,6 +3,10 @@ import { FORMS, type FontChoice, type Form } from "./types";
 export const VIEWS = ["matrix", "overview", "notes"] as const;
 export type View = (typeof VIEWS)[number];
 
+/** What dragging on the inspector moves: a mark, the whole letter, or one dot group. */
+export const DRAG_MODES = ["mark", "letter", "dot"] as const;
+export type DragMode = (typeof DRAG_MODES)[number];
+
 export interface ViewState {
   view: View;
   mark: string;
@@ -12,6 +16,7 @@ export interface ViewState {
   offsets: boolean;
   niche: boolean;
   impossible: boolean;
+  drag: DragMode;
 }
 
 export const DEFAULT_STATE: ViewState = {
@@ -23,6 +28,7 @@ export const DEFAULT_STATE: ViewState = {
   offsets: true,
   niche: false,
   impossible: false,
+  drag: "mark",
 };
 
 function oneOf<T extends string>(value: string | null, options: readonly T[], fallback: T): T {
@@ -46,6 +52,7 @@ export function parseState(search: string): ViewState {
     offsets: params.get("offsets") !== "off",
     niche: params.get("niche") === "on",
     impossible: params.get("impossible") === "on",
+    drag: oneOf(params.get("drag"), DRAG_MODES, DEFAULT_STATE.drag),
   };
 }
 
@@ -62,6 +69,7 @@ export function serializeState(state: ViewState): string {
   if (!state.offsets) params.set("offsets", "off");
   if (state.niche) params.set("niche", "on");
   if (state.impossible) params.set("impossible", "on");
+  if (state.drag !== DEFAULT_STATE.drag) params.set("drag", state.drag);
   const query = params.toString();
   return query ? `?${query}` : "";
 }

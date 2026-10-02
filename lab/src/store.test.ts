@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_STATE, parseState, serializeState } from "./state";
 import {
+  type GlyphOverride,
+  NO_OVERRIDES,
   type Note,
   type Override,
   SchemaError,
+  mergeOverrides,
   annotationsFile,
   mergeNotes,
   overridesFile,
@@ -37,6 +40,16 @@ const OVERRIDE: Override = {
   updated: "2026-10-01T09:05:00.000Z",
 };
 
+const GLYPH: GlyphOverride = {
+  glyph: "uni066E.init",
+  usedBy: ["beh initial", "noon initial"],
+  build: "sans-400-1.15-abc",
+  wght: 400,
+  body: { dx: 0, dy: 40 },
+  dots: [{ part: "dotbelowar", dx: 0, dy: -20 }],
+  updated: "2026-10-02T09:00:00.000Z",
+};
+
 function roundTrip(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
@@ -44,11 +57,34 @@ function roundTrip(value: unknown): unknown {
 describe("annotations and overrides", () => {
   it("round-trips through JSON", () => {
     expect(parseAnnotations(roundTrip(annotationsFile([NOTE])))).toEqual([NOTE]);
-    expect(parseOverrides(roundTrip(overridesFile([OVERRIDE])))).toEqual([OVERRIDE]);
+    const overrides = { glyphs: [GLYPH], marks: [OVERRIDE] };
+    expect(parseOverrides(roundTrip(overridesFile(overrides)))).toEqual(overrides);
+  });
+
+  it("reads a version 1 overrides file into the mark offsets", () => {
+    const v1 = { schema: "sawa-lab/overrides", version: 1, overrides: [OVERRIDE] };
+    expect(parseOverrides(roundTrip(v1))).toEqual({ glyphs: [], marks: [OVERRIDE] });
+    expect(() => parseOverrides({ ...v1, version: 3 })).toThrow(/version 3/);
+  });
+
+  it("keeps the part a note is about", () => {
+    const note: Note = { ...NOTE, part: { kind: "dots", glyph: "uni066E.init", id: "dotbelowar" } };
+    expect(parseAnnotations(roundTrip(annotationsFile([note])))).toEqual([note]);
+  });
+
+  it("merges imported overrides by glyph and by cell", () => {
+    const moved = { ...GLYPH, body: { dx: 5, dy: 5 } };
+    const other = { ...GLYPH, glyph: "uni066E.medi" };
+    const merged = mergeOverrides(
+      { glyphs: [GLYPH], marks: [OVERRIDE] },
+      { glyphs: [moved, other], marks: [] },
+    );
+    expect(merged.glyphs).toEqual([moved, other]);
+    expect(merged.marks).toEqual([OVERRIDE]);
   });
 
   it("rejects a file of the wrong kind or a malformed entry", () => {
-    expect(() => parseAnnotations(overridesFile([]))).toThrow(SchemaError);
+    expect(() => parseAnnotations(overridesFile(NO_OVERRIDES))).toThrow(SchemaError);
     const bad = { ...annotationsFile([NOTE]), notes: [{ ...NOTE, severity: 5 }] };
     expect(() => parseAnnotations(roundTrip(bad))).toThrow(/severity/);
   });
@@ -68,7 +104,7 @@ describe("annotations and overrides", () => {
   });
 
   it("summarises notes and offsets as plain text", () => {
-    const text = summary([NOTE], [OVERRIDE], "sans-400-1.15-abc", {
+    const text = summary([NOTE], { glyphs: [GLYPH], marks: [OVERRIDE] }, "sans-400-1.15-abc", {
       letter: (cp) => ({ "U+0623": "alef hamza above", "U+0628": "beh" })[cp] ?? cp,
       marks: (cps) => cps.join(" + "),
     });
@@ -76,6 +112,9 @@ describe("annotations and overrides", () => {
     expect(text).toContain("[open] too high, severity 2 (calib): Hamza and damma");
     expect(text).toContain(
       "offset beh medial + U+0651 + U+064E: uni0651 dx 0 dy -40; uni064E dx 12 dy 0",
+    );
+    expect(text).toContain(
+      "glyph uni066E.init (beh initial, noon initial): body dx 0 dy 40; dots dotbelowar dx 0 dy -20",
     );
   });
 });
@@ -91,6 +130,7 @@ describe("URL state", () => {
       font: "source" as const,
       niche: true,
       impossible: true,
+      drag: "dot" as const,
     };
     expect(parseState(serializeState(state))).toEqual(state);
   });

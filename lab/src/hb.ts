@@ -66,6 +66,11 @@ export class HbFont {
     return cls === hb.GlyphClass.BASE_GLYPH || cls === hb.GlyphClass.LIGATURE;
   }
 
+  /** Whether GDEF classes the glyph as a mark: a split-off dot or a tashkeel mark. */
+  isMark(gid: number): boolean {
+    return this.face.getGlyphClass(gid) === hb.GlyphClass.MARK;
+  }
+
   glyph(codepoint: number): number | undefined {
     return this.font.glyph(codepoint);
   }

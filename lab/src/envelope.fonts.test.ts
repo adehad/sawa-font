@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { HbFont } from "./hb";
+import { moveBy } from "./edits";
+import { NO_OVERRIDES } from "./store";
 import { Model } from "./model";
 import { DEFAULT_STATE } from "./state";
 import type { LabData } from "./types";
@@ -24,7 +26,7 @@ function model(): Model {
     },
     DEFAULT_STATE,
     [],
-    [],
+    NO_OVERRIDES,
   );
 }
 
@@ -60,5 +62,30 @@ describe.skipIf(!present)("the calibrated font's everyday envelope", () => {
   it("reaches further with impossible combinations included", () => {
     const lab = model();
     expect(lab.arabicEnvelope("calib", true).top).toBeGreaterThan(lab.arabicEnvelope("calib").top);
+  });
+
+  it("recomputes from edited glyphs, so lifting yeh's bodies raises the bottom", () => {
+    const lab = model();
+    const before = lab.arabicEnvelope("calib");
+    const yeh = lab.letters.get("U+064A");
+    const kasratan = lab.marks.get("kasratan");
+    if (!yeh || !kasratan) throw new Error("no yeh or kasratan");
+    const cell = { letter: yeh, form: "isolated" as const, mark: kasratan };
+    const bodies = (["isolated", "final"] as const).map((form) => ({
+      kind: "body" as const,
+      glyph: lab.letterForm(yeh, form)?.body ?? "",
+    }));
+    const boxBefore = lab.box("calib", cell);
+    lab.overrides = moveBy(NO_OVERRIDES, bodies, [0, 150], {
+      build: lab.data.build,
+      wght: lab.data.wght,
+      now: "2026-10-02T10:00:00.000Z",
+      usedBy: (g) => lab.usedBy(g),
+    });
+    const after = lab.arabicEnvelope("calib");
+    expect(lab.box("calib", cell)?.y0).toBeCloseTo((boxBefore?.y0 ?? 0) + 150);
+    expect(after.bottom).toBeGreaterThan(before.bottom);
+    expect(after.deepest[0]?.key).not.toBe(before.deepest[0]?.key);
+    expect(lab.fontEnvelope("calib").bottom).toBe(before.bottom);
   });
 });

@@ -1,22 +1,32 @@
 import {
   type Analysis,
+  type GlyphFacts,
+  type GlyphMoves,
+  type Ink,
   type Layout,
+  NO_MOVES,
+  type Offset,
   type Offsets,
+  type Placement,
   analyse,
   cellCodepoints,
   layout,
-  pieceBox,
+  layoutBox,
+  lineLayout,
+  placements,
 } from "./cells";
 import { type Envelope, type Extent, envelope } from "./envelope";
-import { type Box, unionBox } from "./geometry";
+import { type Box, type Contour, bounds, flatten, parsePath, translate } from "./geometry";
 import { HbFont } from "./hb";
 import type { ViewState } from "./state";
-import { type CellKey, type Note, type Override, keyId } from "./store";
+import { type CellKey, type Note, type Override, type Overrides, keyId } from "./store";
 import {
   type FontChoice,
   type Form,
+  type GlyphInfo,
   type LabData,
   type Letter,
+  type LetterForm,
   type MarkSequence,
   NO_MARK,
 } from "./types";
@@ -51,24 +61,65 @@ export function cellId(cell: Cell): string {
   return `${cell.letter.codepoint}|${cell.form}|${cell.mark.id}`;
 }
 
+export function formId(letter: Letter, form: Form): string {
+  return `${letter.codepoint}|${form}`;
+}
+
+/** How a set of overrides moves glyph parts, looked up by glyph name. */
+export function glyphMoves(overrides: Overrides): GlyphMoves {
+  const byGlyph = new Map(overrides.glyphs.map((o) => [o.glyph, o]));
+  return {
+    body: (glyph) => {
+      const entry = byGlyph.get(glyph);
+      return entry ? [entry.body.dx, entry.body.dy] : [0, 0];
+    },
+    dot: (base, dot) => {
+      const found = byGlyph.get(base)?.dots.find((d) => d.part === dot);
+      return found ? [found.dx, found.dy] : undefined;
+    },
+    inline: (glyph) => {
+      const out: Record<string, Offset> = {};
+      for (const d of byGlyph.get(glyph)?.dots ?? [])
+        if (d.part.includes(":")) out[d.part] = [d.dx, d.dy];
+      return out;
+    },
+  };
+}
+
 /** The lab's data, fonts and the owner's notes and offsets, with shaping cached per cell. */
 export class Model {
   readonly letters: Map<string, Letter>;
   readonly marks: Map<string, MarkSequence>;
   private readonly layouts = new Map<string, Layout>();
   private readonly analyses = new Map<string, Analysis>();
+  private readonly partOutlines = new Map<string, Contour[]>();
+  private readonly fontEnvelopes = new Map<string, Envelope & { cells: Map<string, Cell> }>();
+  private moves: GlyphMoves = NO_MOVES;
+  private overridesValue: Overrides = { glyphs: [], marks: [] };
 
   constructor(
     readonly data: LabData,
     readonly fonts: Fonts,
     public state: ViewState,
     public notes: Note[],
-    public overrides: Override[],
+    overrides: Overrides,
   ) {
     this.letters = new Map(data.matrix.letters.map((l) => [l.codepoint, l]));
     this.marks = new Map(
       [NO_MARK, ...data.matrix.everyday, ...data.matrix.niche].map((m) => [m.id, m]),
     );
+    this.overrides = overrides;
+  }
+
+  get overrides(): Overrides {
+    return this.overridesValue;
+  }
+
+  /** Setting the overrides drops every cached analysis, since offsets feed them all. */
+  set overrides(value: Overrides) {
+    this.overridesValue = value;
+    this.moves = glyphMoves(value);
+    this.analyses.clear();
   }
 
   get upm(): number {
@@ -92,12 +143,43 @@ export class Model {
     return script === "arabic" ? "notoArabic" : "notoSans";
   }
 
+  facts(choice: FontChoice): GlyphFacts {
+    const font = this.arabicFont(choice);
+    return {
+      isBase: (gid) => font.isBase(gid),
+      isMark: (gid) => font.isMark(gid),
+      name: (gid) => font.name(gid),
+    };
+  }
+
+  /** Whether glyph overrides are drawn: on the calibrated font, with offsets shown. */
+  editing(choice: FontChoice): boolean {
+    return choice === "calib" && this.state.offsets;
+  }
+
   selected(): Cell | null {
     const { letter, form, mark } = this.state;
     const l = letter ? this.letters.get(letter) : undefined;
     const m = this.marks.get(mark) ?? NO_MARK;
     if (!l || !form || !l.forms.includes(form)) return null;
     return { letter: l, form, mark: m };
+  }
+
+  letterForm(letter: Letter, form: Form): LetterForm | undefined {
+    return this.data.letterForms[formId(letter, form)];
+  }
+
+  glyphInfo(name: string): GlyphInfo | undefined {
+    return this.data.glyphs[name];
+  }
+
+  /** The letter forms whose body is `glyph`, as "beh initial". */
+  usedBy(glyph: string): string[] {
+    const out: string[] = [];
+    for (const letter of this.data.matrix.letters)
+      for (const form of letter.forms)
+        if (this.letterForm(letter, form)?.body === glyph) out.push(`${letter.name} ${form}`);
+    return out;
   }
 
   layout(choice: FontChoice, cell: Cell): Layout {
@@ -107,7 +189,20 @@ export class Model {
       const font = this.arabicFont(choice);
       const shaped = font.shape(cellCodepoints(cell.letter.char, cell.form, cell.mark.codepoints));
       const bare = font.shape(cellCodepoints(cell.letter.char, cell.form, []));
-      result = layout(shaped, bare, (gid) => font.isBase(gid));
+      result = layout(shaped, bare, this.facts(choice));
+      this.layouts.set(id, result);
+    }
+    return result;
+  }
+
+  lineLayout(choice: FontChoice, text: string): Layout {
+    const id = `${choice}|line|${text}`;
+    let result = this.layouts.get(id);
+    if (!result) {
+      const font = this.arabicFont(choice);
+      const codepoints: number[] = [];
+      for (const char of text) codepoints.push(char.codePointAt(0) ?? 0);
+      result = lineLayout(font.shape(codepoints), this.facts(choice));
       this.layouts.set(id, result);
     }
     return result;
@@ -115,27 +210,67 @@ export class Model {
 
   override(cell: Cell): Override | undefined {
     const id = keyId(cellKey(cell));
-    return this.overrides.find((o) => keyId(o.key) === id);
+    return this.overrides.marks.find((o) => keyId(o.key) === id);
   }
 
-  /** The offsets drawn for a cell: its proposal, when shown and on the calibrated font. */
-  offsets(choice: FontChoice, cell: Cell): Offsets {
-    if (choice !== "calib" || !this.state.offsets) return {};
+  /** The cell's per-cell mark offsets, when shown and on the calibrated font. */
+  markOffsets(choice: FontChoice, cell: Cell): Offsets {
+    if (!this.editing(choice)) return {};
     const entry = this.override(cell);
     if (!entry) return {};
     return Object.fromEntries(entry.marks.map((m) => [m.index, [m.dx, m.dy] as const]));
   }
 
+  placements(choice: FontChoice, cell: Cell): Placement[] {
+    const moves = this.editing(choice) ? this.moves : NO_MOVES;
+    return placements(this.layout(choice, cell), moves, this.markOffsets(choice, cell));
+  }
+
+  linePlacements(choice: FontChoice, line: Layout): Placement[] {
+    return placements(line, this.editing(choice) ? this.moves : NO_MOVES);
+  }
+
+  /** One part's outline from the glyph table, placed at (x, y). */
+  partInk(glyph: string, part: string, x: number, y: number): Contour[] {
+    return translate(this.partOutline(glyph, part), x, y);
+  }
+
+  /** A part's outline from the glyph table, unplaced. */
+  private partOutline(glyph: string, part: string): Contour[] {
+    const id = `${glyph}|${part}`;
+    let contours = this.partOutlines.get(id);
+    if (!contours) {
+      const d = this.glyphInfo(glyph)?.parts.find((p) => p.id === part)?.d ?? "";
+      contours = flatten(parsePath(d));
+      this.partOutlines.set(id, contours);
+    }
+    return contours;
+  }
+
+  /** Placed outlines, splitting a glyph into its parts when a part inside it moves. */
+  ink(choice: FontChoice): Ink {
+    const font = this.arabicFont(choice);
+    return (piece, placement) => {
+      const x = piece.x + placement.dx;
+      const y = piece.y + placement.dy;
+      const moved = Object.entries(placement.parts).filter(([, [dx, dy]]) => dx !== 0 || dy !== 0);
+      const info = moved.length ? this.glyphInfo(piece.name) : undefined;
+      if (!info) return translate(font.outline(piece.gid), x, y);
+      return info.parts.flatMap((part) => {
+        const [px, py] = placement.parts[part.id] ?? [0, 0];
+        return translate(this.partOutline(piece.name, part.id), x + px, y + py);
+      });
+    };
+  }
+
   analysis(choice: FontChoice, cell: Cell): Analysis {
-    const offsets = this.offsets(choice, cell);
-    const id = `${choice}|${cellId(cell)}|${JSON.stringify(offsets)}`;
+    const id = `${choice}|${cellId(cell)}|${this.state.offsets}`;
     let result = this.analyses.get(id);
     if (!result) {
-      const font = this.arabicFont(choice);
       result = analyse(
         this.layout(choice, cell),
-        (gid) => font.outline(gid),
-        offsets,
+        this.ink(choice),
+        this.placements(choice, cell),
         this.clearanceUnits,
       );
       this.analyses.set(id, result);
@@ -145,16 +280,11 @@ export class Model {
 
   /** The cell's ink box, cheaper than a full analysis. */
   box(choice: FontChoice, cell: Cell, withOffsets = true): Box | null {
-    const font = this.arabicFont(choice);
-    const offsets = withOffsets ? this.offsets(choice, cell) : {};
-    let box: Box | null = null;
-    for (const piece of this.layout(choice, cell).pieces) {
-      box = unionBox(
-        box,
-        pieceBox(piece, (gid) => font.outline(gid), offsets),
-      );
-    }
-    return box;
+    const cellLayout = this.layout(choice, cell);
+    const placed = withOffsets
+      ? this.placements(choice, cell)
+      : placements(cellLayout, NO_MOVES, {});
+    return layoutBox(cellLayout, this.ink(choice), placed);
   }
 
   /** Whether ordinary spelling puts the mark sequence on the letter (`sawa lab fonts` decides). */
@@ -194,12 +324,26 @@ export class Model {
     return { ...envelope(extents), cells };
   }
 
+  /** The everyday envelope as the font draws it, without any edits; it never changes. */
+  fontEnvelope(
+    choice: FontChoice,
+    includeImpossible = this.state.impossible,
+  ): Envelope & { cells: Map<string, Cell> } {
+    const id = `${choice}|${includeImpossible}`;
+    let result = this.fontEnvelopes.get(id);
+    if (!result) {
+      result = this.arabicEnvelope(choice, includeImpossible, false);
+      this.fontEnvelopes.set(id, result);
+    }
+    return result;
+  }
+
   /**
    * The owner's approved line box, centred on the calibrated font's plausible
    * everyday envelope as drawn by the font itself.
    */
   approvedLineBox(): { top: number; bottom: number; height: number } {
-    const env = this.arabicEnvelope("calib", false, false);
+    const env = this.fontEnvelope("calib", false);
     const height = this.data.approvedLineBox.height * this.upm;
     const extra = (height - (env.top - env.bottom)) / 2;
     return { top: env.top + extra, bottom: env.bottom - extra, height };
@@ -209,11 +353,7 @@ export class Model {
     const font = this.latinFont(choice);
     const ink = (char: string) => {
       const [glyph] = font.shape([char.codePointAt(0) ?? 0]);
-      const gid = glyph?.gid ?? 0;
-      return unionBox(
-        null,
-        pieceBox({ gid, kind: "base", mark: -1, x: 0, y: 0 }, (g) => font.outline(g), {}),
-      );
+      return bounds(font.outline(glyph?.gid ?? 0));
     };
     const tops = LATIN_TOP.map((c) => ({ c, y: ink(c)?.y1 ?? 0 })).toSorted((a, b) => b.y - a.y);
     const bottoms = LATIN_BOTTOM.map((c) => ({ c, y: ink(c)?.y0 ?? 0 })).toSorted(

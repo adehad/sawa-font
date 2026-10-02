@@ -499,15 +499,21 @@ circle.pending {
 
 .offset-row {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 2px 8px;
   align-items: center;
   margin-block-end: 6px;
 }
 
 .glyph-name {
+  flex-basis: 100%;
   font-family: ui-monospace, monospace;
   font-size: 12px;
-  min-inline-size: 7em;
+}
+
+.envelope tr.as-built.changed {
+  color: var(--approved);
+  font-weight: 600;
 }
 
 .note-form {
@@ -754,6 +760,103 @@ dialog {
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--line);
+}
+
+.ink-line {
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-dasharray: 14 10;
+}
+
+.ink-label {
+  fill: var(--accent);
+  font-family: var(--sans);
+}
+
+.anchor {
+  stroke: var(--approved);
+  stroke-width: 5;
+  fill: none;
+}
+
+.handle-body {
+  fill: color-mix(in srgb, var(--ink) 12%, transparent);
+  stroke: var(--ink);
+}
+
+.handle-dots {
+  fill: color-mix(in srgb, var(--approved) 25%, transparent);
+  stroke: var(--approved);
+}
+
+.side h4 {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.drag-modes {
+  flex-wrap: wrap;
+  margin-block-end: 4px;
+}
+
+.drag-modes legend {
+  font-weight: 600;
+  margin-inline-end: 6px;
+  float: inline-start;
+}
+
+.small-button {
+  padding: 1px 6px;
+  font-size: 12px;
+}
+
+.shared {
+  border-inline-start: 3px solid var(--mark);
+  padding-inline-start: 6px;
+}
+
+.envelope tr.as-built {
+  color: var(--muted);
+}
+
+.edge-lines {
+  margin-block-start: 14px;
+}
+
+.edge-lines .lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edge-lines .line {
+  border-block-end: 1px solid var(--line);
+  padding-block-end: 4px;
+}
+
+.line-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.line-samples {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  overflow-x: auto;
+}
+
+.line-samples svg {
+  flex: none;
+}
+
+.credit {
+  color: var(--muted);
 }
 
 @media (width < 900px) {

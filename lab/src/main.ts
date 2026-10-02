@@ -1,13 +1,25 @@
 import "./style.css";
-import { type Layout, type Offsets, analyse, pieceBox, pieceOffset } from "./cells";
+import { type Layout, type Placement, analyse, layoutBox } from "./cells";
 import { h, s } from "./dom";
+import {
+  History,
+  type Offset,
+  type PartRef,
+  type Stamp,
+  moveBy,
+  offsetOf,
+  refId,
+  resetPart,
+} from "./edits";
 import { em, lineBox } from "./envelope";
+import { bounds } from "./geometry";
 import { HbFont, harfbuzzVersion } from "./hb";
 import { type Cell, Model, cellKey } from "./model";
-import { type View, parseState, serializeState } from "./state";
+import { DRAG_MODES, type DragMode, type View, parseState, serializeState } from "./state";
 import {
   type Note,
-  type Override,
+  type NotePart,
+  type Overrides,
   STATUSES,
   type Severity,
   type Status,
@@ -27,12 +39,21 @@ import {
   saveOverrides,
 } from "./store";
 import { summary } from "./summary";
-import { type FontChoice, type Form, type LabData, NO_MARK } from "./types";
+import { type EdgeLine, type FontChoice, type Form, type LabData, NO_MARK } from "./types";
 
 const BASE = import.meta.env.BASE_URL;
 /** Inspector scale: 0.3 px per font unit puts the em at 300 px. */
 const INSPECTOR_SCALE = 0.3;
 const CONTEXT_SCALE = 0.11;
+/** Edge-case lines at reading size (24 px per em) and large (64 px per em). */
+const READING_SCALE = 0.024;
+const LARGE_SCALE = 0.064;
+
+const DRAG_LABELS: Record<DragMode, string> = {
+  mark: "Marks",
+  letter: "Whole letter",
+  dot: "Dots",
+};
 
 async function fetchBytes(path: string): Promise<ArrayBuffer> {
   const response = await fetch(`${BASE}fonts/${path}`);
@@ -112,13 +133,46 @@ function download(name: string, value: unknown): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function center(box: { x0: number; y0: number; x1: number; y1: number }): [number, number] {
+  return [(box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2];
+}
+
+/** One movable part of a cell, with where it is drawn. */
+interface CellPart {
+  ref: PartRef;
+  label: string;
+  kind: "body" | "dots" | "mark";
+  /** The layout piece the part is, or lives in. */
+  piece: number;
+  /** A dot group drawn inside the piece's glyph. */
+  inline?: string;
+}
+
+interface CellParts {
+  body?: CellPart;
+  dots: CellPart[];
+  marks: CellPart[];
+}
+
+/** One cell drawn on the inspector canvas. */
+interface Drawn {
+  cell: Cell;
+  x: number;
+  layout: Layout;
+  parts: CellParts;
+  glyphs: SVGGElement;
+  ink: SVGGElement;
+}
+
 class App {
   private readonly defs = s("defs");
   private readonly defined = new Set<string>();
   private readonly root = document.querySelector("#app") as HTMLElement;
   private readonly live = h("p", { class: "visually-hidden", "aria-live": "polite" });
-  private pending: { x: number; y: number } | null = null;
+  private readonly history = new History();
+  private pending: { x: number; y: number; part?: NotePart } | null = null;
   private focusCell: string | null = null;
+  private envelopeQueued = false;
 
   constructor(private readonly model: Model) {}
 
@@ -131,6 +185,7 @@ class App {
       this.model.state = parseState(location.search);
       this.render();
     });
+    document.addEventListener("keydown", (event) => this.historyKeys(event));
     this.render();
   }
 
@@ -146,6 +201,60 @@ class App {
     this.render();
   }
 
+  private stamp(): Stamp {
+    return {
+      build: this.model.data.build,
+      wght: this.model.data.wght,
+      now: new Date().toISOString(),
+      usedBy: (glyph) => this.model.usedBy(glyph),
+    };
+  }
+
+  /** Makes `next` the overrides, recording `before` for undo. */
+  private commit(before: Overrides, next: Overrides): void {
+    if (JSON.stringify(before) === JSON.stringify(next)) {
+      this.model.overrides = next;
+      this.render();
+      return;
+    }
+    this.history.push(before);
+    this.model.overrides = next;
+    saveOverrides(next);
+    this.render();
+  }
+
+  private undo(): void {
+    const previous = this.history.undo(this.model.overrides);
+    if (!previous) return;
+    this.model.overrides = previous;
+    saveOverrides(previous);
+    this.announce("Undone");
+    this.render();
+  }
+
+  private redo(): void {
+    const next = this.history.redo(this.model.overrides);
+    if (!next) return;
+    this.model.overrides = next;
+    saveOverrides(next);
+    this.announce("Redone");
+    this.render();
+  }
+
+  private historyKeys(event: KeyboardEvent): void {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("textarea, input[type='text'], input:not([type])")) return;
+    const key = event.key.toLowerCase();
+    if (key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      this.undo();
+    } else if ((key === "z" && event.shiftKey) || key === "y") {
+      event.preventDefault();
+      this.redo();
+    }
+  }
+
   private glyphRef(fontKey: string, font: HbFont, gid: number): string {
     const id = `g-${fontKey}-${gid}`;
     if (!this.defined.has(id)) {
@@ -155,23 +264,70 @@ class App {
     return `#${id}`;
   }
 
-  /** The cell's glyphs as <use> elements in a y-up group, marks tagged for styling. */
-  private drawCell(choice: FontChoice, cell: Cell, offsets: Offsets, x = 0): SVGGElement {
+  private partRef(glyph: string, part: string, d: string): string {
+    const id = `p-${glyph}-${part}`.replace(/[^\w-]/g, "_");
+    if (!this.defined.has(id)) {
+      this.defs.append(s("path", { id, d }));
+      this.defined.add(id);
+    }
+    return `#${id}`;
+  }
+
+  /**
+   * Pieces as <use> elements in a y-up group, marks tagged for styling. A
+   * glyph with a moved dot group inside it is drawn part by part.
+   */
+  private drawPieces(
+    choice: FontChoice,
+    cellLayout: Layout,
+    placed: Placement[],
+    x = 0,
+  ): SVGGElement {
     const font = this.model.arabicFont(choice);
     const key = this.model.fontKey(choice, "arabic");
     const group = s("g", { transform: `translate(${x} 0)` });
-    for (const piece of this.model.layout(choice, cell).pieces) {
-      const [dx, dy] = pieceOffset(piece, offsets);
-      group.append(
-        s("use", {
-          href: this.glyphRef(key, font, piece.gid),
-          transform: `translate(${piece.x + dx} ${piece.y + dy})`,
-          class: piece.kind === "mark" ? "ink-mark" : "ink-base",
-          "data-mark": piece.kind === "mark" ? piece.mark : null,
-        }),
-      );
-    }
+    cellLayout.pieces.forEach((piece, i) => {
+      const at = placed[i] ?? { dx: 0, dy: 0, parts: {} };
+      const cls = piece.kind === "mark" ? "ink-mark" : "ink-base";
+      const mark = piece.kind === "mark" ? piece.mark : null;
+      const transform = `translate(${piece.x + at.dx} ${piece.y + at.dy})`;
+      const split = Object.values(at.parts).some(([dx, dy]) => dx !== 0 || dy !== 0);
+      const info = split ? this.model.glyphInfo(piece.name) : undefined;
+      if (!info) {
+        group.append(
+          s("use", {
+            href: this.glyphRef(key, font, piece.gid),
+            transform,
+            class: cls,
+            "data-mark": mark,
+            "data-piece": i,
+          }),
+        );
+        return;
+      }
+      const parts = s("g", { transform, class: cls, "data-piece": i });
+      for (const part of info.parts) {
+        const [px, py] = at.parts[part.id] ?? [0, 0];
+        parts.append(
+          s("use", {
+            href: this.partRef(piece.name, part.id, part.d ?? ""),
+            transform: `translate(${px} ${py})`,
+          }),
+        );
+      }
+      group.append(parts);
+    });
     return group;
+  }
+
+  /** The cell's glyphs as <use> elements in a y-up group. */
+  private drawCell(choice: FontChoice, cell: Cell, x = 0): SVGGElement {
+    return this.drawPieces(
+      choice,
+      this.model.layout(choice, cell),
+      this.model.placements(choice, cell),
+      x,
+    );
   }
 
   private drawText(
@@ -217,6 +373,16 @@ class App {
       ? this.root.querySelector<HTMLElement>(`[data-focus-id="${CSS.escape(activeId)}"]`)
       : null;
     target?.focus({ preventScroll: true });
+  }
+
+  /** Redraws the envelope panel on the next frame, for live edits. */
+  private queueEnvelope(): void {
+    if (this.envelopeQueued) return;
+    this.envelopeQueued = true;
+    requestAnimationFrame(() => {
+      this.envelopeQueued = false;
+      this.root.querySelector("section.envelope")?.replaceWith(this.envelopePanel());
+    });
   }
 
   private header(): HTMLElement {
@@ -343,7 +509,7 @@ class App {
         ),
         h(
           "label",
-          { title: "Draw the offsets you proposed by dragging marks" },
+          { title: "Draw the letters, dots and marks you moved" },
           offsets,
           " Proposed offsets",
         ),
@@ -405,8 +571,11 @@ class App {
         const value: unknown = JSON.parse(texts[i] ?? "");
         const schema = (value as { schema?: unknown }).schema;
         if (schema === "sawa-lab/overrides") {
-          this.model.overrides = mergeOverrides(this.model.overrides, parseOverrides(value));
-          saveOverrides(this.model.overrides);
+          const before = this.model.overrides;
+          const next = mergeOverrides(before, parseOverrides(value));
+          this.history.push(before);
+          this.model.overrides = next;
+          saveOverrides(next);
         } else {
           this.model.notes = mergeNotes(this.model.notes, parseAnnotations(value));
           saveNotes(this.model.notes);
@@ -417,7 +586,6 @@ class App {
         alert(`${file.name}: ${(error as Error).message}`);
       }
     }
-    this.model.invalidate();
     this.render();
   }
 
@@ -462,6 +630,9 @@ class App {
     const box = lineBox(latin, arabic);
     const latinBox = lineBox(latin);
     const approved = model.approvedLineBox();
+    const edited = model.editing(choice) && model.overrides.glyphs.length > 0;
+    const asBuilt = model.fontEnvelope(choice);
+    const builtBox = lineBox(latin, asBuilt);
     const chip = (id: string, value: number) => {
       const cell = arabic.cells.get(id);
       if (!cell) return null;
@@ -485,6 +656,15 @@ class App {
       );
       return h("li", {}, button);
     };
+    const row = (label: string, top: number, bottom: number, cls?: string, unit = "") =>
+      h(
+        "tr",
+        cls ? { class: cls } : {},
+        h("th", { scope: "row" }, label),
+        h("td", {}, em(top, upm)),
+        h("td", {}, em(bottom, upm)),
+        h("td", {}, `${em(top - bottom, upm)}${unit}`),
+      );
     return h(
       "section",
       { class: "envelope", "aria-labelledby": "envelope-title" },
@@ -500,6 +680,7 @@ class App {
             { class: "muted" },
             choice === "calib" ? "calibrated" : "source",
             this.state.impossible ? ", impossible combinations included" : "",
+            edited ? ", with your edits" : "",
           ),
         ),
         h(
@@ -528,21 +709,16 @@ class App {
               h("td", {}, em(latin.bottom, upm)),
               h("td", {}, em(latinBox.height, upm)),
             ),
+            row(edited ? "Arabic everyday, edited" : "Arabic everyday", arabic.top, arabic.bottom),
+            row("Arabic everyday, as built", asBuilt.top, asBuilt.bottom, "as-built"),
+            row("Line box both need", box.top, box.bottom, "total", " em"),
             h(
               "tr",
-              {},
-              h("th", { scope: "row" }, "Arabic everyday"),
-              h("td", {}, em(arabic.top, upm)),
-              h("td", {}, em(arabic.bottom, upm)),
-              h("td", {}, em(arabic.top - arabic.bottom, upm)),
-            ),
-            h(
-              "tr",
-              { class: "total" },
-              h("th", { scope: "row" }, "Line box both need"),
-              h("td", {}, em(box.top, upm)),
-              h("td", {}, em(box.bottom, upm)),
-              h("td", {}, `${em(box.height, upm)} em`),
+              { class: `as-built${edited ? " changed" : ""}`, "data-testid": "line-box-change" },
+              h("th", { scope: "row" }, "Change from as built"),
+              h("td", {}, em(box.top - builtBox.top, upm)),
+              h("td", {}, em(box.bottom - builtBox.bottom, upm)),
+              h("td", {}, `${em(box.height - builtBox.height, upm)} em`),
             ),
             h(
               "tr",
@@ -708,7 +884,7 @@ class App {
   private verticalRange(choice: FontChoice): { top: number; bottom: number } {
     const arabic = this.model.arabicEnvelope(choice);
     const latin = this.model.latinEnvelope(choice);
-    const box = lineBox(arabic, latin);
+    const box = lineBox(arabic, latin, this.model.fontEnvelope(choice));
     return { top: box.top + 60, bottom: box.bottom - 60 };
   }
 
@@ -718,7 +894,6 @@ class App {
     range: { top: number; bottom: number },
     cls: string,
   ): SVGSVGElement {
-    const offsets = this.model.offsets(choice, cell);
     const box = this.model.box(choice, cell);
     const advance = this.model.layout(choice, cell).advance;
     const x0 = Math.min(0, box?.x0 ?? 0) - 60;
@@ -727,7 +902,7 @@ class App {
       "g",
       { transform: "scale(1 -1)" },
       s("line", { x1: x0, x2: x1, y1: 0, y2: 0, class: "baseline" }),
-      this.drawCell(choice, cell, offsets),
+      this.drawCell(choice, cell),
     );
     return s(
       "svg",
@@ -754,7 +929,7 @@ class App {
       : analysis.clash
         ? `clash ${analysis.gap === 0 ? "touching" : em(analysis.gap, upm, 3)}`
         : `clear ${Number.isFinite(analysis.gap) ? em(analysis.gap, upm, 3) : "far"}`;
-    const hasOffset = choice === "calib" && model.override(cell) !== undefined;
+    const hasOffset = choice === "calib" && this.cellMoved(cell);
     const notes = model.notes.filter((n) => keyId(n.key) === keyId(cellKey(cell))).length;
     const id = `${cell.letter.codepoint}|${cell.form}`;
     const impossible = !model.plausible(cell.letter, cell.mark);
@@ -777,6 +952,13 @@ class App {
     );
     button.addEventListener("click", () => this.select(cell));
     return button;
+  }
+
+  /** Whether any part of the cell has been moved, by a glyph or a mark override. */
+  private cellMoved(cell: Cell): boolean {
+    if (this.model.override(cell)) return true;
+    const form = this.model.letterForm(cell.letter, cell.form);
+    return this.model.overrides.glyphs.some((o) => form?.glyphs.includes(o.glyph));
   }
 
   private overviewCell(
@@ -886,6 +1068,66 @@ class App {
     document.querySelector("#inspector")?.scrollIntoView({ block: "start" });
   }
 
+  /** The cell's movable parts: its body, its dot groups and its marks. */
+  private cellParts(choice: FontChoice, cell: Cell): CellParts {
+    const model = this.model;
+    const cellLayout = model.layout(choice, cell);
+    const font = model.arabicFont(choice);
+    const form = model.letterForm(cell.letter, cell.form);
+    const inked = (i: number) => font.outline(cellLayout.pieces[i]?.gid ?? 0).length > 0;
+    const bodyIndex = cellLayout.pieces.findIndex(
+      (p, i) => p.kind === "base" && p.owner === i && inked(i) && p.name === form?.body,
+    );
+    const result: CellParts = { dots: [], marks: [] };
+    const bodyPiece = cellLayout.pieces[bodyIndex];
+    if (bodyPiece) {
+      result.body = {
+        ref: { kind: "body", glyph: bodyPiece.name },
+        label: bodyPiece.name,
+        kind: "body",
+        piece: bodyIndex,
+      };
+      for (const part of model.glyphInfo(bodyPiece.name)?.parts ?? []) {
+        if (part.kind === "body") continue;
+        result.dots.push({
+          ref: { kind: "dots", glyph: bodyPiece.name, part: part.id },
+          label: part.label,
+          kind: "dots",
+          piece: bodyIndex,
+          inline: part.id,
+        });
+      }
+    }
+    cellLayout.pieces.forEach((piece, i) => {
+      if (piece.kind === "mark" && inked(i)) {
+        result.marks.push({
+          ref: {
+            kind: "mark",
+            key: cellKey(cell),
+            index: piece.mark,
+            glyph: piece.name,
+            ...(bodyPiece ? { base: bodyPiece.name } : {}),
+          },
+          label: piece.name,
+          kind: "mark",
+          piece: i,
+        });
+      } else if (bodyPiece && piece.owner === bodyIndex && i !== bodyIndex && piece.adjacent) {
+        const part = form?.parts.find((p) => p.id === piece.name);
+        result.dots.push({
+          ref: { kind: "dots", glyph: bodyPiece.name, part: piece.name },
+          label: part?.label ?? piece.name,
+          kind: "dots",
+          piece: i,
+        });
+      }
+    });
+    result.marks.sort((a, b) =>
+      a.ref.kind === "mark" && b.ref.kind === "mark" ? a.ref.index - b.ref.index : 0,
+    );
+    return result;
+  }
+
   private inspector(): HTMLElement | null {
     const model = this.model;
     const cell = model.selected();
@@ -896,9 +1138,7 @@ class App {
         h("p", {}, "Pick a cell in the matrix to inspect it. Arrow keys move between cells."),
       );
     const choice = this.state.font;
-    const offsets = model.offsets(choice, cell);
     const analysis = model.analysis(choice, cell);
-    const upm = model.upm;
     const close = h(
       "button",
       { type: "button", class: "close", "data-focus-id": "close" },
@@ -908,17 +1148,10 @@ class App {
     const readout = h(
       "p",
       { class: "readout", "aria-live": "polite" },
-      !analysis.hasMarks
-        ? "No mark"
-        : analysis.clash
-          ? h(
-              "strong",
-              { class: "bad" },
-              `Clash: gap ${em(analysis.gap, upm, 3)} em under ${model.data.clearance} em`,
-            )
-          : `Clear: gap ${Number.isFinite(analysis.gap) ? em(analysis.gap, upm, 3) : "> 0.2"} em`,
-      ` · ink top ${em(analysis.top, upm)} em, bottom ${em(analysis.bottom, upm)} em`,
+      this.readoutText(choice, cell),
     );
+    if (analysis.clash)
+      readout.replaceChildren(h("strong", { class: "bad" }, this.readoutText(choice, cell)));
     return h(
       "section",
       { id: "inspector", class: "inspector", "aria-labelledby": "inspector-title" },
@@ -946,12 +1179,30 @@ class App {
       h(
         "div",
         { class: "inspector-body" },
-        this.canvas(cell, choice, offsets, readout),
-        this.sidePanel(cell, choice, offsets),
+        this.canvas([cell], choice, readout),
+        this.sidePanel(cell, choice),
       ),
+      this.edgeLines(cell, choice),
       this.contextRow(cell),
       this.readingSizes(cell),
     );
+  }
+
+  private readoutText(choice: FontChoice, cell: Cell): string {
+    const model = this.model;
+    const upm = model.upm;
+    const live = analyse(
+      model.layout(choice, cell),
+      model.ink(choice),
+      model.placements(choice, cell),
+      model.clearanceUnits,
+    );
+    const ink = ` · ink top ${em(live.top, upm)} em, bottom ${em(live.bottom, upm)} em`;
+    if (!live.hasMarks) return `No mark${ink}`;
+    const gap = Number.isFinite(live.gap) ? em(live.gap, upm, 3) : "> 0.2";
+    return live.clash
+      ? `Clash: gap ${gap} em under ${model.data.clearance} em${ink}`
+      : `Clear: gap ${gap} em${ink}`;
   }
 
   private gridLines(width: number, x0: number, choice: FontChoice, labelSize = 34): SVGGElement {
@@ -992,48 +1243,72 @@ class App {
     );
   }
 
-  private canvas(
-    cell: Cell,
-    choice: FontChoice,
-    offsets: Offsets,
-    readout: HTMLElement,
-  ): HTMLElement {
+  /** The handles the drag mode offers on one drawn cell, each with where it sits. */
+  private handlesFor(drawn: Drawn): CellPart[] {
+    const mode = this.state.drag;
+    if (mode === "letter") return drawn.parts.body ? [drawn.parts.body] : [];
+    if (mode === "dot") return drawn.parts.dots;
+    return drawn.parts.marks;
+  }
+
+  /** Where a part's ink is centred, in the drawn cell's font units. */
+  private partCenter(drawn: Drawn, part: CellPart, choice: FontChoice): [number, number] | null {
+    const model = this.model;
+    const piece = drawn.layout.pieces[part.piece];
+    const at = model.placements(choice, drawn.cell)[part.piece];
+    if (!piece || !at) return null;
+    let contours;
+    if (part.inline) {
+      const [px, py] = at.parts[part.inline] ?? [0, 0];
+      contours = model.partInk(piece.name, part.inline, piece.x + at.dx + px, piece.y + at.dy + py);
+    } else contours = model.ink(choice)(piece, at);
+    const box = bounds(contours);
+    return box ? center(box) : null;
+  }
+
+  private canvas(cells: Cell[], choice: FontChoice, readout: HTMLElement): HTMLElement {
     const model = this.model;
     const latinFont = model.latinFont(choice);
     const range = this.verticalRange(choice);
     const top = range.top + 120;
     const bottom = range.bottom - 60;
     const labels = 520;
-    const cellLayout: Layout = model.layout(choice, cell);
-    const box = model.box(choice, cell);
-    const clusterX = labels + 120 - Math.min(0, box?.x0 ?? 0);
-    const latinX = clusterX + Math.max(cellLayout.advance, box?.x1 ?? 0) + 200;
+    const editable = model.editing(choice);
+    const drawn: Drawn[] = [];
+    let x = labels + 120;
+    for (const cell of cells) {
+      const cellLayout = model.layout(choice, cell);
+      const box = model.box(choice, cell, false);
+      const cellX = x - Math.min(0, box?.x0 ?? 0);
+      drawn.push({
+        cell,
+        x: cellX,
+        layout: cellLayout,
+        parts: this.cellParts(choice, cell),
+        glyphs: s("g", {}),
+        ink: s("g", { class: "ink-lines" }),
+      });
+      x = cellX + Math.max(cellLayout.advance, box?.x1 ?? 0) + 260;
+    }
+    const latinX = x - 60;
     const latin = this.drawText(latinFont, model.fontKey(choice, "latin"), "Hxgy", latinX);
     const width = latinX + latin.advance + 120;
     const height = top - bottom;
+    const selected = model.selected();
     const svg = s("svg", {
       viewBox: `0 ${-top} ${width} ${height}`,
       width: Math.round(width * INSPECTOR_SCALE),
       height: Math.round(height * INSPECTOR_SCALE),
       class: "big",
       role: "img",
-      "aria-label": `${model.cellName(cell)} at 300 px per em on the Latin grid. Click to pin a note.`,
+      "aria-label": `${cells.map((c) => model.cellName(c)).join(", ")} at 300 px per em on the Latin grid. Click to pin a note.`,
     });
-    const glyphs = s(
-      "g",
-      { transform: "scale(1 -1)" },
-      latin.group,
-      this.drawCell(choice, cell, offsets, clusterX),
-    );
-    svg.append(this.gridLines(width, 0, choice), glyphs);
-    const font = model.arabicFont(choice);
-    const outline = (gid: number) => font.outline(gid);
-    const editable = choice === "calib" && this.state.offsets;
-    const markPieces = cellLayout.pieces.filter(
-      (p) => p.kind === "mark" && font.outline(p.gid).length > 0,
-    );
-    const current: Record<number, [number, number]> = {};
-    for (const piece of markPieces) current[piece.mark] = [...pieceOffset(piece, offsets)];
+    const glyphs = s("g", { transform: "scale(1 -1)" }, latin.group);
+    for (const d of drawn) glyphs.append(d.glyphs);
+    svg.append(this.gridLines(width, 0, choice));
+    for (const d of drawn) svg.append(d.ink);
+    svg.append(glyphs);
+    const handleLayer = s("g", { class: "handles" });
 
     const toFont = (event: PointerEvent | MouseEvent): [number, number] => {
       const ctm = svg.getScreenCTM();
@@ -1042,180 +1317,302 @@ class App {
       return [point.x, -point.y];
     };
 
-    for (const piece of markPieces) {
-      const pbox = pieceBox(piece, outline, current);
-      if (!pbox) continue;
-      const handle = s("circle", {
-        cx: clusterX + (pbox.x0 + pbox.x1) / 2,
-        cy: -(pbox.y0 + pbox.y1) / 2,
-        r: 34,
-        class: `handle${editable ? "" : " disabled"}`,
-        tabindex: editable ? 0 : -1,
-        role: "button",
-        "data-focus-id": `handle-${piece.mark}`,
-        "data-handle": piece.mark,
-        "aria-label": `Mark ${piece.mark + 1} (${font.name(piece.gid)}): drag or use arrow keys to move it; offset ${current[piece.mark]?.join(", ")}`,
-      });
-      if (editable) {
-        const update = (dx: number, dy: number, commit: boolean) => {
-          current[piece.mark] = [Math.round(dx), Math.round(dy)];
-          const use = glyphs.querySelector<SVGUseElement>(`use[data-mark="${piece.mark}"]`);
-          use?.setAttribute(
-            "transform",
-            `translate(${piece.x + (current[piece.mark]?.[0] ?? 0)} ${piece.y + (current[piece.mark]?.[1] ?? 0)})`,
-          );
-          const moved = pieceBox(piece, outline, current);
-          if (moved) {
-            handle.setAttribute("cx", String(clusterX + (moved.x0 + moved.x1) / 2));
-            handle.setAttribute("cy", String(-(moved.y0 + moved.y1) / 2));
-          }
-          const live = analyseLive(model, choice, cellLayout, current);
-          readout.textContent = `${live}  ·  offset ${current[piece.mark]?.join(", ")}`;
-          if (commit) this.saveOffsets(cell, current);
-        };
-        handle.addEventListener("pointerdown", (event) => {
-          event.stopPropagation();
-          handle.setPointerCapture(event.pointerId);
-          const [sx, sy] = toFont(event);
-          const [ox, oy] = current[piece.mark] ?? [0, 0];
-          const onMove = (e: PointerEvent) => {
-            const [x, y] = toFont(e);
-            update(ox + x - sx, oy + y - sy, false);
-          };
-          const onUp = () => {
-            handle.removeEventListener("pointermove", onMove);
-            handle.removeEventListener("pointerup", onUp);
-            this.saveOffsets(cell, current);
-          };
-          handle.addEventListener("pointermove", onMove);
-          handle.addEventListener("pointerup", onUp);
-        });
-        handle.addEventListener("keydown", (event) => {
-          const step = event.shiftKey ? 25 : 5;
-          const deltas: Record<string, [number, number]> = {
-            ArrowUp: [0, step],
-            ArrowDown: [0, -step],
-            ArrowLeft: [-step, 0],
-            ArrowRight: [step, 0],
-          };
-          const delta = deltas[event.key];
-          if (!delta) return;
-          event.preventDefault();
-          const [ox, oy] = current[piece.mark] ?? [0, 0];
-          update(ox + delta[0], oy + delta[1], true);
-        });
+    const handles: { el: SVGCircleElement; drawn: Drawn; part: CellPart }[] = [];
+    const redraw = () => {
+      for (const d of drawn) {
+        d.glyphs.replaceChildren(this.drawCell(choice, d.cell, d.x), this.anchorMarks(choice, d));
+        d.ink.replaceChildren(...this.inkLines(choice, d));
       }
-      svg.append(handle);
+      for (const { el, drawn: d, part } of handles) {
+        const at = this.partCenter(d, part, choice);
+        if (!at) continue;
+        el.setAttribute("cx", String(d.x + at[0]));
+        el.setAttribute("cy", String(-at[1]));
+      }
+      if (selected) readout.textContent = this.readoutText(choice, selected);
+    };
+
+    for (const d of drawn) {
+      for (const part of this.handlesFor(d)) {
+        const id = refId(part.ref);
+        const handle = s("circle", {
+          r: 34,
+          class: `handle handle-${part.kind}${editable ? "" : " disabled"}`,
+          tabindex: editable ? 0 : -1,
+          role: "button",
+          "data-focus-id": `handle-${id}`,
+          "data-handle": part.ref.kind === "mark" ? part.ref.index : null,
+          "data-part": id,
+          "aria-label": `${part.kind === "body" ? "Letter" : part.kind === "dots" ? "Dots" : "Mark"} ${part.label} of ${model.cellName(d.cell)}: drag or use arrow keys to move it; offset ${offsetOf(model.overrides, part.ref).join(", ")}`,
+        });
+        handles.push({ el: handle, drawn: d, part });
+        if (editable) this.wireHandle(handle, part.ref, toFont, redraw);
+        handleLayer.append(handle);
+      }
     }
 
-    const cellNotes = model.notes.filter((n) => keyId(n.key) === keyId(cellKey(cell)));
-    cellNotes.forEach((note, i) => {
-      const pin = s(
-        "g",
-        {
-          class: `pin sev-${note.severity}`,
-          transform: `translate(${clusterX + note.x} ${-note.y})`,
-        },
-        s("circle", { r: 30 }),
-        s("text", { "text-anchor": "middle", y: 12 }, String(i + 1)),
-      );
-      pin.addEventListener("click", (event) => {
-        event.stopPropagation();
-        this.root.querySelector<HTMLElement>(`[data-note="${note.id}"]`)?.focus();
+    if (selected) {
+      const home = drawn.find((d) => keyId(cellKey(d.cell)) === keyId(cellKey(selected)));
+      const cellNotes = home
+        ? model.notes.filter((n) => keyId(n.key) === keyId(cellKey(selected)))
+        : [];
+      cellNotes.forEach((note, i) => {
+        const pin = s(
+          "g",
+          {
+            class: `pin sev-${note.severity}`,
+            transform: `translate(${(home?.x ?? 0) + note.x} ${-note.y})`,
+          },
+          s("circle", { r: 30 }),
+          s("text", { "text-anchor": "middle", y: 12 }, String(i + 1)),
+        );
+        pin.addEventListener("click", (event) => {
+          event.stopPropagation();
+          this.root.querySelector<HTMLElement>(`[data-note="${note.id}"]`)?.focus();
+        });
+        svg.append(pin);
       });
-      svg.append(pin);
-    });
-    if (this.pending) {
-      svg.append(
-        s("circle", {
-          cx: clusterX + this.pending.x,
-          cy: -this.pending.y,
-          r: 30,
-          class: "pin pending",
-        }),
-      );
+      if (this.pending && home) {
+        svg.append(
+          s("circle", {
+            cx: home.x + this.pending.x,
+            cy: -this.pending.y,
+            r: 30,
+            class: "pin pending",
+          }),
+        );
+      }
+      svg.addEventListener("click", (event) => {
+        if ((event.target as Element).closest(".handle, .pin")) return;
+        const [fx, fy] = toFont(event);
+        if (!home) return;
+        const nx = Math.round(fx - home.x);
+        const ny = Math.round(fy);
+        this.pending = { x: nx, y: ny, ...this.nearestPart(choice, home, nx, ny) };
+        this.render();
+        this.root.querySelector<HTMLElement>("#note-tag")?.focus();
+      });
     }
-    svg.addEventListener("click", (event) => {
-      if ((event.target as Element).closest(".handle, .pin")) return;
-      const [x, y] = toFont(event);
-      this.pending = { x: Math.round(x - clusterX), y: Math.round(y) };
-      this.render();
-      this.root.querySelector<HTMLElement>("#note-tag")?.focus();
-    });
+    svg.append(handleLayer);
+    redraw();
     return h("div", { class: "canvas-wrap" }, svg);
   }
 
-  private saveOffsets(cell: Cell, current: Record<number, [number, number]>): void {
-    const font = this.model.arabicFont("calib");
-    const pieces = this.model.layout("calib", cell).pieces.filter((p) => p.kind === "mark");
-    const marks = pieces.map((p) => ({
-      index: p.mark,
-      glyph: font.name(p.gid),
-      dx: current[p.mark]?.[0] ?? 0,
-      dy: current[p.mark]?.[1] ?? 0,
-    }));
-    const id = keyId(cellKey(cell));
-    const rest = this.model.overrides.filter((o) => keyId(o.key) !== id);
-    const moved = marks.some((m) => m.dx !== 0 || m.dy !== 0);
-    const entry: Override = {
-      key: cellKey(cell),
-      build: this.model.data.build,
-      wght: this.model.data.wght,
-      marks,
-      updated: new Date().toISOString(),
-    };
-    this.model.overrides = moved ? [...rest, entry] : rest;
-    saveOverrides(this.model.overrides);
-    this.model.invalidate();
-    this.render();
+  /** The part whose ink is nearest a clicked point, for a new note. */
+  private nearestPart(choice: FontChoice, drawn: Drawn, x: number, y: number): { part?: NotePart } {
+    let best: { part: NotePart; distance: number } | null = null;
+    for (const part of [
+      ...(drawn.parts.body ? [drawn.parts.body] : []),
+      ...drawn.parts.dots,
+      ...drawn.parts.marks,
+    ]) {
+      const at = this.partCenter(drawn, part, choice);
+      if (!at) continue;
+      const distance = Math.hypot(at[0] - x, at[1] - y);
+      if (best && best.distance <= distance) continue;
+      best = { part: this.notePart(part), distance };
+    }
+    return best ? { part: best.part } : {};
   }
 
-  private sidePanel(cell: Cell, choice: FontChoice, offsets: Offsets): HTMLElement {
-    const model = this.model;
-    const font = model.arabicFont(choice);
-    const markPieces = model.layout(choice, cell).pieces.filter((p) => p.kind === "mark");
-    const editable = choice === "calib" && this.state.offsets;
-    const offsetFields = markPieces.map((piece) => {
-      const [dx, dy] = pieceOffset(piece, offsets);
-      const field = (axis: "x" | "y", value: number) => {
-        const input = h("input", {
-          type: "number",
-          step: 1,
-          value,
-          id: `offset-${piece.mark}-${axis}`,
-          disabled: !editable,
-          "data-focus-id": `offset-${piece.mark}-${axis}`,
-        });
-        input.addEventListener("change", () => {
-          const current: Record<number, [number, number]> = {};
-          for (const p of markPieces) current[p.mark] = [...pieceOffset(p, offsets)];
-          const entered = Math.round(Number(input.value) || 0);
-          const pair = current[piece.mark] ?? [0, 0];
-          current[piece.mark] = axis === "x" ? [entered, pair[1]] : [pair[0], entered];
-          this.saveOffsets(cell, current);
-        });
-        return h("label", { for: `offset-${piece.mark}-${axis}` }, `${axis} `, input);
+  private notePart(part: CellPart): NotePart {
+    const ref = part.ref;
+    if (ref.kind === "body") return { kind: "body", glyph: ref.glyph };
+    if (ref.kind === "dots") return { kind: "dots", glyph: ref.glyph, id: ref.part };
+    return { kind: "mark", glyph: ref.glyph, index: ref.index };
+  }
+
+  /** The refs an edit to `ref` moves together. */
+  protected linked(ref: PartRef): PartRef[] {
+    return [ref];
+  }
+
+  private wireHandle(
+    handle: SVGCircleElement,
+    ref: PartRef,
+    toFont: (event: PointerEvent) => [number, number],
+    redraw: () => void,
+  ): void {
+    handle.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      handle.setPointerCapture(event.pointerId);
+      const [sx, sy] = toFont(event);
+      const before = this.model.overrides;
+      const refs = this.linked(ref);
+      const stamp = this.stamp();
+      const onMove = (e: PointerEvent) => {
+        const [x, y] = toFont(e);
+        this.model.overrides = moveBy(before, refs, [x - sx, y - sy], stamp);
+        redraw();
+        this.queueEnvelope();
       };
-      return h(
+      const onUp = () => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onUp);
+        this.commit(before, this.model.overrides);
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onUp);
+    });
+    handle.addEventListener("click", (event) => event.stopPropagation());
+    handle.addEventListener("keydown", (event) => {
+      const step = event.shiftKey ? 25 : 5;
+      const deltas: Record<string, [number, number]> = {
+        ArrowUp: [0, step],
+        ArrowDown: [0, -step],
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+      };
+      const delta = deltas[event.key];
+      if (!delta) return;
+      event.preventDefault();
+      const before = this.model.overrides;
+      this.commit(before, moveBy(before, this.linked(ref), delta, this.stamp()));
+    });
+  }
+
+  /** Dashed lines at the cell's ink top and bottom, labelled in em. */
+  private inkLines(choice: FontChoice, drawn: Drawn): SVGElement[] {
+    const box = this.model.box(choice, drawn.cell);
+    if (!box) return [];
+    const x0 = drawn.x + Math.min(0, box.x0) - 40;
+    const x1 = drawn.x + Math.max(drawn.layout.advance, box.x1) + 40;
+    const upm = this.model.upm;
+    return [
+      ["ink top", box.y1],
+      ["ink bottom", box.y0],
+    ].flatMap(([label, y]) => [
+      s("line", {
+        x1: x0,
+        x2: x1,
+        y1: -(y as number),
+        y2: -(y as number),
+        class: "ink-line",
+      }),
+      s(
+        "text",
+        {
+          x: x0,
+          y: -(y as number) + (label === "ink top" ? -12 : 40),
+          class: "ink-label",
+          "font-size": 30,
+        },
+        `${label} ${em(y as number, upm)}`,
+      ),
+    ]);
+  }
+
+  /** The body glyph's attachment anchors, which move with it. */
+  private anchorMarks(choice: FontChoice, drawn: Drawn): SVGGElement {
+    const group = s("g", { class: "anchors" });
+    const body = drawn.parts.body;
+    if (!body || this.state.drag !== "letter") return group;
+    const piece = drawn.layout.pieces[body.piece];
+    const at = this.model.placements(choice, drawn.cell)[body.piece];
+    if (!piece || !at) return group;
+    for (const anchor of this.model.glyphInfo(piece.name)?.anchors ?? []) {
+      if (anchor.kind !== "base" && anchor.kind !== "ligature") continue;
+      const ax = drawn.x + piece.x + at.dx + anchor.x;
+      const ay = piece.y + at.dy + anchor.y;
+      group.append(
+        s(
+          "path",
+          { d: `M${ax - 18} ${ay}H${ax + 18}M${ax} ${ay - 18}V${ay + 18}`, class: "anchor" },
+          s("title", {}, `anchor ${anchor.x}, ${anchor.y} (${anchor.lookups.join(", ")})`),
+        ),
+      );
+    }
+    return group;
+  }
+
+  private sidePanel(cell: Cell, choice: FontChoice): HTMLElement {
+    const model = this.model;
+    const editable = model.editing(choice);
+    const parts = this.cellParts(choice, cell);
+    const modes = h(
+      "fieldset",
+      { class: "inline drag-modes" },
+      h("legend", {}, "Drag"),
+      ...DRAG_MODES.map((mode) => {
+        const input = h("input", {
+          type: "radio",
+          name: "drag",
+          value: mode,
+          checked: this.state.drag === mode,
+          "data-focus-id": `drag-${mode}`,
+        });
+        input.addEventListener("change", () => this.setState({ drag: mode }));
+        return h("label", {}, input, ` ${DRAG_LABELS[mode]}`);
+      }),
+    );
+    const field = (part: CellPart, axis: "x" | "y", id: string) => {
+      const [dx, dy] = offsetOf(model.overrides, part.ref);
+      const input = h("input", {
+        type: "number",
+        step: 1,
+        value: axis === "x" ? dx : dy,
+        id: `${id}-${axis}`,
+        disabled: !editable,
+        "data-focus-id": `${id}-${axis}`,
+      });
+      input.addEventListener("change", () => {
+        const before = model.overrides;
+        const [x, y] = offsetOf(before, part.ref);
+        const entered = Math.round(Number(input.value) || 0);
+        const target: Offset = axis === "x" ? [entered, y] : [x, entered];
+        const delta: Offset = [target[0] - x, target[1] - y];
+        this.commit(before, moveBy(before, this.linked(part.ref), delta, this.stamp()));
+      });
+      return h("label", { for: `${id}-${axis}` }, `${axis} `, input);
+    };
+    const reset = (part: CellPart, id: string) => {
+      const [dx, dy] = offsetOf(model.overrides, part.ref);
+      const button = h(
+        "button",
+        {
+          type: "button",
+          class: "small-button",
+          disabled: !editable || (dx === 0 && dy === 0),
+          "data-focus-id": `${id}-reset`,
+          "aria-label": `Reset ${part.label}`,
+        },
+        "Reset",
+      );
+      button.addEventListener("click", () => {
+        const before = model.overrides;
+        let next = before;
+        for (const ref of this.linked(part.ref)) next = resetPart(next, ref, this.stamp());
+        this.commit(before, next);
+      });
+      return button;
+    };
+    const rowFor = (part: CellPart, id: string, label: string) =>
+      h(
         "div",
         { class: "offset-row" },
-        h("span", { class: "glyph-name" }, font.name(piece.gid)),
-        field("x", dx),
-        field("y", dy),
+        h("span", { class: "glyph-name", title: part.label }, label),
+        field(part, "x", id),
+        field(part, "y", id),
+        reset(part, id),
       );
-    });
-    const reset = h(
+    const body = parts.body;
+    const shared = body ? model.usedBy(body.ref.kind === "body" ? body.ref.glyph : "") : [];
+    const undo = h(
       "button",
-      {
-        type: "button",
-        disabled: !editable || !model.override(cell),
-        "data-focus-id": "reset-offsets",
-      },
-      "Reset offsets",
+      { type: "button", disabled: !this.history.canUndo, "data-focus-id": "undo" },
+      "Undo",
     );
-    reset.addEventListener("click", () => this.saveOffsets(cell, {}));
+    undo.addEventListener("click", () => this.undo());
+    const redo = h(
+      "button",
+      { type: "button", disabled: !this.history.canRedo, "data-focus-id": "redo" },
+      "Redo",
+    );
+    redo.addEventListener("click", () => this.redo());
     const hint = editable
-      ? "Drag a mark's handle, or focus it and use the arrow keys (Shift for 25 units). Offsets are in font units at wght 400 and only change this preview."
+      ? "Drag a handle, or focus it and use the arrow keys (Shift for 25 units). Moving the letter moves its glyph with its dots and marks, as the font's anchors would; moving dots moves only them. Offsets are in font units at wght 400. Ctrl+Z undoes, Ctrl+Shift+Z redoes."
       : choice === "source"
         ? "Offsets apply to the calibrated font."
         : "Turn on proposed offsets to edit them.";
@@ -1225,18 +1622,42 @@ class App {
       h(
         "section",
         { "aria-labelledby": "offsets-title" },
-        h("h3", { id: "offsets-title" }, "Mark offsets"),
-        markPieces.length
-          ? h("div", {}, ...offsetFields, reset)
+        h("h3", { id: "offsets-title" }, "Move parts"),
+        modes,
+        h("h4", {}, "Letter"),
+        body
+          ? rowFor(body, "body", body.label)
+          : h("p", { class: "muted small" }, "No body glyph."),
+        shared.length > 1
+          ? h(
+              "p",
+              { class: "muted small shared" },
+              `This glyph is also ${shared.filter((u) => u !== `${cell.letter.name} ${cell.form}`).join(", ")}: moving it moves those too.`,
+            )
+          : null,
+        h("h4", {}, "Dots"),
+        parts.dots.length
+          ? h("div", {}, ...parts.dots.map((part, i) => rowFor(part, `dot-${i}`, part.label)))
+          : h("p", { class: "muted small" }, "No dots."),
+        h("h4", {}, "Marks"),
+        parts.marks.length
+          ? h(
+              "div",
+              {},
+              ...parts.marks.map((part) =>
+                rowFor(part, `offset-${part.ref.kind === "mark" ? part.ref.index : 0}`, part.label),
+              ),
+            )
           : h("p", { class: "muted" }, "This cell has no mark."),
+        h("div", { class: "row" }, undo, redo),
         h("p", { class: "muted small" }, hint),
       ),
-      this.noteForm(cell, choice),
+      this.noteForm(cell, choice, parts),
       this.cellNotes(cell),
     );
   }
 
-  private noteForm(cell: Cell, choice: FontChoice): HTMLElement {
+  private noteForm(cell: Cell, choice: FontChoice, parts: CellParts): HTMLElement {
     if (!this.pending)
       return h(
         "section",
@@ -1249,6 +1670,22 @@ class App {
       "select",
       { id: "note-tag", "data-focus-id": "note-tag" },
       ...TAGS.map((t) => h("option", { value: t }, TAG_LABELS[t])),
+    );
+    const options = [...(parts.body ? [parts.body] : []), ...parts.dots, ...parts.marks].map(
+      (part) => ({ part: this.notePart(part), label: `${part.kind}: ${part.label}` }),
+    );
+    const pendingId = pending.part ? JSON.stringify(pending.part) : "";
+    const partSelect = h(
+      "select",
+      { id: "note-part", "data-focus-id": "note-part" },
+      h("option", { value: "" }, "the whole cell"),
+      ...options.map((o) =>
+        h(
+          "option",
+          { value: JSON.stringify(o.part), selected: JSON.stringify(o.part) === pendingId },
+          o.label,
+        ),
+      ),
     );
     const severity = h(
       "fieldset",
@@ -1280,6 +1717,7 @@ class App {
       { class: "note-form", "aria-labelledby": "note-form-title" },
       h("h3", { id: "note-form-title" }, `New note at ${pending.x}, ${pending.y}`),
       h("label", { for: "note-tag" }, "Tag ", tag),
+      h("label", { for: "note-part" }, "About ", partSelect),
       severity,
       h("label", { for: "note-text" }, "Note ", text),
       h("label", { for: "note-status" }, "Status ", status),
@@ -1300,6 +1738,7 @@ class App {
         text: text.value,
         status: status.value as Status,
         created: new Date().toISOString(),
+        ...(partSelect.value ? { part: JSON.parse(partSelect.value) as NotePart } : {}),
       };
       this.model.notes = [...this.model.notes, note];
       saveNotes(this.model.notes);
@@ -1348,6 +1787,13 @@ class App {
         index !== null ? h("span", { class: "pin-number" }, String(index + 1)) : open,
         h("span", { class: "tag" }, TAG_LABELS[note.tag]),
         h("span", { class: "sev" }, `severity ${note.severity}`),
+        note.part
+          ? h(
+              "span",
+              { class: "muted small" },
+              `on ${note.part.kind} ${note.part.id ?? note.part.glyph}`,
+            )
+          : null,
         h("span", { class: "muted small" }, note.font),
       ),
       note.text ? h("p", {}, note.text) : null,
@@ -1401,6 +1847,7 @@ class App {
           (!filter.severity || String(n.severity) === filter.severity),
       )
       .toSorted((a, b) => b.severity - a.severity || a.created.localeCompare(b.created));
+    const overrides = this.model.overrides;
     return h(
       "section",
       { class: "notes-view", "aria-labelledby": "notes-title" },
@@ -1415,7 +1862,7 @@ class App {
       notes.length
         ? h("ol", { class: "notes" }, ...notes.map((n) => this.noteItem(n, null)))
         : h("p", { class: "muted" }, "No notes match."),
-      this.model.overrides.length
+      overrides.glyphs.length || overrides.marks.length
         ? h(
             "section",
             {},
@@ -1423,7 +1870,18 @@ class App {
             h(
               "ul",
               {},
-              ...this.model.overrides.map((o) => {
+              ...overrides.glyphs.map((o) =>
+                h(
+                  "li",
+                  {},
+                  `${o.glyph} (${o.usedBy.join(", ") || "no listed form"}): `,
+                  [
+                    ...(o.body.dx || o.body.dy ? [`body ${o.body.dx}, ${o.body.dy}`] : []),
+                    ...o.dots.map((d) => `dots ${d.part} ${d.dx}, ${d.dy}`),
+                  ].join("; "),
+                ),
+              ),
+              ...overrides.marks.map((o) => {
                 const cell = this.model.cellFromKey(o.key);
                 return h(
                   "li",
@@ -1436,6 +1894,96 @@ class App {
             ),
           )
         : null,
+    );
+  }
+
+  /** The letter's edge-case lines at reading size and large, with edits drawn. */
+  private edgeLines(cell: Cell, choice: FontChoice): HTMLElement {
+    const entry = this.model.data.lines[cell.letter.codepoint];
+    const lines = entry?.lines ?? [];
+    const quran = lines.some((line) => line.source?.corpus === "tanzil");
+    return h(
+      "section",
+      { class: "edge-lines", "aria-labelledby": "edge-title" },
+      h("h3", { id: "edge-title" }, `Edge cases for ${cell.letter.name}`),
+      h(
+        "p",
+        { class: "muted small" },
+        "Each line puts the letter where it is most likely to go wrong, at 24 px and at 64 px per em, with your moves drawn.",
+      ),
+      h("ol", { class: "lines" }, ...lines.map((line, i) => this.edgeLine(line, i, choice))),
+      entry?.unreached.length
+        ? h(
+            "details",
+            { class: "muted small" },
+            h(
+              "summary",
+              {},
+              `${entry.unreached.length} alternates no short string or word reaches`,
+            ),
+            h(
+              "ul",
+              {},
+              ...entry.unreached.map((u) =>
+                h(
+                  "li",
+                  {},
+                  `${u.glyph} from lookup ${u.lookup} (${u.feature})${u.context ? `, ${u.context}` : ""}`,
+                ),
+              ),
+            ),
+          )
+        : null,
+      quran
+        ? h(
+            "p",
+            { class: "credit small" },
+            `${this.model.data.credits.tanzil} `,
+            h("a", { href: "https://tanzil.net", rel: "noopener" }, "tanzil.net"),
+          )
+        : null,
+    );
+  }
+
+  private edgeLine(line: EdgeLine, index: number, choice: FontChoice): HTMLElement {
+    const model = this.model;
+    const lineLayout = model.lineLayout(choice, line.text);
+    const placed = model.linePlacements(choice, lineLayout);
+    const box = layoutBox(lineLayout, model.ink(choice), placed);
+    const range = {
+      top: Math.max(box?.y1 ?? 0, model.data.metrics.ascender) + 60,
+      bottom: Math.min(box?.y0 ?? 0, model.data.metrics.descender) - 60,
+    };
+    const x0 = Math.min(0, box?.x0 ?? 0) - 40;
+    const x1 = Math.max(lineLayout.advance, box?.x1 ?? 0) + 40;
+    const svg = (scale: number, cls: string) =>
+      s(
+        "svg",
+        {
+          viewBox: `${x0} ${-range.top} ${x1 - x0} ${range.top - range.bottom}`,
+          width: Math.round((x1 - x0) * scale),
+          height: Math.round((range.top - range.bottom) * scale),
+          class: cls,
+          role: "img",
+          "aria-label": line.text,
+        },
+        s(
+          "g",
+          { transform: "scale(1 -1)" },
+          s("line", { x1: x0, x2: x1, y1: 0, y2: 0, class: "baseline" }),
+          this.drawPieces(choice, lineLayout, placed),
+        ),
+      );
+    return h(
+      "li",
+      { class: `line line-${line.kind}`, "data-line": index },
+      h("span", { class: "line-label" }, line.label),
+      h(
+        "div",
+        { class: "line-samples" },
+        svg(READING_SCALE, "line-reading"),
+        svg(LARGE_SCALE, "line-large"),
+      ),
     );
   }
 
@@ -1520,20 +2068,6 @@ class App {
       sentence("source", 24),
     );
   }
-}
-
-function analyseLive(
-  model: Model,
-  choice: FontChoice,
-  cellLayout: Layout,
-  offsets: Offsets,
-): string {
-  const font = model.arabicFont(choice);
-  const upm = model.upm;
-  const live = analyse(cellLayout, (gid) => font.outline(gid), offsets, model.clearanceUnits);
-  if (!live.hasMarks) return "No mark";
-  const gap = Number.isFinite(live.gap) ? em(live.gap, upm, 3) : "> 0.2";
-  return `${live.clash ? "Clash" : "Clear"}: gap ${gap} em · ink top ${em(live.top, upm)} em, bottom ${em(live.bottom, upm)} em`;
 }
 
 const THEME_KEY = "sawa-lab:theme";

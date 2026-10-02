@@ -31,11 +31,23 @@ Checks: `bun run lint`, `bun run fmt:check`, `bun run test` (unit tests and the 
 
 - **Matrix**: letters by form (isolated, initial, medial, final, forced with ZWJ) with one mark or mark sequence. Each cell has a clash badge and its ink top and bottom in em. A clash is mark ink closer than 0.03 em to the letter, its dots or another mark, measured on the drawn outlines. Arrow keys move between cells.
 - **All everyday marks**: every everyday mark on every letter and form at once, with clashing ones outlined.
-- **Vertical envelope** (always visible): the Latin ink range (top of É and Å, bottom of g, y, j and p) against the range of every everyday cell, the line box both need, and the approved line box. The five tallest and deepest cells are links.
-- **Inspector**: the cell at 300 px per em on the Latin grid, then "Hxgy", in context and at 16 and 24 px. Drag a mark's handle (or focus it and use the arrow keys) to show where it should go. Click anywhere else on the large glyph to pin a note.
+- **Vertical envelope** (always visible): the Latin ink range (top of É and Å, bottom of g, y, j and p) against the range of every everyday cell, the line box both need, and the approved line box. It is worked out from the glyphs as you have moved them, live while you drag, next to the envelope as built and the change in the line box. The five tallest and deepest cells are links.
+- **Inspector**: the cell at 300 px per em on the Latin grid, then "Hxgy", its edge-case lines, in context and at 16 and 24 px. The cell's ink top and bottom are drawn as dashed lines that follow your edits. Click anywhere else on the large glyph to pin a note, and pick which part it is about.
 - **Notes**: every note with filters for status, tag and severity, and the proposed offsets.
 
-The Font switch swaps between the calibrated font and the unscaled Noto sources. Proposed offsets apply to the calibrated font only, and only in this preview. Text at reading size is set by the browser from the font files, so it never shows them.
+The Font switch swaps between the calibrated font and the unscaled Noto sources. Proposed offsets apply to the calibrated font only, and only in this preview. Text at reading size is set by the browser from the font files, so it never shows them; the edge-case lines are drawn by the lab and do.
+
+## Moving parts
+
+"Drag" in the inspector picks what a handle moves:
+
+- **Marks**: one mark in this cell only.
+- **Whole letter**: the form's body glyph, with its dots and every mark on it, as moving the outline and its anchors does in the font. This is how you try a letter off the baseline, such as a meem that starts higher so its tail reaches less far down. The glyph's anchors are drawn as small crosses. A body glyph can serve several letters (Noto draws beh, noon and yeh hamza initial with one dotless body); the inspector says which, since moving it moves them all.
+- **Dots**: one dot group on its own. Marks stacked on the dots stay where they are, as the dot glyph's own anchors don't move.
+
+Each part also has x and y fields in font units and a Reset button. Ctrl+Z undoes and Ctrl+Shift+Z (or Ctrl+Y) redoes, as do the Undo and Redo buttons.
+
+The edge-case lines under the canvas, at 24 and 64 px per em, are drawn with every move applied, so a change shows in context straight away. When one comes from the Quran text, Tanzil is credited under the list.
 
 By default the matrix and envelope hold only combinations ordinary spelling uses, the same rules as the search behind the approved line spacing: maddah and hamza below only on bare alef, hamza above only on alef, waw, yeh and alef maksura, and no shadda on an alef, hamza, alef maksura or teh marbuta. `sawa lab fonts` decides this and lists each letter's `implausible` mark sequences in `lab.json`. "Include impossible combinations" brings the rest back, hatched and labelled.
 
@@ -45,7 +57,7 @@ The URL holds the view, mark, cell, font and toggles, so a link reproduces what 
 
 ## The feedback loop
 
-1. Pin notes on the cells that look wrong, and drag marks to show what you mean.
+1. Pin notes on the cells that look wrong, and drag letters, dots and marks to show what you mean.
 2. Export `annotations.json` and `overrides.json`, or press "Copy summary" for a short text version to paste into chat.
 3. The agent proposes a change for each note and sets its status to `proposed`. You set it to `accepted` or `rejected`.
 4. Accepted offsets become per-master overrides (400 and 700) in the font build, and the everyday clash check confirms the rule still holds. The build does not read `overrides.json` yet.
@@ -89,16 +101,31 @@ Both files are JSON. A cell is keyed by its letter, form and mark sequence:
 - `tag`: `too-small`, `too-high`, `too-low`, `collides`, `dot-spacing`, `feels-heavy` or `other`.
 - `severity`: 1 (minor) to 3 (must fix).
 - `status`: `open`, `proposed`, `accepted` or `rejected`.
+- `part` (optional): what the note is about, `{ "kind": "body", "glyph": "uni066E.init" }`, `{ "kind": "dots", "glyph": "uni066E.init", "id": "dotbelowar" }` or `{ "kind": "mark", "glyph": "uni064E", "index": 0 }`.
 
 ### overrides.json
+
+Version 2. Offsets are in font units at `wght`, on top of where the font puts each part.
 
 ```json
 {
   "schema": "sawa-lab/overrides",
-  "version": 1,
-  "overrides": [
+  "version": 2,
+  "glyphs": [
+    {
+      "glyph": "uni066E.init",
+      "usedBy": ["beh initial", "noon initial", "yeh hamza above initial"],
+      "build": "sans-400-1.15-d0817c60d0",
+      "wght": 400,
+      "body": { "dx": 0, "dy": 40 },
+      "dots": [{ "part": "dotbelowar", "dx": 0, "dy": -20 }],
+      "updated": "2026-10-02T09:00:00.000Z"
+    }
+  ],
+  "marks": [
     {
       "key": { "letter": "U+0628", "form": "medial", "marks": ["U+0651", "U+064E"] },
+      "glyph": "uni066E.medi",
       "build": "sans-400-1.15-d0817c60d0",
       "wght": 400,
       "marks": [
@@ -111,10 +138,12 @@ Both files are JSON. A cell is keyed by its letter, form and mark sequence:
 }
 ```
 
-- `marks`: one entry per mark glyph in the cell, `index` in typed order, `glyph` its name in the font.
-- `dx`, `dy`: the move in font units at `wght`, on top of the placement the font gives.
+- `glyphs`: one entry per moved glyph, wherever the font uses it. `usedBy` names the letter forms whose body it is, for reading only.
+  - `body`: moves the glyph's outline and its mark anchors, so its dots and marks follow.
+  - `dots`: moves one dot group alone. `part` is the part id from `lab.json`: the dot glyph's name when `ccmp` splits the dots off the letter, or `component:N` / `contours:A,B` for dots drawn inside the glyph.
+- `marks`: marks moved in one cell, keyed by the cell. `glyph` is the cell's body glyph, for reading; each moved mark has its `index` in typed order and its glyph name.
 
-Importing either file merges it in: a note with a known `id`, or an offset for a known cell, replaces the one stored.
+A version 1 file, which had only cell-keyed mark offsets under `overrides`, imports into `marks`. Importing either file merges it in: a note with a known `id`, or an entry for a known glyph or cell, replaces the one stored.
 
 ## HarfBuzz parity
 

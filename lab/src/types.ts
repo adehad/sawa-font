@@ -47,8 +47,64 @@ export interface LabData {
   approvedLineBox: { height: number; basis: string };
   clearance: number;
   matrix: Matrix;
+  /** Keyed "U+0628|initial". */
+  letterForms: Record<string, LetterForm>;
+  glyphs: Record<string, GlyphInfo>;
+  /** Keyed by the letter's codepoint. */
+  lines: Record<string, LetterLines>;
+  credits: { tanzil: string };
 }
 
 export type FontChoice = "calib" | "source";
 
 export const NO_MARK: MarkSequence = { id: "none", label: "no mark", codepoints: [] };
+
+export interface PartInfo {
+  /** "body", a dot glyph's name, or "component:N" / "contours:A,B" inside the body glyph. */
+  id: string;
+  kind: "body" | "dots" | "mark";
+  glyph: string;
+  label: string;
+  position?: "above" | "below" | "inside";
+  count?: number;
+  contours?: number[];
+  component?: number;
+  /** SVG path in font units; the glyph table has it, a letter form's list does not. */
+  d?: string;
+}
+
+export interface Anchor {
+  kind: "base" | "ligature" | "mark" | "mark2";
+  x: number;
+  y: number;
+  lookups: string[];
+}
+
+export interface GlyphInfo {
+  advance: number;
+  class: string;
+  parts: PartInfo[];
+  anchors: Anchor[];
+}
+
+export interface LetterForm {
+  glyphs: string[];
+  body: string | null;
+  parts: PartInfo[];
+}
+
+export interface EdgeLine {
+  kind: "font" | "situational" | "word";
+  text: string;
+  label: string;
+  glyph?: string;
+  lookup?: number;
+  feature?: string;
+  context?: string;
+  source?: { corpus: "mixed" | "stress" | "tanzil"; ref: string };
+}
+
+export interface LetterLines {
+  lines: EdgeLine[];
+  unreached: { glyph: string; lookup: number; feature: string; context: string }[];
+}

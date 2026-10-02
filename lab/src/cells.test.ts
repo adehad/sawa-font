@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { analyse, cellCodepoints, layout, type ShapedGlyph } from "./cells";
+import {
+  NO_MOVES,
+  type Offsets,
+  type Layout,
+  type ShapedGlyph,
+  analyse,
+  cellCodepoints,
+  layout,
+  plainInk,
+  placements,
+} from "./cells";
 import { envelope, lineBox } from "./envelope";
 import { type Contour, flatten, inkGap, parsePath } from "./geometry";
 
@@ -16,6 +26,9 @@ const OUTLINES: Record<number, Contour[]> = {
   4: [],
 };
 const outline = (gid: number) => OUTLINES[gid] ?? [];
+const ink = plainInk(outline);
+const check = (cell: Layout, marks: Offsets = {}) =>
+  analyse(cell, ink, placements(cell, NO_MOVES, marks), 30);
 
 function glyph(gid: number, cluster: number, xAdvance = 0, xOffset = 0, yOffset = 0): ShapedGlyph {
   return { gid, cluster, xAdvance, xOffset, yOffset };
@@ -60,10 +73,10 @@ describe("cells", () => {
       [glyph(3, 1, 0, 100, 470), glyph(2, 0), glyph(1, 0, 500)],
       [glyph(2, 0), glyph(1, 0, 500)],
     );
-    const clashing = analyse(cell, outline, {}, 30);
+    const clashing = check(cell);
     expect(clashing.gap).toBe(0);
     expect(clashing.clash).toBe(true);
-    const moved = analyse(cell, outline, { 0: [0, 120] }, 30);
+    const moved = check(cell, { 0: [0, 120] });
     expect(moved.gap).toBeCloseTo(40);
     expect(moved.clash).toBe(false);
     expect(moved.top).toBe(670);
@@ -83,7 +96,7 @@ describe("cells", () => {
 
   it("reports no clash for a bare letter", () => {
     const letter = [glyph(2, 0), glyph(1, 0, 500)];
-    const bare = analyse(layout(letter, letter), outline, {}, 30);
+    const bare = check(layout(letter, letter));
     expect(bare.hasMarks).toBe(false);
     expect(bare.clash).toBe(false);
     expect(bare.top).toBe(550);
