@@ -1,4 +1,5 @@
 import { type Box, type Contour, bounds, inkGap, translate, unionBox } from "./geometry";
+import type { Attachment } from "./positioning";
 import type { Form } from "./types";
 
 export const ZWJ = 0x200d;
@@ -39,6 +40,8 @@ export interface Piece {
   owner: number;
   /** A mark that comes straight after its base in logical order, as a split-off dot does. */
   adjacent: boolean;
+  /** GDEF mark: split-off dots and tashkeel alike. */
+  gdefMark: boolean;
 }
 
 export interface Layout {
@@ -130,6 +133,7 @@ export function layout(glyphs: ShapedGlyph[], bare: ShapedGlyph[], facts = PLAIN
       y: glyph.yOffset,
       owner: attach[order]?.owner ?? order,
       adjacent: attach[order]?.adjacent ?? false,
+      gdefMark: facts.isMark(glyph.gid),
       cluster: glyph.cluster,
       order,
     });
@@ -161,6 +165,7 @@ export function lineLayout(glyphs: ShapedGlyph[], facts: GlyphFacts): Layout {
       y: glyph.yOffset,
       owner: attach[i]?.owner ?? i,
       adjacent: attach[i]?.adjacent ?? false,
+      gdefMark: facts.isMark(glyph.gid),
     };
     pen += glyph.xAdvance;
     return piece;
@@ -168,50 +173,106 @@ export function lineLayout(glyphs: ShapedGlyph[], facts: GlyphFacts): Layout {
   return { pieces, advance: pen };
 }
 
-/** How the owner's glyph overrides move its parts. */
+/** How a set of edits moves glyph parts and marks, by glyph name and mark class id. */
 export interface GlyphMoves {
+  /** The glyph's outline, with its anchors. */
   body(glyph: string): Offset;
-  /** A dot group that is a glyph of its own, attached to `base`. */
+  /** A split-off dot's outline in the copy swapped in after `base`; its anchors stay. */
   dot(base: string, dot: string): Offset | undefined;
   /** Dot groups drawn inside `glyph`, by part id. */
   inline(glyph: string): Record<string, Offset>;
+  /** The glyph's mark-to-base or mark-to-ligature anchor for a class. */
+  anchor(glyph: string, cls: string): Offset;
+  /** The glyph's own anchor for `mark` alone, split from the class. */
+  split(glyph: string, cls: string, mark: string): Offset;
+  /** The mark's mark-to-mark anchor for the class that stacks on it. */
+  mkmk(glyph: string, cls: string): Offset;
+  /** A contextual adjustment of `mark` after `base`. */
+  pair(base: string, mark: string): Offset;
 }
 
+const ZERO: Offset = [0, 0];
+
 export const NO_MOVES: GlyphMoves = {
-  body: () => [0, 0],
+  body: () => ZERO,
   dot: () => undefined,
   inline: () => ({}),
+  anchor: () => ZERO,
+  split: () => ZERO,
+  mkmk: () => ZERO,
+  pair: () => ZERO,
 };
 
 /**
- * Where each piece goes. A glyph's body offset moves it and everything
- * attached to it, as moving the outline and its anchors does in the font;
- * a dot group's offset moves only that dot, since its own anchors, which
- * marks stack on, stay put. Mark offsets are per cell and come last.
+ * The glyph a contextual pair rule for the mark at `i` sees before it: the
+ * previous glyph in logical order, skipping marks other than this one, as
+ * a mark filtering set of that mark alone does. Undefined when that is a
+ * mark.
  */
-export function placements(cell: Layout, moves: GlyphMoves, marks: Offsets = {}): Placement[] {
-  return cell.pieces.map((piece, i) => {
-    let dx = 0;
-    let dy = 0;
-    let parts: Record<string, Offset> = {};
-    const owner = piece.owner >= 0 ? cell.pieces[piece.owner] : undefined;
-    if (owner && piece.owner !== i) {
-      [dx, dy] = moves.body(owner.name);
-      const dot = piece.adjacent ? moves.dot(owner.name, piece.name) : undefined;
-      if (dot) {
-        dx += dot[0];
-        dy += dot[1];
-      }
-    } else if (owner) {
-      [dx, dy] = moves.body(piece.name);
-      parts = moves.inline(piece.name);
+export function contextBase(pieces: readonly Piece[], i: number): number | undefined {
+  const name = pieces[i]?.name;
+  let j = i + 1;
+  while (j < pieces.length && pieces[j]?.gdefMark && pieces[j]?.name !== name) j++;
+  return j < pieces.length && !pieces[j]?.gdefMark ? j : undefined;
+}
+
+/**
+ * Where each piece goes, as HarfBuzz would place it in the edited font. A
+ * base glyph moves with its outline. A mark hangs on what it is attached
+ * to: it follows that glyph and the anchor it attaches by, which an outline
+ * move, an anchor move, a split class or a mark-to-mark anchor shifts; the
+ * marks stacked on it follow in turn. A pair rule and a moved split-off dot
+ * come after attachment, so they move that one mark alone.
+ */
+export function placements(
+  cell: Layout,
+  attach: readonly (Attachment | null)[],
+  moves: GlyphMoves,
+): Placement[] {
+  const pieces = cell.pieces;
+  const origins: (Offset | undefined)[] = [];
+  const origin = (i: number, depth: number): Offset => {
+    const known = origins[i];
+    if (known) return known;
+    const link = attach[i];
+    const parent = link ? pieces[link.parent] : undefined;
+    let at = ZERO;
+    if (link && parent && depth < pieces.length) {
+      const [px, py] = origin(link.parent, depth + 1);
+      const name = pieces[i]?.name ?? "";
+      const shifts =
+        link.kind === "mark"
+          ? [moves.mkmk(parent.name, link.cls)]
+          : [
+              parent.gdefMark ? ZERO : moves.body(parent.name),
+              moves.anchor(parent.name, link.cls),
+              moves.split(parent.name, link.cls, name),
+            ];
+      at = shifts.reduce<Offset>((sum, [x, y]) => [sum[0] + x, sum[1] + y], [px, py]);
     }
-    if (piece.kind === "mark") {
-      const [mx, my] = marks[piece.mark] ?? [0, 0];
-      dx += mx;
-      dy += my;
+    origins[i] = at;
+    return at;
+  };
+  return pieces.map((piece, i) => {
+    if (!piece.gdefMark && !attach[i]) {
+      const [dx, dy] = moves.body(piece.name);
+      return { dx, dy, parts: moves.inline(piece.name) };
     }
-    return { dx, dy, parts };
+    let [dx, dy] = origin(i, 0);
+    const base = contextBase(pieces, i);
+    const before = base === undefined ? undefined : pieces[base];
+    if (before) {
+      const [px, py] = moves.pair(before.name, piece.name);
+      dx += px;
+      dy += py;
+    }
+    const owner = piece.adjacent ? pieces[piece.owner] : undefined;
+    const dot = owner ? moves.dot(owner.name, piece.name) : undefined;
+    if (dot) {
+      dx += dot[0];
+      dy += dot[1];
+    }
+    return { dx, dy, parts: {} };
   });
 }
 

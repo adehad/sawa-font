@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { cellCodepoints, formatCodepoint } from "./cells";
+import { NO_EDITS } from "./edits";
+import { labModel } from "./fixture";
 import { HbFont, harfbuzzVersion } from "./hb";
 import type { LabData } from "./types";
 
@@ -69,5 +71,28 @@ describe.skipIf(!present)("harfbuzzjs matches uharfbuzz", () => {
         expect(shaped, `"${line.text}" in ${key} shapes differently (${versions})`).toEqual(glyphs);
       }
     }
+  });
+
+  it("finds what each mark hangs on the way `sawa lab fonts` does", () => {
+    const lab = labModel(NO_EDITS);
+    const cells = lab.positioning.cells;
+    expect(Object.keys(cells).length).toBeGreaterThan(1000);
+    for (const letter of lab.data.matrix.letters)
+      for (const form of letter.forms)
+        for (const mark of lab.marks.values()) {
+          const id = `${letter.codepoint}|${form}|${mark.id}`;
+          const expected = cells[id];
+          if (!expected) throw new Error(`positioning.json has no cell ${id}`);
+          const cell = { letter, form, mark };
+          const layout = lab.layout("calib", cell);
+          expect(
+            layout.pieces.map((p) => p.name),
+            `${id}: glyphs`,
+          ).toEqual(expected.glyphs);
+          const found = lab
+            .cellAttachments("calib", cell)
+            .map((a) => (a ? [a.parent, a.cls, a.kind] : null));
+          expect(found, `${id}: attachments`).toEqual(expected.attach);
+        }
   });
 });

@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { type ShapedGlyph, layout, placements } from "./cells";
-import { History, type PartRef, type Stamp, moveBy, offsetOf, resetPart, setOffset } from "./edits";
-import { glyphMoves } from "./model";
-import { NO_OVERRIDES, type Overrides } from "./store";
+import {
+  History,
+  NO_EDITS,
+  type Stamp,
+  type Target,
+  moveBy,
+  movesOf,
+  offsetOf,
+  reset,
+  setOffset,
+} from "./edits";
+import type { Attachment } from "./positioning";
 
 const STAMP: Stamp = {
   build: "sans-400-1.15-abc",
@@ -11,64 +20,56 @@ const STAMP: Stamp = {
   usedBy: (name) => (name === "beh.init" ? ["beh initial", "noon initial"] : []),
 };
 
-const BODY: PartRef = { kind: "body", glyph: "beh.init" };
-const DOT: PartRef = { kind: "dots", glyph: "beh.init", part: "dotbelow" };
-const MARK: PartRef = {
-  kind: "mark",
-  key: { letter: "U+0628", form: "initial", marks: ["U+064E"] },
-  index: 0,
-  glyph: "fatha",
-  base: "beh.init",
-};
+const BODY: Target = { mechanism: "outline", glyph: "beh.init", part: "body" };
+const DOT: Target = { mechanism: "outline", glyph: "beh.init", part: "dotbelow" };
+const PAIR: Target = { mechanism: "pair", base: "beh.init", mark: "fatha" };
 
-describe("drag state", () => {
-  it("stores body, dot and mark offsets in their own entries", () => {
-    let o: Overrides = NO_OVERRIDES;
-    o = setOffset(o, BODY, [0, 40.4], STAMP);
-    o = setOffset(o, DOT, [3, -20], STAMP);
-    o = setOffset(o, MARK, [12, 0], STAMP);
-    expect(offsetOf(o, BODY)).toEqual([0, 40]);
-    expect(offsetOf(o, DOT)).toEqual([3, -20]);
-    expect(offsetOf(o, MARK)).toEqual([12, 0]);
-    expect(o.glyphs).toEqual([
-      {
-        glyph: "beh.init",
-        usedBy: ["beh initial", "noon initial"],
-        build: STAMP.build,
-        wght: 400,
-        body: { dx: 0, dy: 40 },
-        dots: [{ part: "dotbelow", dx: 3, dy: -20 }],
-        updated: STAMP.now,
-      },
-    ]);
-    expect(o.marks[0]?.glyph).toBe("beh.init");
+describe("edit state", () => {
+  it("keeps one edit per target, rounded, stamped with where its glyph is used", () => {
+    let e = setOffset(NO_EDITS, BODY, "outline", [0, 40.4], STAMP);
+    e = setOffset(e, DOT, "outline", [3, -20], STAMP);
+    e = setOffset(e, PAIR, "pair", [12, 0], STAMP);
+    e = setOffset(e, PAIR, "pair", [12, 5], STAMP);
+    expect(offsetOf(e, BODY)).toEqual([0, 40]);
+    expect(offsetOf(e, DOT)).toEqual([3, -20]);
+    expect(offsetOf(e, PAIR)).toEqual([12, 5]);
+    expect(e.edits).toHaveLength(3);
+    expect(e.edits[0]).toEqual({
+      target: BODY,
+      scope: "outline",
+      dx: 0,
+      dy: 40,
+      build: STAMP.build,
+      wght: 400,
+      usedBy: ["beh initial", "noon initial"],
+      updated: STAMP.now,
+    });
   });
 
-  it("drops an entry once every part is back home", () => {
-    let o = setOffset(NO_OVERRIDES, BODY, [5, 5], STAMP);
-    o = setOffset(o, DOT, [1, 1], STAMP);
-    o = resetPart(o, BODY, STAMP);
-    expect(o.glyphs).toHaveLength(1);
-    o = resetPart(o, DOT, STAMP);
-    expect(o.glyphs).toEqual([]);
-    expect(resetPart(setOffset(NO_OVERRIDES, MARK, [1, 2], STAMP), MARK, STAMP).marks).toEqual([]);
+  it("drops an edit once it is back home", () => {
+    let e = setOffset(NO_EDITS, BODY, "outline", [5, 5], STAMP);
+    e = setOffset(e, DOT, "outline", [1, 1], STAMP);
+    e = reset(e, [BODY], STAMP);
+    expect(e.edits.map((x) => x.target)).toEqual([DOT]);
+    expect(reset(e, [DOT], STAMP).edits).toEqual([]);
   });
 
-  it("moves linked parts by the same delta from where each was", () => {
-    const other: PartRef = { kind: "body", glyph: "beh.medi" };
-    const start = setOffset(NO_OVERRIDES, other, [0, 10], STAMP);
-    const moved = moveBy(start, [BODY, other, BODY], [0, 25], STAMP);
+  it("moves every target of a scope by the same delta from where each was", () => {
+    const other: Target = { mechanism: "outline", glyph: "beh.medi", part: "body" };
+    const start = setOffset(NO_EDITS, other, "outline", [0, 10], STAMP);
+    const moved = moveBy(start, [BODY, other, BODY], "all-forms", [0, 25], STAMP);
     expect(offsetOf(moved, BODY)).toEqual([0, 25]);
     expect(offsetOf(moved, other)).toEqual([0, 35]);
+    expect(moved.edits.every((x) => x.scope === "all-forms")).toBe(true);
   });
 });
 
 describe("undo and redo", () => {
   it("walks back and forward through edits and forgets redo on a new edit", () => {
     const history = new History();
-    const a = NO_OVERRIDES;
-    const b = setOffset(a, BODY, [0, 10], STAMP);
-    const c = setOffset(b, BODY, [0, 20], STAMP);
+    const a = NO_EDITS;
+    const b = setOffset(a, BODY, "outline", [0, 10], STAMP);
+    const c = setOffset(b, BODY, "outline", [0, 20], STAMP);
     history.push(a);
     history.push(b);
     expect(history.undo(c)).toBe(b);
@@ -86,37 +87,71 @@ function glyph(gid: number, cluster: number, xAdvance = 0, xOffset = 0, yOffset 
   return { gid, cluster, xAdvance, xOffset, yOffset };
 }
 
-describe("placements", () => {
-  // Visual order of beh initial + fatha: fatha (3), the split-off dot (2), the body (1).
-  const names: Record<number, string> = { 1: "beh.init", 2: "dotbelow", 3: "fatha" };
+const split = (marks: string[]): Target => ({
+  mechanism: "split-class",
+  glyph: "beh.init",
+  cls: "27.0",
+  marks,
+});
+
+describe("placements for each mechanism", () => {
+  // Beh initial with shadda and fatha, in visual order: fatha (4) stacked on
+  // shadda (3), which hangs on the body's top anchor; the split-off dot (2)
+  // hangs on its bottom anchor; the body (1).
+  const names: Record<number, string> = { 1: "beh.init", 2: "dotbelow", 3: "shadda", 4: "fatha" };
   const facts = {
     isBase: (gid: number) => gid === 1,
     isMark: (gid: number) => gid !== 1,
     name: (gid: number) => names[gid] ?? "",
   };
   const cell = layout(
-    [glyph(3, 1, 0, 100, 500), glyph(2, 0, 0, 120, -100), glyph(1, 0, 300)],
+    [
+      glyph(4, 2, 0, 100, 700),
+      glyph(3, 1, 0, 100, 500),
+      glyph(2, 0, 0, 120, -100),
+      glyph(1, 0, 300),
+    ],
     [glyph(2, 0, 0, 120, -100), glyph(1, 0, 300)],
     facts,
   );
+  const at: (Attachment | null)[] = [
+    { parent: 1, cls: "35.0", kind: "mark" },
+    { parent: 3, cls: "27.0", kind: "base" },
+    { parent: 3, cls: "19.0", kind: "base" },
+    null,
+  ];
+  const placed = (target: Target) =>
+    placements(cell, at, movesOf(setOffset(NO_EDITS, target, "pair", [0, 10], STAMP).edits)).map(
+      (p) => p.dy,
+    );
 
-  it("ties the dot and the mark to the body", () => {
-    expect(cell.pieces.map((p) => [p.name, p.kind, p.owner, p.adjacent])).toEqual([
-      ["fatha", "mark", 2, false],
-      ["dotbelow", "base", 2, true],
-      ["beh.init", "base", 2, false],
+  it("moves the body's outline with everything that hangs on it", () => {
+    expect(placed(BODY)).toEqual([10, 10, 10, 10]);
+  });
+
+  it("moves a dot glyph's copy alone, its stacked marks staying put", () => {
+    expect(placed(DOT)).toEqual([0, 0, 10, 0]);
+  });
+
+  it("moves an anchor's class and what stacks on it, not the other classes", () => {
+    expect(placed({ mechanism: "anchor", glyph: "beh.init", cls: "27.0" })).toEqual([10, 10, 0, 0]);
+    expect(placed({ mechanism: "anchor", glyph: "beh.init", cls: "19.0" })).toEqual([0, 0, 10, 0]);
+  });
+
+  it("moves only the split-off marks of a class", () => {
+    expect(placed(split(["shadda"]))).toEqual([10, 10, 0, 0]);
+    expect(placed(split(["fatha"]))).toEqual([0, 0, 0, 0]);
+  });
+
+  it("moves the marks stacked on a mark-to-mark anchor", () => {
+    expect(placed({ mechanism: "mkmk-anchor", glyph: "shadda", cls: "35.0" })).toEqual([
+      10, 0, 0, 0,
     ]);
   });
 
-  it("moves everything with the body and only the dot with the dot", () => {
-    let o = setOffset(NO_OVERRIDES, BODY, [0, 40], STAMP);
-    o = setOffset(o, DOT, [10, -5], STAMP);
-    o = setOffset(o, MARK, [0, 7], STAMP);
-    const placed = placements(cell, glyphMoves(o), { 0: [0, 7] });
-    expect(placed.map((p) => [p.dx, p.dy])).toEqual([
-      [0, 47],
-      [10, 35],
-      [0, 40],
-    ]);
+  it("moves one mark after its base with a pair rule, leaving what stacks on it", () => {
+    expect(placed({ mechanism: "pair", base: "beh.init", mark: "shadda" })).toEqual([0, 10, 0, 0]);
+    expect(placed(PAIR)).toEqual([10, 0, 0, 0]);
+    expect(placed({ mechanism: "pair", base: "beh.medi", mark: "fatha" })).toEqual([0, 0, 0, 0]);
   });
 });

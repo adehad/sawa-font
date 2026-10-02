@@ -1,26 +1,31 @@
 import "./style.css";
-import { type Layout, type Placement, analyse, layoutBox } from "./cells";
+import { type Layout, type Placement, analyse, contextBase, layoutBox } from "./cells";
 import { h, s } from "./dom";
 import {
+  type Edits,
   History,
+  NO_EDITS,
   type Offset,
-  type PartRef,
+  SCOPE_LABELS,
+  type Scope,
   type Stamp,
+  type Target,
   moveBy,
   offsetOf,
-  refId,
-  resetPart,
+  reset,
+  targetId,
 } from "./edits";
 import { em, lineBox } from "./envelope";
 import { arrowStep, leftToRight } from "./forms";
 import { bounds } from "./geometry";
 import { HbFont, harfbuzzVersion } from "./hb";
-import { type Baked, type Cell, Model, cellKey } from "./model";
+import { type Baked, type Cell, Model, cellId, cellKey } from "./model";
+import { NO_POSITIONING, type Positioning, markClass } from "./positioning";
+import { type Handle, type ScopeOption, blastRadius, scopeOptions } from "./scope";
 import { DRAG_MODES, type DragMode, type View, parseState, serializeState } from "./state";
 import {
   type Note,
   type NotePart,
-  type Overrides,
   STATUSES,
   type Severity,
   type Status,
@@ -56,7 +61,10 @@ const DRAG_LABELS: Record<DragMode, string> = {
   mark: "Marks",
   letter: "Whole letter",
   dot: "Dots",
+  anchor: "Anchors",
 };
+/** How many affected cells the blast radius draws; the rest are counted. */
+const BLAST_SHOWN = 24;
 
 async function fetchBytes(path: string): Promise<ArrayBuffer> {
   const response = await fetch(`${BASE}fonts/${path}`);
@@ -99,7 +107,10 @@ async function load(): Promise<Model> {
   );
   for (const face of faces) document.fonts.add(face);
   const preview = await loadPreview();
-  return new Model(
+  const positioning = data.fonts.positioning
+    ? ((await (await fetch(`${BASE}fonts/${data.fonts.positioning}`)).json()) as Positioning)
+    : NO_POSITIONING;
+  const model = new Model(
     data,
     {
       calib: new HbFont(calib),
@@ -109,9 +120,12 @@ async function load(): Promise<Model> {
     },
     parseState(location.search),
     loadNotes(),
-    loadOverrides(),
+    NO_EDITS,
     preview?.baked ?? null,
+    positioning,
   );
+  model.edits = loadOverrides((key) => model.bodyOf(key));
+  return model;
 }
 
 function cssFamily(choice: FontChoice): string {
@@ -157,21 +171,28 @@ function center(box: { x0: number; y0: number; x1: number; y1: number }): [numbe
   return [(box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2];
 }
 
-/** One movable part of a cell, with where it is drawn. */
+/** One movable part or anchor of a cell, with the handle it is edited by. */
 interface CellPart {
-  ref: PartRef;
+  /** Unique within the cell: "body", "dots:<part>", "mark:<index>", "anchor:<class>", "mkmk:<piece>:<class>". */
+  key: string;
+  handle: Handle;
   label: string;
-  kind: "body" | "dots" | "mark";
-  /** The layout piece the part is, or lives in. */
+  kind: "body" | "dots" | "mark" | "anchor" | "mkmk";
+  /** The layout piece the part is, lives in or is an anchor of. */
   piece: number;
   /** A dot group drawn inside the piece's glyph. */
   inline?: string;
+  /** A mark's position among the cell's marks. */
+  order?: number;
+  /** An anchor's point in its glyph's own coordinates. */
+  point?: [number, number];
 }
 
 interface CellParts {
   body?: CellPart;
   dots: CellPart[];
   marks: CellPart[];
+  anchors: CellPart[];
 }
 
 /** One cell drawn on the inspector canvas. */
@@ -196,6 +217,13 @@ class App {
   private pending: { x: number; y: number; part?: NotePart } | null = null;
   private focusCell: string | null = null;
   private envelopeQueued = false;
+  private liveQueued = false;
+  /** The handle the side panel edits, as "<form>|<part key>". */
+  private active: string | null = null;
+  /** The scope picked per handle, by the same key; the smallest one otherwise. */
+  private readonly scopes = new Map<string, Scope>();
+  /** The cells the active edit changes, by cell id. */
+  private affected = new Map<string, Cell>();
 
   constructor(private readonly model: Model) {}
 
@@ -234,31 +262,31 @@ class App {
   }
 
   /** Makes `next` the overrides, recording `before` for undo. */
-  private commit(before: Overrides, next: Overrides): void {
+  private commit(before: Edits, next: Edits): void {
     if (JSON.stringify(before) === JSON.stringify(next)) {
-      this.model.overrides = next;
+      this.model.edits = next;
       this.render();
       return;
     }
     this.history.push(before);
-    this.model.overrides = next;
+    this.model.edits = next;
     saveOverrides(next);
     this.render();
   }
 
   private undo(): void {
-    const previous = this.history.undo(this.model.overrides);
+    const previous = this.history.undo(this.model.edits);
     if (!previous) return;
-    this.model.overrides = previous;
+    this.model.edits = previous;
     saveOverrides(previous);
     this.announce("Undone");
     this.render();
   }
 
   private redo(): void {
-    const next = this.history.redo(this.model.overrides);
+    const next = this.history.redo(this.model.edits);
     if (!next) return;
-    this.model.overrides = next;
+    this.model.edits = next;
     saveOverrides(next);
     this.announce("Redone");
     this.render();
@@ -376,6 +404,7 @@ class App {
 
   private render(): void {
     const model = this.model;
+    this.affected = this.activeBlast();
     const active = document.activeElement as HTMLElement | null;
     const activeId = active?.dataset.focusId;
     this.root.replaceChildren(
@@ -396,6 +425,28 @@ class App {
       ? this.root.querySelector<HTMLElement>(`[data-focus-id="${CSS.escape(activeId)}"]`)
       : null;
     target?.focus({ preventScroll: true });
+  }
+
+  /** Redraws the blast radius previews and the affected matrix cells on the next frame. */
+  private queueLive(): void {
+    if (this.liveQueued) return;
+    this.liveQueued = true;
+    requestAnimationFrame(() => {
+      this.liveQueued = false;
+      const choice = this.state.font;
+      const range = this.verticalRange(choice);
+      for (const el of this.root.querySelectorAll<HTMLElement>("[data-blast]")) {
+        const cell = this.affected.get(el.dataset.blast ?? "");
+        if (cell)
+          el.querySelector("svg")?.replaceWith(this.cellSvg(choice, cell, range, "blast-svg"));
+      }
+      const mark = this.state.mark;
+      for (const el of this.root.querySelectorAll<HTMLElement>("button.cell.affected[data-cell]")) {
+        const cell = this.affected.get(`${el.dataset.cell}|${mark}`);
+        if (cell)
+          el.querySelector("svg.mini")?.replaceWith(this.cellSvg(choice, cell, range, "mini"));
+      }
+    });
   }
 
   /** Redraws the envelope panel on the next frame, for live edits. */
@@ -581,7 +632,7 @@ class App {
       "Export overrides.json",
     );
     exportOverrides.addEventListener("click", () =>
-      download("overrides.json", overridesFile(this.model.overrides)),
+      download("overrides.json", overridesFile(this.model.edits)),
     );
     const file = h("input", {
       type: "file",
@@ -619,10 +670,13 @@ class App {
         const value: unknown = JSON.parse(texts[i] ?? "");
         const schema = (value as { schema?: unknown }).schema;
         if (schema === "sawa-lab/overrides") {
-          const before = this.model.overrides;
-          const next = mergeOverrides(before, parseOverrides(value));
+          const before = this.model.edits;
+          const next = mergeOverrides(
+            before,
+            parseOverrides(value, (key) => this.model.bodyOf(key)),
+          );
           this.history.push(before);
-          this.model.overrides = next;
+          this.model.edits = next;
           saveOverrides(next);
         } else {
           this.model.notes = mergeNotes(this.model.notes, parseAnnotations(value));
@@ -638,7 +692,7 @@ class App {
   }
 
   private async copySummary(): Promise<void> {
-    const text = summary(this.model.notes, this.model.overrides, this.model.data.build, {
+    const text = summary(this.model.notes, this.model.edits, this.model.data.build, {
       letter: (cp) => this.model.letters.get(cp)?.name ?? cp,
       marks: (cps) => this.model.markLabel(cps),
     });
@@ -678,7 +732,7 @@ class App {
     const box = lineBox(latin, arabic);
     const latinBox = lineBox(latin);
     const approved = model.approvedLineBox();
-    const edited = model.editing(choice) && model.overrides.glyphs.length > 0;
+    const edited = model.editing(choice) && model.edits.edits.length > 0;
     const asBuilt = model.fontEnvelope(choice);
     const builtBox = lineBox(latin, asBuilt);
     const chip = (id: string, value: number) => {
@@ -990,32 +1044,34 @@ class App {
     const notes = model.notes.filter((n) => keyId(n.key) === keyId(cellKey(cell))).length;
     const id = `${cell.letter.codepoint}|${cell.form}`;
     const impossible = !model.plausible(cell.letter, cell.mark);
+    const affected = this.affected.has(cellId(cell));
     const button = h(
       "button",
       {
         type: "button",
-        class: `cell${analysis.clash ? " clash" : ""}${impossible ? " implausible" : ""}`,
+        class: `cell${analysis.clash ? " clash" : ""}${impossible ? " implausible" : ""}${affected ? " affected" : ""}`,
         tabindex: focus ? 0 : -1,
         "data-cell": id,
         "data-focus-id": `cell-${id}`,
-        "aria-label": `${model.cellName(cell)}${impossible ? " (impossible in ordinary spelling)" : ""}: ${status}, top ${em(analysis.top, upm)} em, bottom ${em(analysis.bottom, upm)} em${hasOffset ? ", offset proposed" : ""}${notes ? `, ${notes} notes` : ""}`,
+        "aria-label": `${model.cellName(cell)}${impossible ? " (impossible in ordinary spelling)" : ""}: ${status}, top ${em(analysis.top, upm)} em, bottom ${em(analysis.bottom, upm)} em${hasOffset ? ", offset proposed" : ""}${affected ? ", changed by the selected edit" : ""}${notes ? `, ${notes} notes` : ""}`,
       },
       this.cellSvg(choice, cell, range, "mini"),
       h("span", { class: `badge ${analysis.clash ? "bad" : "ok"}` }, status),
       h("span", { class: "extent" }, `↑${em(analysis.top, upm)} ↓${em(analysis.bottom, upm)}`),
       impossible ? h("span", { class: "flag impossible" }, "impossible combination") : null,
       hasOffset ? h("span", { class: "flag" }, "offset") : null,
+      affected ? h("span", { class: "flag affected-flag" }, "changes") : null,
       notes ? h("span", { class: "flag" }, `${notes} note${notes > 1 ? "s" : ""}`) : null,
     );
     button.addEventListener("click", () => this.select(cell));
     return button;
   }
 
-  /** Whether any part of the cell has been moved, by a glyph or a mark override. */
+  /** Whether any edit moves part of the cell. */
   private cellMoved(cell: Cell): boolean {
-    if (this.model.override(cell)) return true;
-    const form = this.model.letterForm(cell.letter, cell.form);
-    return this.model.overrides.glyphs.some((o) => form?.glyphs.includes(o.glyph));
+    return this.model
+      .placements("calib", cell)
+      .some((p) => p.dx || p.dy || Object.values(p.parts).some(([x, y]) => x || y));
   }
 
   private overviewCell(
@@ -1061,7 +1117,7 @@ class App {
           {
             type: "button",
             tabindex: -1,
-            class: `tiny${analysis.clash ? " clash" : ""}${model.plausible(cell.letter, mark) ? "" : " implausible"}`,
+            class: `tiny${analysis.clash ? " clash" : ""}${model.plausible(cell.letter, mark) ? "" : " implausible"}${this.affected.has(cellId({ ...cell, mark })) ? " affected" : ""}`,
             title: `${mark.label}${model.plausible(cell.letter, mark) ? "" : " (impossible combination)"}${analysis.clash ? " (clash)" : ""}`,
           },
           this.cellSvg(choice, { ...cell, mark }, range, "tiny-svg"),
@@ -1119,64 +1175,202 @@ class App {
     document.querySelector("#inspector")?.scrollIntoView({ block: "start" });
   }
 
-  /** The cell's movable parts: its body, its dot groups and its marks. */
+  /** The cell's movable parts and anchors, each with the handle that edits it. */
   private cellParts(choice: FontChoice, cell: Cell): CellParts {
     const model = this.model;
     const cellLayout = model.layout(choice, cell);
+    const pieces = cellLayout.pieces;
+    const attach = model.cellAttachments(choice, cell);
+    const anchors = model.positioning.anchors;
     const font = model.arabicFont(choice);
     const form = model.letterForm(cell.letter, cell.form);
-    const inked = (i: number) => font.outline(cellLayout.pieces[i]?.gid ?? 0).length > 0;
-    const bodyIndex = cellLayout.pieces.findIndex(
+    const inked = (i: number) => font.outline(pieces[i]?.gid ?? 0).length > 0;
+    const bodyIndex = pieces.findIndex(
       (p, i) => p.kind === "base" && p.owner === i && inked(i) && p.name === form?.body,
     );
-    const result: CellParts = { dots: [], marks: [] };
-    const bodyPiece = cellLayout.pieces[bodyIndex];
+    const context = (i: number) => {
+      const j = contextBase(pieces, i);
+      return j === undefined ? null : (pieces[j]?.name ?? null);
+    };
+    const link = (i: number) => {
+      const a = attach[i];
+      const parent = a ? pieces[a.parent] : undefined;
+      return a && parent ? { parent: parent.name, cls: a.cls, kind: a.kind } : null;
+    };
+    const result: CellParts = { dots: [], marks: [], anchors: [] };
+    const bodyPiece = pieces[bodyIndex];
     if (bodyPiece) {
+      const glyph = bodyPiece.name;
       result.body = {
-        ref: { kind: "body", glyph: bodyPiece.name },
-        label: bodyPiece.name,
+        key: "body",
+        handle: { kind: "body", glyph },
+        label: glyph,
         kind: "body",
         piece: bodyIndex,
       };
-      for (const part of model.glyphInfo(bodyPiece.name)?.parts ?? []) {
+      for (const part of model.glyphInfo(glyph)?.parts ?? []) {
         if (part.kind === "body") continue;
         result.dots.push({
-          ref: { kind: "dots", glyph: bodyPiece.name, part: part.id },
+          key: `dots:${part.id}`,
+          handle: { kind: "dots", glyph, part: part.id, inline: true, attach: null, context: null },
           label: part.label,
           kind: "dots",
           piece: bodyIndex,
           inline: part.id,
         });
       }
+      const set = anchors[glyph];
+      for (const anchor of [...(set?.base ?? []), ...(set?.ligature ?? [])]) {
+        if (result.anchors.some((a) => a.key === `anchor:${anchor.class}`)) continue;
+        const group = pieces
+          .filter((_p, i) => attach[i]?.parent === bodyIndex && attach[i]?.cls === anchor.class)
+          .map((p) => p.name);
+        result.anchors.push({
+          key: `anchor:${anchor.class}`,
+          handle: { kind: "anchor", glyph, cls: anchor.class, group },
+          label: `${this.className(anchor.class)} anchor of ${glyph}`,
+          kind: "anchor",
+          piece: bodyIndex,
+          point: [anchor.x, anchor.y],
+        });
+      }
     }
-    cellLayout.pieces.forEach((piece, i) => {
+    pieces.forEach((piece, i) => {
       if (piece.kind === "mark" && inked(i)) {
         result.marks.push({
-          ref: {
-            kind: "mark",
-            key: cellKey(cell),
-            index: piece.mark,
-            glyph: piece.name,
-            ...(bodyPiece ? { base: bodyPiece.name } : {}),
-          },
-          label: piece.name,
+          key: `mark:${piece.mark}`,
+          handle: { kind: "mark", mark: piece.name, attach: link(i), context: context(i) },
+          label: this.glyphLabel(piece.name),
           kind: "mark",
           piece: i,
+          order: piece.mark,
         });
       } else if (bodyPiece && piece.owner === bodyIndex && i !== bodyIndex && piece.adjacent) {
         const part = form?.parts.find((p) => p.id === piece.name);
+        const l = link(i);
         result.dots.push({
-          ref: { kind: "dots", glyph: bodyPiece.name, part: piece.name },
+          key: `dots:${piece.name}`,
+          handle: {
+            kind: "dots",
+            glyph: bodyPiece.name,
+            part: piece.name,
+            inline: false,
+            attach: l ? { parent: l.parent, cls: l.cls } : null,
+            context: context(i),
+          },
           label: part?.label ?? piece.name,
           kind: "dots",
           piece: i,
         });
       }
+      if (piece.gdefMark && inked(i))
+        for (const anchor of anchors[piece.name]?.mark2 ?? [])
+          result.anchors.push({
+            key: `mkmk:${i}:${anchor.class}`,
+            handle: { kind: "mkmk", glyph: piece.name, cls: anchor.class },
+            label: `${this.className(anchor.class)} anchor of ${this.glyphLabel(piece.name)}`,
+            kind: "mkmk",
+            piece: i,
+            point: [anchor.x, anchor.y],
+          });
     });
-    result.marks.sort((a, b) =>
-      a.ref.kind === "mark" && b.ref.kind === "mark" ? a.ref.index - b.ref.index : 0,
-    );
+    result.marks.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    // Anchors the cell's tashkeel hangs on come first, then those its dots hang on.
+    const rank = (part: CellPart) => {
+      const cls =
+        part.handle.kind === "anchor" || part.handle.kind === "mkmk" ? part.handle.cls : "";
+      const on = pieces.filter(
+        (_p, i) => attach[i]?.parent === part.piece && attach[i]?.cls === cls,
+      );
+      return on.some((p) => p.kind === "mark") ? 2 : on.length ? 1 : 0;
+    };
+    result.anchors.sort((a, b) => rank(b) - rank(a));
     return result;
+  }
+
+  /** A glyph's name with the mark it draws, "uni064E (fatha)", when the matrix names it. */
+  private glyphLabel(name: string): string {
+    const cp = /^uni([0-9A-F]{4})$/.exec(name)?.[1];
+    const mark = cp
+      ? this.model.data.matrix.everyday.find((m) => m.codepoints.join() === `U+${cp}`)
+      : undefined;
+    return mark ? `${name} (${mark.label})` : name;
+  }
+
+  /** A mark class's name for feature syntax, "top_27". */
+  private className(id: string): string {
+    return markClass(this.model.positioning, id)?.cls.name ?? id;
+  }
+
+  /** The handles the drag mode offers among a cell's parts. */
+  private handlesOf(parts: CellParts): CellPart[] {
+    const mode = this.state.drag;
+    if (mode === "letter") return parts.body ? [parts.body] : [];
+    if (mode === "dot") return parts.dots;
+    if (mode === "anchor") return parts.anchors;
+    return parts.marks;
+  }
+
+  /** The same outline part in every form of the letter. */
+  private allForms(cell: Cell, part: CellPart): Target[] {
+    const choice = this.state.font;
+    const here = this.cellParts(choice, cell);
+    const index = here.dots.findIndex((d) => d.key === part.key);
+    return this.formCells(cell).flatMap((c): Target[] => {
+      const parts = this.cellParts(choice, c);
+      const pick = part.kind === "body" ? parts.body : parts.dots[index];
+      const handle = pick?.handle;
+      if (handle?.kind === "body")
+        return [{ mechanism: "outline", glyph: handle.glyph, part: "body" }];
+      if (handle?.kind === "dots")
+        return [{ mechanism: "outline", glyph: handle.glyph, part: handle.part }];
+      return [];
+    });
+  }
+
+  private options(cell: Cell, part: CellPart): ScopeOption[] {
+    return scopeOptions(part.handle, () => this.allForms(cell, part));
+  }
+
+  /** The scope picked for a handle, or its smallest. */
+  private option(cell: Cell, part: CellPart): ScopeOption | undefined {
+    const options = this.options(cell, part);
+    const picked = this.scopes.get(`${cell.form}|${part.key}`);
+    return options.find((o) => o.scope === picked) ?? options[0];
+  }
+
+  /** The handle the side panel edits in the selected cell: the one last used, or the first. */
+  private activePart(
+    cell: Cell,
+    parts = this.cellParts(this.state.font, cell),
+  ): CellPart | undefined {
+    const handles = this.handlesOf(parts);
+    return handles.find((p) => `${cell.form}|${p.key}` === this.active) ?? handles[0];
+  }
+
+  /** The cells the active handle's edit, at its scope, changes. */
+  private activeBlast(): Map<string, Cell> {
+    const cell = this.model.selected();
+    if (!cell || this.state.view === "notes") return new Map();
+    const part = this.activePart(cell);
+    const option = part ? this.option(cell, part) : undefined;
+    if (!option) return new Map();
+    return new Map(this.model.blastRadius(option.targets).map((c) => [cellId(c), c]));
+  }
+
+  /** Makes a handle the active one, and redraws what depends on it, but not the canvas being dragged. */
+  private activate(cell: Cell, part: CellPart): void {
+    const key = `${cell.form}|${part.key}`;
+    if (this.active === key) return;
+    this.active = key;
+    if (cell.form !== this.state.form) return;
+    this.affected = this.activeBlast();
+    this.root.querySelector("aside.side")?.replaceWith(this.sidePanel(cell, this.state.font));
+    this.root.querySelector("section.matrix-wrap")?.replaceWith(this.body());
+    for (const el of this.root.querySelectorAll(".handle.active")) el.classList.remove("active");
+    this.root
+      .querySelector(`.handle[data-form="${cell.form}"][data-part="${CSS.escape(part.key)}"]`)
+      ?.classList.add("active");
   }
 
   private inspector(): HTMLElement | null {
@@ -1302,20 +1496,17 @@ class App {
     );
   }
 
-  /** The handles the drag mode offers on one drawn cell, each with where it sits. */
-  private handlesFor(drawn: Drawn): CellPart[] {
-    const mode = this.state.drag;
-    if (mode === "letter") return drawn.parts.body ? [drawn.parts.body] : [];
-    if (mode === "dot") return drawn.parts.dots;
-    return drawn.parts.marks;
-  }
-
-  /** Where a part's ink is centred, in the drawn cell's font units. */
+  /** Where a part's handle sits, in the drawn cell's font units: its ink's centre, or the anchor. */
   private partCenter(drawn: Drawn, part: CellPart, choice: FontChoice): [number, number] | null {
     const model = this.model;
     const piece = drawn.layout.pieces[part.piece];
     const at = model.placements(choice, drawn.cell)[part.piece];
     if (!piece || !at) return null;
+    if (part.point) {
+      const target = this.option(drawn.cell, part)?.targets[0];
+      const [ox, oy] = target ? offsetOf(model.edits, target) : [0, 0];
+      return [piece.x + at.dx + part.point[0] + ox, piece.y + at.dy + part.point[1] + oy];
+    }
     let contours;
     if (part.inline) {
       const [px, py] = at.parts[part.inline] ?? [0, 0];
@@ -1424,7 +1615,10 @@ class App {
     const handles: { el: SVGCircleElement; drawn: Drawn; part: CellPart }[] = [];
     const redraw = () => {
       for (const d of drawn) {
-        d.glyphs.replaceChildren(this.drawCell(choice, d.cell, d.x), this.anchorMarks(choice, d));
+        d.glyphs.replaceChildren(
+          this.drawCell(choice, d.cell, d.x),
+          this.anchorMarks(choice, d, k),
+        );
         d.ink.replaceChildren(...this.inkLines(choice, d, k));
       }
       for (const { el, drawn: d, part } of handles) {
@@ -1436,22 +1630,33 @@ class App {
       if (selected) readout.textContent = this.readoutText(choice, selected);
     };
 
+    const kinds: Record<CellPart["kind"], string> = {
+      body: "Letter",
+      dots: "Dots",
+      mark: "Mark",
+      anchor: "Anchor",
+      mkmk: "Mark-to-mark anchor",
+    };
     for (const d of drawn) {
-      for (const part of this.handlesFor(d)) {
-        const id = refId(part.ref);
+      const current = selected ? this.activePart(d.cell, d.parts) : undefined;
+      for (const part of this.handlesOf(d.parts)) {
+        const option = this.option(d.cell, part);
+        const offset = option?.targets[0] ? offsetOf(model.edits, option.targets[0]) : [0, 0];
+        const anchor = part.kind === "anchor" || part.kind === "mkmk";
+        const isActive = isSelected(d) && part.key === current?.key;
         const handle = s("circle", {
-          r: 34 * k,
-          class: `handle handle-${part.kind}${editable ? "" : " disabled"}`,
+          r: (anchor ? 24 : 34) * k,
+          class: `handle handle-${part.kind}${editable ? "" : " disabled"}${isActive ? " active" : ""}`,
           tabindex: editable ? 0 : -1,
           role: "button",
-          "data-focus-id": `handle-${id}`,
-          "data-handle": part.ref.kind === "mark" ? part.ref.index : null,
-          "data-part": id,
+          "data-focus-id": `handle-${d.cell.form}-${part.key}`,
+          "data-handle": part.order ?? null,
+          "data-part": part.key,
           "data-form": d.cell.form,
-          "aria-label": `${part.kind === "body" ? "Letter" : part.kind === "dots" ? "Dots" : "Mark"} ${part.label} of ${model.cellName(d.cell)}: drag or use arrow keys to move it; offset ${offsetOf(model.overrides, part.ref).join(", ")}`,
+          "aria-label": `${kinds[part.kind]} ${part.label} of ${model.cellName(d.cell)}: drag or use arrow keys to move it (${option?.label.toLowerCase() ?? "fixed"}); offset ${offset.join(", ")}`,
         });
         handles.push({ el: handle, drawn: d, part });
-        if (editable) this.wireHandle(handle, part.ref, toFont, redraw);
+        if (editable) this.wireHandle(handle, d.cell, part, toFont, redraw);
         handleLayer.append(handle);
       }
     }
@@ -1527,10 +1732,10 @@ class App {
   }
 
   private notePart(part: CellPart): NotePart {
-    const ref = part.ref;
-    if (ref.kind === "body") return { kind: "body", glyph: ref.glyph };
-    if (ref.kind === "dots") return { kind: "dots", glyph: ref.glyph, id: ref.part };
-    return { kind: "mark", glyph: ref.glyph, index: ref.index };
+    const handle = part.handle;
+    if (handle.kind === "dots") return { kind: "dots", glyph: handle.glyph, id: handle.part };
+    if (handle.kind === "mark") return { kind: "mark", glyph: handle.mark, index: part.order ?? 0 };
+    return { kind: "body", glyph: part.label };
   }
 
   /** The cells of the selected letter in every form it has, with the current mark. */
@@ -1538,61 +1743,44 @@ class App {
     return cell.letter.forms.map((form) => ({ letter: cell.letter, mark: cell.mark, form }));
   }
 
-  /**
-   * The refs an edit to `ref` moves together: just `ref`, or with forms
-   * linked, the same part in every form of the letter (the body, the dot
-   * group in the same place in the list, the mark at the same index).
-   */
-  private linked(ref: PartRef): PartRef[] {
-    const cell = this.model.selected();
-    if (!this.state.link || !cell) return [ref];
-    const choice = this.state.font;
-    const forms = this.formCells(cell).map((c) => this.cellParts(choice, c));
-    const id = refId(ref);
-    let pick: ((parts: CellParts) => CellPart | undefined) | null = null;
-    for (const parts of forms) {
-      if (parts.body && refId(parts.body.ref) === id) pick = (p) => p.body;
-      const dot = parts.dots.findIndex((d) => refId(d.ref) === id);
-      if (dot >= 0) pick = (p) => p.dots[dot];
-      const mark = parts.marks.findIndex((m) => refId(m.ref) === id);
-      if (mark >= 0) pick = (p) => p.marks[mark];
-      if (pick) break;
-    }
-    if (!pick) return [ref];
-    const choose = pick;
-    return [ref, ...forms.flatMap((parts) => choose(parts)?.ref ?? [])];
-  }
-
   private wireHandle(
     handle: SVGCircleElement,
-    ref: PartRef,
+    cell: Cell,
+    part: CellPart,
     toFont: (event: PointerEvent) => [number, number],
     redraw: () => void,
   ): void {
+    const live = () => {
+      redraw();
+      this.queueEnvelope();
+      this.queueLive();
+    };
     handle.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
       handle.setPointerCapture(event.pointerId);
+      this.activate(cell, part);
+      const option = this.option(cell, part);
+      if (!option) return;
       const [sx, sy] = toFont(event);
-      const before = this.model.overrides;
-      const refs = this.linked(ref);
+      const before = this.model.edits;
       const stamp = this.stamp();
       const onMove = (e: PointerEvent) => {
         const [x, y] = toFont(e);
-        this.model.overrides = moveBy(before, refs, [x - sx, y - sy], stamp);
-        redraw();
-        this.queueEnvelope();
+        this.model.edits = moveBy(before, option.targets, option.scope, [x - sx, y - sy], stamp);
+        live();
       };
       const onUp = () => {
         handle.removeEventListener("pointermove", onMove);
         handle.removeEventListener("pointerup", onUp);
         handle.removeEventListener("pointercancel", onUp);
-        this.commit(before, this.model.overrides);
+        this.commit(before, this.model.edits);
       };
       handle.addEventListener("pointermove", onMove);
       handle.addEventListener("pointerup", onUp);
       handle.addEventListener("pointercancel", onUp);
     });
     handle.addEventListener("click", (event) => event.stopPropagation());
+    handle.addEventListener("focus", () => this.activate(cell, part));
     handle.addEventListener("keydown", (event) => {
       const step = event.shiftKey ? 25 : 5;
       const deltas: Record<string, [number, number]> = {
@@ -1602,10 +1790,11 @@ class App {
         ArrowRight: [step, 0],
       };
       const delta = deltas[event.key];
-      if (!delta) return;
+      const option = this.option(cell, part);
+      if (!delta || !option) return;
       event.preventDefault();
-      const before = this.model.overrides;
-      this.commit(before, moveBy(before, this.linked(ref), delta, this.stamp()));
+      const before = this.model.edits;
+      this.commit(before, moveBy(before, option.targets, option.scope, delta, this.stamp()));
     });
   }
 
@@ -1640,26 +1829,64 @@ class App {
     ]);
   }
 
-  /** The body glyph's attachment anchors, which move with it. */
-  private anchorMarks(choice: FontChoice, drawn: Drawn): SVGGElement {
+  /**
+   * Anchors, drawn apart from the ink: each base anchor of the body glyph
+   * as a cross labelled with its class, each mark's own anchor as a ring
+   * where it meets what it hangs on, and each mark-to-mark anchor as a
+   * square. Shown when dragging anchors or the whole letter.
+   */
+  private anchorMarks(choice: FontChoice, drawn: Drawn, k = 1): SVGGElement {
     const group = s("g", { class: "anchors" });
-    const body = drawn.parts.body;
-    if (!body || this.state.drag !== "letter") return group;
-    const piece = drawn.layout.pieces[body.piece];
-    const at = this.model.placements(choice, drawn.cell)[body.piece];
-    if (!piece || !at) return group;
-    for (const anchor of this.model.glyphInfo(piece.name)?.anchors ?? []) {
-      if (anchor.kind !== "base" && anchor.kind !== "ligature") continue;
-      const ax = drawn.x + piece.x + at.dx + anchor.x;
-      const ay = piece.y + at.dy + anchor.y;
+    const mode = this.state.drag;
+    if (mode !== "anchor" && mode !== "letter") return group;
+    const model = this.model;
+    const placed = model.placements(choice, drawn.cell);
+    const attach = model.cellAttachments(choice, drawn.cell);
+    const size = 18 * k;
+    for (const part of drawn.parts.anchors) {
+      const at = this.partCenter(drawn, part, choice);
+      if (!at) continue;
+      const [ax, ay] = [drawn.x + at[0], at[1]];
+      const shape =
+        part.kind === "anchor"
+          ? `M${ax - size} ${ay}H${ax + size}M${ax} ${ay - size}V${ay + size}`
+          : `M${ax - size * 0.7} ${ay - size * 0.7}h${size * 1.4}v${size * 1.4}h${-size * 1.4}Z`;
+      group.append(
+        s("path", { d: shape, class: `anchor anchor-${part.kind}` }, s("title", {}, part.label)),
+      );
+      if (mode === "anchor" && part.kind === "anchor" && drawn.cell.form === this.state.form)
+        group.append(
+          s(
+            "text",
+            {
+              x: ax + size * 1.4,
+              y: -ay - size * 0.6,
+              class: "anchor-label",
+              "font-size": 26 * k,
+              transform: "scale(1 -1)",
+            },
+            this.className(part.handle.kind === "anchor" ? part.handle.cls : ""),
+          ),
+        );
+    }
+    drawn.layout.pieces.forEach((piece, i) => {
+      const link = attach[i];
+      const own = model.positioning.anchors[piece.name]?.mark?.find((a) => a.class === link?.cls);
+      const at = placed[i];
+      if (!link || !own || !at) return;
       group.append(
         s(
-          "path",
-          { d: `M${ax - 18} ${ay}H${ax + 18}M${ax} ${ay - 18}V${ay + 18}`, class: "anchor" },
-          s("title", {}, `anchor ${anchor.x}, ${anchor.y} (${anchor.lookups.join(", ")})`),
+          "circle",
+          {
+            cx: drawn.x + piece.x + at.dx + own.x,
+            cy: piece.y + at.dy + own.y,
+            r: size * 0.8,
+            class: "anchor anchor-mark",
+          },
+          s("title", {}, `${piece.name} attaches here through ${this.className(link.cls)}`),
         ),
       );
-    }
+    });
     return group;
   }
 
@@ -1667,6 +1894,9 @@ class App {
     const model = this.model;
     const editable = model.editing(choice) && !model.showsBaked(choice);
     const parts = this.cellParts(choice, cell);
+    const part = this.activePart(cell, parts);
+    const options = part ? this.options(cell, part) : [];
+    const option = part ? this.option(cell, part) : undefined;
     const modes = h(
       "fieldset",
       { class: "inline drag-modes" },
@@ -1683,58 +1913,95 @@ class App {
         return h("label", {}, input, ` ${DRAG_LABELS[mode]}`);
       }),
     );
-    const field = (part: CellPart, axis: "x" | "y", id: string) => {
-      const [dx, dy] = offsetOf(model.overrides, part.ref);
+    const handles = this.handlesOf(parts);
+    const list = h(
+      "div",
+      { class: "part-list", role: "group", "aria-label": "Parts" },
+      ...handles.map((p) => {
+        const button = h(
+          "button",
+          {
+            type: "button",
+            class: "chip",
+            "aria-pressed": String(p.key === part?.key),
+            "data-focus-id": `part-${p.key}`,
+          },
+          p.label,
+        );
+        button.addEventListener("click", () => {
+          this.active = `${cell.form}|${p.key}`;
+          this.render();
+        });
+        return button;
+      }),
+    );
+    const scopes = option
+      ? h(
+          "fieldset",
+          { class: "scopes" },
+          h("legend", {}, "Scope"),
+          ...options.map((o) => {
+            const input = h("input", {
+              type: "radio",
+              name: "scope",
+              value: o.scope,
+              checked: o.scope === option.scope,
+              "data-focus-id": `scope-${o.scope}`,
+            });
+            input.addEventListener("change", () => {
+              if (part) this.scopes.set(`${cell.form}|${part.key}`, o.scope);
+              this.render();
+            });
+            const count = model.blastRadius(o.targets).length;
+            return h(
+              "label",
+              { class: "scope" },
+              input,
+              ` ${o.label} `,
+              h("span", { class: "muted small" }, `${count} cell${count === 1 ? "" : "s"}`),
+            );
+          }),
+        )
+      : null;
+    const target = option?.targets[0];
+    const field = (axis: "x" | "y") => {
+      const [dx, dy] = target ? offsetOf(model.edits, target) : [0, 0];
       const input = h("input", {
         type: "number",
         step: 1,
         value: axis === "x" ? dx : dy,
-        id: `${id}-${axis}`,
-        disabled: !editable,
-        "data-focus-id": `${id}-${axis}`,
+        id: `edit-${axis}`,
+        disabled: !editable || !option,
+        "data-focus-id": `edit-${axis}`,
       });
       input.addEventListener("change", () => {
-        const before = model.overrides;
-        const [x, y] = offsetOf(before, part.ref);
+        if (!option || !target) return;
+        const before = model.edits;
+        const [x, y] = offsetOf(before, target);
         const entered = Math.round(Number(input.value) || 0);
-        const target: Offset = axis === "x" ? [entered, y] : [x, entered];
-        const delta: Offset = [target[0] - x, target[1] - y];
-        this.commit(before, moveBy(before, this.linked(part.ref), delta, this.stamp()));
+        const delta: Offset = axis === "x" ? [entered - x, 0] : [0, entered - y];
+        this.commit(before, moveBy(before, option.targets, option.scope, delta, this.stamp()));
       });
-      return h("label", { for: `${id}-${axis}` }, `${axis} `, input);
+      return h("label", { for: `edit-${axis}` }, `${axis} `, input);
     };
-    const reset = (part: CellPart, id: string) => {
-      const [dx, dy] = offsetOf(model.overrides, part.ref);
-      const button = h(
-        "button",
-        {
-          type: "button",
-          class: "small-button",
-          disabled: !editable || (dx === 0 && dy === 0),
-          "data-focus-id": `${id}-reset`,
-          "aria-label": `Reset ${part.label}`,
-        },
-        "Reset",
-      );
-      button.addEventListener("click", () => {
-        const before = model.overrides;
-        let next = before;
-        for (const ref of this.linked(part.ref)) next = resetPart(next, ref, this.stamp());
-        this.commit(before, next);
-      });
-      return button;
-    };
-    const rowFor = (part: CellPart, id: string, label: string) =>
-      h(
-        "div",
-        { class: "offset-row" },
-        h("span", { class: "glyph-name", title: part.label }, label),
-        field(part, "x", id),
-        field(part, "y", id),
-        reset(part, id),
-      );
-    const body = parts.body;
-    const shared = body ? model.usedBy(body.ref.kind === "body" ? body.ref.glyph : "") : [];
+    const resetButton = h(
+      "button",
+      {
+        type: "button",
+        class: "small-button",
+        disabled:
+          !editable ||
+          !option ||
+          option.targets.every((t) => offsetOf(model.edits, t).every((v) => v === 0)),
+        "data-focus-id": "edit-reset",
+      },
+      "Reset",
+    );
+    resetButton.addEventListener("click", () => {
+      if (!option) return;
+      const before = model.edits;
+      this.commit(before, reset(before, option.targets, this.stamp()));
+    });
     const undo = h(
       "button",
       { type: "button", disabled: !this.history.canUndo, "data-focus-id": "undo" },
@@ -1748,19 +2015,12 @@ class App {
     );
     redo.addEventListener("click", () => this.redo());
     const hint = editable
-      ? "Drag a handle, or focus it and use the arrow keys (Shift for 25 units). Moving the letter moves its glyph with its dots and marks, as the font's anchors would; moving dots moves only them. Offsets are in font units at wght 400. Ctrl+Z undoes, Ctrl+Shift+Z redoes."
+      ? "Drag a handle, or focus it and use the arrow keys (Shift for 25 units). The scope says which font rule the move becomes and how far it reaches; the smallest that does the job is picked first. Offsets are in font units at wght 400. Ctrl+Z undoes, Ctrl+Shift+Z redoes."
       : choice === "source"
-        ? "Offsets apply to the calibrated font."
+        ? "Edits apply to the calibrated font."
         : model.showsBaked(choice)
           ? "Showing the baked preview: the font itself, shaped by HarfBuzz, with no overlay. Turn it off to edit."
           : "Turn on proposed offsets to edit them.";
-    const link = h("input", {
-      type: "checkbox",
-      id: "link-forms",
-      checked: this.state.link,
-      "data-focus-id": "link-forms",
-    });
-    link.addEventListener("change", () => this.setState({ link: link.checked }));
     return h(
       "aside",
       { class: "side" },
@@ -1769,53 +2029,157 @@ class App {
         { "aria-labelledby": "offsets-title" },
         h("h3", { id: "offsets-title" }, "Move parts"),
         modes,
-        h(
-          "label",
-          {
-            class: "link-forms",
-            title: "Apply each move to the same part in every form, as for a baseline shift",
-          },
-          link,
-          " Link forms: move the same part in every form",
-        ),
         ...(model.showsBaked(choice)
           ? []
           : [
-              h("h4", {}, "Letter"),
-              body
-                ? rowFor(body, "body", body.label)
-                : h("p", { class: "muted small" }, "No body glyph."),
-              shared.length > 1
-                ? h(
+              handles.length
+                ? list
+                : h(
                     "p",
-                    { class: "muted small shared" },
-                    `This glyph is also ${shared.filter((u) => u !== `${cell.letter.name} ${cell.form}`).join(", ")}: moving it moves those too.`,
-                  )
+                    { class: "muted small" },
+                    `Nothing to drag here in ${DRAG_LABELS[this.state.drag].toLowerCase()} mode.`,
+                  ),
+              part ? h("h4", { class: "part-title" }, part.label) : null,
+              part ? h("p", { class: "muted small" }, this.attachText(cell, part)) : null,
+              scopes,
+              option
+                ? h("div", { class: "offset-row" }, field("x"), field("y"), resetButton)
                 : null,
-              h("h4", {}, "Dots"),
-              parts.dots.length
-                ? h("div", {}, ...parts.dots.map((part, i) => rowFor(part, `dot-${i}`, part.label)))
-                : h("p", { class: "muted small" }, "No dots."),
-              h("h4", {}, "Marks"),
-              parts.marks.length
-                ? h(
-                    "div",
-                    {},
-                    ...parts.marks.map((part) =>
-                      rowFor(
-                        part,
-                        `offset-${part.ref.kind === "mark" ? part.ref.index : 0}`,
-                        part.label,
-                      ),
-                    ),
-                  )
-                : h("p", { class: "muted" }, "This cell has no mark."),
               h("div", { class: "row" }, undo, redo),
             ]),
         h("p", { class: "muted small" }, hint),
       ),
+      this.blastPanel(option),
+      this.cellEdits(cell),
       this.noteForm(cell, choice, parts),
       this.cellNotes(cell),
+    );
+  }
+
+  /** What the part is, in the font's terms: what it hangs on and through which class. */
+  private attachText(cell: Cell, part: CellPart): string {
+    const handle = part.handle;
+    const used = (glyph: string) => {
+      const others = this.model
+        .usedBy(glyph)
+        .filter((u) => u !== `${cell.letter.name} ${cell.form}`);
+      return others.length ? ` It is also ${others.join(", ")}.` : "";
+    };
+    switch (handle.kind) {
+      case "body":
+        return `The letter's glyph. Its outline carries its anchors, so its dots and marks follow it.${used(handle.glyph)}`;
+      case "dots":
+        return handle.inline
+          ? `Dots drawn inside ${handle.glyph}.`
+          : `A dot glyph of its own, attached to ${handle.attach?.parent ?? handle.glyph}${handle.attach ? ` through ${this.className(handle.attach.cls)}` : ""}.`;
+      case "mark":
+        return handle.attach
+          ? `Attached to ${handle.attach.parent} through ${this.className(handle.attach.cls)}${handle.attach.kind === "mark" ? ", stacked on that mark" : ""}.`
+          : "No anchor places this mark; only a pair rule can move it.";
+      case "anchor":
+        return `Where ${this.className(handle.cls)} marks attach to ${handle.glyph}${handle.group.length ? `: here ${handle.group.join(", ")}` : ""}.${used(handle.glyph)}`;
+      default:
+        return `Where marks of ${this.className(handle.cls)} stack on ${handle.glyph}.`;
+    }
+  }
+
+  /** The cells the active edit changes: how many, and the first few drawn live. */
+  private blastPanel(option: ScopeOption | undefined): HTMLElement {
+    const model = this.model;
+    const choice = this.state.font;
+    const range = this.verticalRange(choice);
+    const cells = [...this.affected.values()];
+    const shown = cells.slice(0, BLAST_SHOWN);
+    return h(
+      "section",
+      { class: "blast", "aria-labelledby": "blast-title", "data-testid": "blast" },
+      h("h3", { id: "blast-title" }, "Blast radius"),
+      option
+        ? h(
+            "p",
+            {},
+            h("strong", { id: "blast-count" }, `${cells.length}`),
+            ` everyday cell${cells.length === 1 ? "" : "s"} change: ${option.label.toLowerCase()}. They are outlined in the matrix.`,
+          )
+        : h("p", { class: "muted small" }, "Pick a handle to see what moving it reaches."),
+      shown.length
+        ? h(
+            "ul",
+            { class: "blast-cells" },
+            ...shown.map((c) => {
+              const button = h(
+                "button",
+                {
+                  type: "button",
+                  class: "chip blast-cell",
+                  "data-blast": cellId(c),
+                  title: model.cellName(c),
+                },
+                this.cellSvg(choice, c, range, "blast-svg"),
+                h("span", {}, model.cellName(c)),
+              );
+              button.addEventListener("click", () => this.select(c));
+              return h("li", {}, button);
+            }),
+          )
+        : null,
+      cells.length > shown.length
+        ? h("p", { class: "muted small" }, `and ${cells.length - shown.length} more`)
+        : null,
+    );
+  }
+
+  /** The edits that change this cell, each with how far it reaches. */
+  private cellEdits(cell: Cell): HTMLElement {
+    const model = this.model;
+    const choice = "calib";
+    const here = [
+      {
+        id: cellId(cell),
+        layout: model.layout(choice, cell),
+        attach: model.cellAttachments(choice, cell),
+      },
+    ];
+    const edits = model.edits.edits.filter((e) => blastRadius([e.target], here).length > 0);
+    return h(
+      "section",
+      { class: "cell-edits", "aria-labelledby": "cell-edits-title" },
+      h("h3", { id: "cell-edits-title" }, "Edits on this cell"),
+      edits.length
+        ? h(
+            "ul",
+            {},
+            ...edits.map((edit) => {
+              const remove = h(
+                "button",
+                {
+                  type: "button",
+                  class: "link",
+                  "data-focus-id": `remove-${targetId(edit.target)}`,
+                },
+                "Reset",
+              );
+              remove.addEventListener("click", () => {
+                const before = model.edits;
+                this.commit(before, reset(before, [edit.target], this.stamp()));
+              });
+              const count = model.blastRadius([edit.target]).length;
+              return h(
+                "li",
+                { class: "cell-edit", "data-edit": targetId(edit.target) },
+                h("span", { class: "glyph-name" }, targetId(edit.target)),
+                ` ${edit.dx}, ${edit.dy} `,
+                h(
+                  "span",
+                  { class: "muted small" },
+                  `${SCOPE_LABELS[edit.scope].toLowerCase()}, ${count} cells`,
+                ),
+                " ",
+                remove,
+              );
+            }),
+          )
+        : h("p", { class: "muted small" }, "None yet."),
     );
   }
 
@@ -2009,7 +2373,6 @@ class App {
           (!filter.severity || String(n.severity) === filter.severity),
       )
       .toSorted((a, b) => b.severity - a.severity || a.created.localeCompare(b.created));
-    const overrides = this.model.overrides;
     return h(
       "section",
       { class: "notes-view", "aria-labelledby": "notes-title" },
@@ -2024,35 +2387,21 @@ class App {
       notes.length
         ? h("ol", { class: "notes" }, ...notes.map((n) => this.noteItem(n, null)))
         : h("p", { class: "muted" }, "No notes match."),
-      overrides.glyphs.length || overrides.marks.length
+      this.model.edits.edits.length
         ? h(
             "section",
             {},
-            h("h3", {}, "Proposed offsets"),
+            h("h3", {}, "Proposed edits"),
             h(
               "ul",
               {},
-              ...overrides.glyphs.map((o) =>
+              ...this.model.edits.edits.map((e) =>
                 h(
                   "li",
                   {},
-                  `${o.glyph} (${o.usedBy.join(", ") || "no listed form"}): `,
-                  [
-                    ...(o.body.dx || o.body.dy ? [`body ${o.body.dx}, ${o.body.dy}`] : []),
-                    ...o.dots.map((d) => `dots ${d.part} ${d.dx}, ${d.dy}`),
-                  ].join("; "),
+                  `${targetId(e.target)}: ${e.dx}, ${e.dy} (${SCOPE_LABELS[e.scope].toLowerCase()})`,
                 ),
               ),
-              ...overrides.marks.map((o) => {
-                const cell = this.model.cellFromKey(o.key);
-                return h(
-                  "li",
-                  {},
-                  cell ? this.model.cellName(cell) : keyId(o.key),
-                  ": ",
-                  o.marks.map((m) => `${m.glyph} ${m.dx}, ${m.dy}`).join("; "),
-                );
-              }),
             ),
           )
         : null,
@@ -2110,7 +2459,7 @@ class App {
   private edgeLine(line: EdgeLine, index: number, choice: FontChoice): HTMLElement {
     const model = this.model;
     const lineLayout = model.lineLayout(choice, line.text);
-    const placed = model.linePlacements(choice, lineLayout);
+    const placed = model.linePlacements(choice, lineLayout, line.text);
     const box = layoutBox(lineLayout, model.ink(choice), placed);
     const range = {
       top: Math.max(box?.y1 ?? 0, model.data.metrics.ascender) + 60,

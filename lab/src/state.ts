@@ -3,8 +3,8 @@ import { FORMS, type FontChoice, type Form } from "./types";
 export const VIEWS = ["matrix", "overview", "notes"] as const;
 export type View = (typeof VIEWS)[number];
 
-/** What dragging on the inspector moves: a mark, the whole letter, or one dot group. */
-export const DRAG_MODES = ["mark", "letter", "dot"] as const;
+/** What dragging on the inspector moves: a mark, the whole letter, one dot group, or an anchor. */
+export const DRAG_MODES = ["mark", "letter", "dot", "anchor"] as const;
 export type DragMode = (typeof DRAG_MODES)[number];
 
 export interface ViewState {
@@ -17,8 +17,6 @@ export interface ViewState {
   niche: boolean;
   impossible: boolean;
   drag: DragMode;
-  /** Apply an edit to the same part in every form of the letter. */
-  link: boolean;
   /** Draw the calibrated font from calib-preview.ttf, with the overrides baked in. */
   baked: boolean;
 }
@@ -33,7 +31,6 @@ export const DEFAULT_STATE: ViewState = {
   niche: false,
   impossible: false,
   drag: "mark",
-  link: false,
   baked: false,
 };
 
@@ -59,7 +56,6 @@ export function parseState(search: string): ViewState {
     niche: params.get("niche") === "on",
     impossible: params.get("impossible") === "on",
     drag: oneOf(params.get("drag"), DRAG_MODES, DEFAULT_STATE.drag),
-    link: params.get("link") === "on",
     baked: params.get("baked") === "on",
   };
 }
@@ -78,7 +74,6 @@ export function serializeState(state: ViewState): string {
   if (state.niche) params.set("niche", "on");
   if (state.impossible) params.set("impossible", "on");
   if (state.drag !== DEFAULT_STATE.drag) params.set("drag", state.drag);
-  if (state.link) params.set("link", "on");
   if (state.baked) params.set("baked", "on");
   const query = params.toString();
   return query ? `?${query}` : "";

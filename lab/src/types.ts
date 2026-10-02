@@ -44,7 +44,8 @@ export interface LabData {
   family: string;
   wght: number;
   arabicScale: number;
-  fonts: { calib: string; notoArabic: string; notoSans: string };
+  /** Font files, and positioning.json, next to lab.json. */
+  fonts: { calib: string; notoArabic: string; notoSans: string; positioning?: string };
   harfbuzz: { harfbuzz: string; uharfbuzz: string };
   metrics: Metrics;
   approvedLineBox: ApprovedLineBox;

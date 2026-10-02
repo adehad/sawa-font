@@ -5,8 +5,6 @@ import {
   type Ink,
   type Layout,
   NO_MOVES,
-  type Offset,
-  type Offsets,
   type Placement,
   analyse,
   cellCodepoints,
@@ -15,18 +13,14 @@ import {
   lineLayout,
   placements,
 } from "./cells";
+import { type Edit, type Edits, type Target, movesOf, targetId } from "./edits";
 import { type Envelope, type Extent, envelope } from "./envelope";
 import { type Box, type Contour, bounds, flatten, parsePath, translate } from "./geometry";
 import { HbFont } from "./hb";
 import type { ViewState } from "./state";
-import {
-  type CellKey,
-  type DotOffset,
-  type Note,
-  type Override,
-  type Overrides,
-  keyId,
-} from "./store";
+import { type Attachment, NO_POSITIONING, type Positioning, attachments } from "./positioning";
+import { type Shaped, blastRadius } from "./scope";
+import { type CellKey, type EditEntry, type Note, parseOverrides } from "./store";
 import {
   type FontChoice,
   type Form,
@@ -52,23 +46,28 @@ export interface Fonts {
   preview?: HbFont;
 }
 
-/** What `sawa lab preview` baked into calib-preview.ttf. */
+/** What `sawa lab preview` baked into calib-preview.ttf: the edits, or a version 2 file's glyph entries. */
 export interface Baked {
   build: string;
   source: string;
-  glyphs: { glyph: string; body: { dx: number; dy: number }; dots: DotOffset[] }[];
+  edits?: EditEntry[];
+  glyphs?: unknown[];
 }
 
-/** The glyph offsets of a set of overrides, comparable with what was baked. */
-export function glyphOffsets(glyphs: Baked["glyphs"]): string {
+/** The edits a baked preview holds. */
+export function bakedEdits(baked: Baked): Edit[] {
+  const file = baked.edits
+    ? { schema: "sawa-lab/overrides", version: 3, edits: baked.edits, requests: [] }
+    : { schema: "sawa-lab/overrides", version: 2, glyphs: baked.glyphs ?? [], marks: [] };
+  return parseOverrides(file).edits;
+}
+
+/** Edits reduced to what a baked font holds, comparable between two sets. */
+export function editKey(edits: readonly Edit[]): string {
   return JSON.stringify(
-    glyphs
-      .map((g) => ({
-        glyph: g.glyph,
-        body: [g.body.dx, g.body.dy],
-        dots: g.dots.map((d) => `${d.part} ${d.dx} ${d.dy}`).toSorted((a, b) => a.localeCompare(b)),
-      }))
-      .toSorted((a, b) => a.glyph.localeCompare(b.glyph)),
+    edits
+      .map((e) => `${targetId(e.target)} ${e.dx} ${e.dy}`)
+      .toSorted((a, b) => a.localeCompare(b)),
   );
 }
 
@@ -94,27 +93,6 @@ export function formId(letter: Letter, form: Form): string {
   return `${letter.codepoint}|${form}`;
 }
 
-/** How a set of overrides moves glyph parts, looked up by glyph name. */
-export function glyphMoves(overrides: Overrides): GlyphMoves {
-  const byGlyph = new Map(overrides.glyphs.map((o) => [o.glyph, o]));
-  return {
-    body: (glyph) => {
-      const entry = byGlyph.get(glyph);
-      return entry ? [entry.body.dx, entry.body.dy] : [0, 0];
-    },
-    dot: (base, dot) => {
-      const found = byGlyph.get(base)?.dots.find((d) => d.part === dot);
-      return found ? [found.dx, found.dy] : undefined;
-    },
-    inline: (glyph) => {
-      const out: Record<string, Offset> = {};
-      for (const d of byGlyph.get(glyph)?.dots ?? [])
-        if (d.part.includes(":")) out[d.part] = [d.dx, d.dy];
-      return out;
-    },
-  };
-}
-
 /** The lab's data, fonts and the owner's notes and offsets, with shaping cached per cell. */
 export class Model {
   readonly letters: Map<string, Letter>;
@@ -123,33 +101,42 @@ export class Model {
   private readonly analyses = new Map<string, Analysis>();
   private readonly partOutlines = new Map<string, Contour[]>();
   private readonly fontEnvelopes = new Map<string, Envelope & { cells: Map<string, Cell> }>();
+  private readonly attached = new Map<string, (Attachment | null)[]>();
+  private readonly blasts = new Map<string, string[]>();
   private moves: GlyphMoves = NO_MOVES;
-  private overridesValue: Overrides = { glyphs: [], marks: [] };
+  private editsValue: Edits = { edits: [], requests: [] };
 
   constructor(
     readonly data: LabData,
     readonly fonts: Fonts,
     public state: ViewState,
     public notes: Note[],
-    overrides: Overrides,
+    edits: Edits,
     readonly baked: Baked | null = null,
+    readonly positioning: Positioning = NO_POSITIONING,
   ) {
     this.letters = new Map(data.matrix.letters.map((l) => [l.codepoint, l]));
     this.marks = new Map(
       [NO_MARK, ...data.matrix.everyday, ...data.matrix.niche].map((m) => [m.id, m]),
     );
-    this.overrides = overrides;
+    this.edits = edits;
   }
 
-  get overrides(): Overrides {
-    return this.overridesValue;
+  get edits(): Edits {
+    return this.editsValue;
   }
 
-  /** Setting the overrides drops every cached analysis, since offsets feed them all. */
-  set overrides(value: Overrides) {
-    this.overridesValue = value;
-    this.moves = glyphMoves(value);
+  /** Setting the edits drops every cached analysis, since they feed them all. */
+  set edits(value: Edits) {
+    this.editsValue = value;
+    this.moves = movesOf(value.edits);
     this.analyses.clear();
+  }
+
+  /** The body glyph of a cell's letter form, which old mark offsets were keyed by. */
+  bodyOf(key: CellKey): string | undefined {
+    const letter = this.letters.get(key.letter);
+    return letter ? (this.letterForm(letter, key.form)?.body ?? undefined) : undefined;
   }
 
   get upm(): number {
@@ -194,16 +181,14 @@ export class Model {
     return choice === "calib" && this.state.offsets;
   }
 
-  /** Glyph moves drawn as an overlay; the baked preview already has them in its outlines. */
-  private glyphMovesFor(choice: FontChoice): GlyphMoves {
+  /** Moves drawn as an overlay; the baked preview already has them in the font. */
+  private movesFor(choice: FontChoice): GlyphMoves {
     return this.editing(choice) && !this.showsBaked(choice) ? this.moves : NO_MOVES;
   }
 
-  /** Whether the baked preview holds the same glyph offsets as the lab. */
+  /** Whether the baked preview holds the same edits as the lab. */
   bakedMatches(): boolean {
-    return (
-      this.baked !== null && glyphOffsets(this.baked.glyphs) === glyphOffsets(this.overrides.glyphs)
-    );
+    return this.baked !== null && editKey(bakedEdits(this.baked)) === editKey(this.edits.edits);
   }
 
   selected(): Cell | null {
@@ -257,29 +242,53 @@ export class Model {
     return result;
   }
 
-  override(cell: Cell): Override | undefined {
-    const id = keyId(cellKey(cell));
-    return this.overrides.marks.find((o) => keyId(o.key) === id);
+  /** What each mark of a layout hangs on, from the calibrated font's anchors. */
+  attachments(layoutId: string, cellLayout: Layout): (Attachment | null)[] {
+    let found = this.attached.get(layoutId);
+    if (!found) {
+      found = attachments(cellLayout.pieces, this.positioning.anchors);
+      this.attached.set(layoutId, found);
+    }
+    return found;
   }
 
-  /** The cell's per-cell mark offsets, when shown and on the calibrated font. */
-  markOffsets(choice: FontChoice, cell: Cell): Offsets {
-    if (!this.editing(choice)) return {};
-    const entry = this.override(cell);
-    if (!entry) return {};
-    return Object.fromEntries(entry.marks.map((m) => [m.index, [m.dx, m.dy] as const]));
-  }
-
-  placements(choice: FontChoice, cell: Cell): Placement[] {
-    return placements(
+  cellAttachments(choice: FontChoice, cell: Cell): (Attachment | null)[] {
+    return this.attachments(
+      `${this.fontKey(choice, "arabic")}|${cellId(cell)}`,
       this.layout(choice, cell),
-      this.glyphMovesFor(choice),
-      this.markOffsets(choice, cell),
     );
   }
 
-  linePlacements(choice: FontChoice, line: Layout): Placement[] {
-    return placements(line, this.glyphMovesFor(choice));
+  placements(choice: FontChoice, cell: Cell, moves = this.movesFor(choice)): Placement[] {
+    return placements(this.layout(choice, cell), this.cellAttachments(choice, cell), moves);
+  }
+
+  linePlacements(choice: FontChoice, line: Layout, text = ""): Placement[] {
+    return placements(
+      line,
+      this.attachments(`${this.fontKey(choice, "arabic")}|line|${text}`, line),
+      this.movesFor(choice),
+    );
+  }
+
+  /** The everyday cells an edit of `targets` changes, in the calibrated font. */
+  blastRadius(targets: readonly Target[]): Cell[] {
+    const id = JSON.stringify([this.state.impossible, targets.map(targetId)]);
+    let ids = this.blasts.get(id);
+    const cells = new Map(this.everydayCells().map((cell) => [cellId(cell), cell]));
+    if (!ids) {
+      const shaped = function* (model: Model): Generator<Shaped> {
+        for (const [key, cell] of cells)
+          yield {
+            id: key,
+            layout: model.layout("calib", cell),
+            attach: model.cellAttachments("calib", cell),
+          };
+      };
+      ids = blastRadius(targets, shaped(this));
+      this.blasts.set(id, ids);
+    }
+    return ids.flatMap((key) => cells.get(key) ?? []);
   }
 
   /** One part's outline from the glyph table, placed at (x, y). */
@@ -335,7 +344,7 @@ export class Model {
     const cellLayout = this.layout(choice, cell);
     const placed = withOffsets
       ? this.placements(choice, cell)
-      : placements(cellLayout, NO_MOVES, {});
+      : this.placements(choice, cell, NO_MOVES);
     return layoutBox(cellLayout, this.ink(choice), placed);
   }
 

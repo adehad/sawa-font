@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  type GlyphMoves,
   NO_MOVES,
-  type Offsets,
   type Layout,
   type ShapedGlyph,
   analyse,
@@ -27,8 +27,23 @@ const OUTLINES: Record<number, Contour[]> = {
 };
 const outline = (gid: number) => OUTLINES[gid] ?? [];
 const ink = plainInk(outline);
-const check = (cell: Layout, marks: Offsets = {}) =>
-  analyse(cell, ink, placements(cell, NO_MOVES, marks), 30);
+const check = (cell: Layout, moves: GlyphMoves = NO_MOVES) =>
+  analyse(
+    cell,
+    ink,
+    placements(
+      cell,
+      cell.pieces.map(() => null),
+      moves,
+    ),
+    30,
+  );
+// gid 3 is a mark, the others are not.
+const FACTS = {
+  isBase: () => false,
+  isMark: (gid: number) => gid === 3,
+  name: (gid: number) => `g${gid}`,
+};
 
 function glyph(gid: number, cluster: number, xAdvance = 0, xOffset = 0, yOffset = 0): ShapedGlyph {
   return { gid, cluster, xAdvance, xOffset, yOffset };
@@ -67,16 +82,20 @@ describe("cells", () => {
     expect(cell.advance).toBe(500);
   });
 
-  it("finds a clash with the dot and clears it with an offset", () => {
+  it("finds a clash with the dot and clears it with a pair rule", () => {
     // The mark sits 470..550 over the dot's 450..550: overlapping ink.
     const cell = layout(
       [glyph(3, 1, 0, 100, 470), glyph(2, 0), glyph(1, 0, 500)],
       [glyph(2, 0), glyph(1, 0, 500)],
+      FACTS,
     );
     const clashing = check(cell);
     expect(clashing.gap).toBe(0);
     expect(clashing.clash).toBe(true);
-    const moved = check(cell, { 0: [0, 120] });
+    const moved = check(cell, {
+      ...NO_MOVES,
+      pair: (base, mark) => (base === "g2" && mark === "g3" ? [0, 120] : [0, 0]),
+    });
     expect(moved.gap).toBeCloseTo(40);
     expect(moved.clash).toBe(false);
     expect(moved.top).toBe(670);

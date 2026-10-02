@@ -1,33 +1,15 @@
-import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { HbFont } from "./hb";
-import { moveBy } from "./edits";
-import { NO_OVERRIDES } from "./store";
-import { Model } from "./model";
-import { DEFAULT_STATE } from "./state";
-import type { LabData } from "./types";
+import { NO_EDITS, type Target, moveBy } from "./edits";
+import { labModel, present as written } from "./fixture";
+import type { Model } from "./model";
 
-const FONTS = fileURLToPath(new URL("../public/fonts/", import.meta.url));
-const present = existsSync(`${FONTS}lab.json`);
+const present = written("lab.json", "positioning.json");
 if (!present && process.env.CI) {
-  throw new Error(`${FONTS}lab.json is missing: run \`uv run --group build sawa lab fonts\` first`);
+  throw new Error("lab.json is missing: run `uv run --group build sawa lab fonts` first");
 }
 
 function model(): Model {
-  const data = JSON.parse(readFileSync(`${FONTS}lab.json`, "utf8")) as LabData;
-  const font = (file: string) => new HbFont(readFileSync(`${FONTS}${file}`));
-  return new Model(
-    data,
-    {
-      calib: font(data.fonts.calib),
-      notoArabic: font(data.fonts.notoArabic),
-      notoSans: font(data.fonts.notoSans),
-    },
-    DEFAULT_STATE,
-    [],
-    NO_OVERRIDES,
-  );
+  return labModel(NO_EDITS);
 }
 
 describe.skipIf(!present)("the calibrated font's everyday envelope", () => {
@@ -73,12 +55,13 @@ describe.skipIf(!present)("the calibrated font's everyday envelope", () => {
     const kasratan = lab.marks.get("kasratan");
     if (!yeh || !kasratan) throw new Error("no yeh or kasratan");
     const cell = { letter: yeh, form: "isolated" as const, mark: kasratan };
-    const bodies = (["isolated", "final"] as const).map((form) => ({
-      kind: "body" as const,
+    const bodies = (["isolated", "final"] as const).map((form): Target => ({
+      mechanism: "outline",
       glyph: lab.letterForm(yeh, form)?.body ?? "",
+      part: "body",
     }));
     const boxBefore = lab.box("calib", cell);
-    lab.overrides = moveBy(NO_OVERRIDES, bodies, [0, 150], {
+    lab.edits = moveBy(NO_EDITS, bodies, "all-forms", [0, 150], {
       build: lab.data.build,
       wght: lab.data.wght,
       now: "2026-10-02T10:00:00.000Z",
