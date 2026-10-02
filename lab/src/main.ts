@@ -777,6 +777,13 @@ class App {
               h("td", {}, em(approved.bottom, upm)),
               h("td", {}, `${em(approved.height, upm)} em`),
             ),
+            row(
+              `Corpus coverage box (${(model.data.approvedLineBox.coverage.share * 100).toFixed(1)}% of ${model.data.approvedLineBox.coverage.words} words)`,
+              model.data.approvedLineBox.coverage.top,
+              model.data.approvedLineBox.coverage.bottom,
+              "as-built",
+              " em",
+            ),
           ),
         ),
       ),

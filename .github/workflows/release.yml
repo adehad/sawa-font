@@ -175,7 +175,7 @@ jobs:
         run: uv run --locked --group build sawa lab fonts
       - name: Test the lab's Python side against the cached Noto sources
         working-directory: .
-        run: uv run --locked --group build pytest tests/python/test_lab.py tests/python/test_lab_parts.py tests/python/test_lab_lines.py tests/python/test_lab_preview.py
+        run: uv run --locked --group build pytest tests/python/test_lab.py tests/python/test_lab_gpos.py tests/python/test_lab_parts.py tests/python/test_lab_lines.py tests/python/test_lab_preview.py
       - name: Bake the sample overrides into the preview font
         working-directory: .
         run: uv run --locked --group build sawa lab preview --overrides lab/tests/fixtures/overrides-sample.json

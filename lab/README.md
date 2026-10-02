@@ -14,7 +14,7 @@ bun install
 bun run dev                              # http://localhost:4410/
 ```
 
-`sawa lab fonts --arabic-scale 1.2` writes the fonts at another scale, and `--line-box 2.4` draws another approved line box. The build id in the footer, and in every note and offset, changes with the scale.
+`sawa lab fonts --arabic-scale 1.2` writes the fonts at another scale, and `--line-box 2.4` draws an approved line box of another height. The build id in the footer, and in every note and offset, changes with the scale.
 
 `lab.json` also splits each letter form into the parts the lab can move. `letterForms["U+0628|initial"]` names the form's body glyph and its parts: the body, and each dot group with its position (above, below or inside) and number of dots. In Noto Sans Arabic a dot group is a glyph of its own, which `ccmp` splits off the letter; a dot drawn inside the body glyph, as a component named like a dot or a small outer contour, is a part too. `glyphs` holds every such glyph's advance, GDEF class, parts with their SVG paths in font units, and GPOS anchors.
 
@@ -54,7 +54,9 @@ The edge-case lines under the canvas, at 24 and 64 px per em, are drawn with eve
 
 By default the matrix and envelope hold only combinations ordinary spelling uses, the same rules as the search behind the approved line spacing: maddah and hamza below only on bare alef, hamza above only on alef, waw, yeh and alef maksura, and no shadda on an alef, hamza, alef maksura or teh marbuta. `sawa lab fonts` decides this and lists each letter's `implausible` mark sequences in `lab.json`. "Include impossible combinations" brings the rest back, hatched and labelled.
 
-For the calibrated font the plausible everyday envelope is 1.503 em to -0.799 em, from theh initial with shadda and kasratan down to yeh isolated with kasratan; `src/envelope.fonts.test.ts` holds it there. The owner's approved line box, 2.36 em (that envelope plus 0.05 em), is drawn centred on it in the envelope panel and on the inspector grid.
+For the calibrated font the plausible everyday envelope is 1.503 em to -0.799 em, from theh initial with shadda and kasratan down to yeh isolated with kasratan; `src/envelope.fonts.test.ts` holds it there.
+
+The owner approved a 2.06 em line box, which the tallest and deepest stacks pass on purpose. `sawa lab fonts` places it from the corpus: the coverage box is the top and bottom that hold the everyday ink of 99.5% of word tokens in the project's sentences and the Tanzil text (niche marks taken out, a quarter of a percent left out at each end), and the approved box is split above and below the baseline in the same proportion. With the Tanzil text that gives a coverage box of 1.471 to -0.631 em over 78043 words, and an approved box of 1.442 to -0.618 em that holds 99.4% of them. `lab.json` records both under `approvedLineBox`, and both are drawn in the envelope panel; the approved one is also on the inspector grid.
 
 The URL holds the view, mark, cell, font and toggles, so a link reproduces what you see. Notes and offsets stay in this browser's local storage until you export them.
 

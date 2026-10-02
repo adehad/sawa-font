@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sawa_tools import lab_lines, lab_preview
+from sawa_tools import lab_gpos, lab_linebox, lab_lines, lab_preview
 from sawa_tools.corpus import DEFAULT_MIXED, DEFAULT_STRESS
 from sawa_tools.tanzil import DEFAULT_UTHMANI
 
@@ -103,10 +103,13 @@ ALEFS = {chr(cp) for cp in (0x0627, 0x0623, 0x0625, 0x0622)}
 HAMZA_ABOVE_CARRIERS = {chr(cp) for cp in (0x0627, 0x0648, 0x064A, 0x0649)}
 NO_SHADDA = ALEFS | {chr(cp) for cp in (0x0621, 0x0649, 0x0629)}
 
-# The line box the owner approved: the plausible everyday envelope of
-# Sans 400 at 1.15 (2.302 em, rounded up to 2.31) plus 0.05 em.
-DEFAULT_LINE_BOX = 2.36
-LINE_BOX_BASIS = "plausible everyday envelope + 0.05 em"
+# The line box height the owner approved for Sans 400 at 1.15. Where it
+# sits against the baseline comes from the corpus (lab_linebox).
+DEFAULT_LINE_BOX = 2.06
+LINE_BOX_BASIS = (
+    "2.06 em approved by the owner, split above and below the baseline in the"
+    " proportion of the box that holds 99.5% of corpus words' everyday ink"
+)
 
 FORMS = ["isolated", "initial", "medial", "final"]
 
@@ -299,7 +302,8 @@ def shape(font_bytes: bytes, codepoints: list[int]) -> list[list[int]]:
     ]
 
 
-_HB_FONTS: dict[int, Any] = {}
+# Keyed by id(); each entry keeps its bytes alive so the id cannot be reused.
+_HB_FONTS: dict[int, tuple[bytes, Any]] = {}
 
 
 def _uharfbuzz() -> Any:
@@ -313,8 +317,8 @@ def _hb_font(font_bytes: bytes) -> Any:
     hb = _uharfbuzz()
     key = id(font_bytes)
     if key not in _HB_FONTS:
-        _HB_FONTS[key] = hb.Font(hb.Face(hb.Blob(font_bytes)))
-    return _HB_FONTS[key]
+        _HB_FONTS[key] = (font_bytes, hb.Font(hb.Face(hb.Blob(font_bytes))))
+    return _HB_FONTS[key][1]
 
 
 def expected_shaping(
@@ -378,7 +382,8 @@ def missing_codepoints(font: TTFont, codepoints: set[int]) -> list[int]:
 
 def latin_metrics(font: TTFont) -> dict[str, int]:
     """Latin heights from the font's own ink: x-height and cap height from
-    x and H, ascender from d, descender from p.
+    x and H, ascender from d, descender from p, and the highest and lowest
+    Latin ink the lab's envelope uses, from É and Å and from g, y, j and p.
     """
     glyphs = font.getGlyphSet()
     cmap = font.getBestCmap() or {}
@@ -400,6 +405,102 @@ def latin_metrics(font: TTFont) -> dict[str, int]:
         "descender": round(ink("p")[0]),
         "hheaAscender": hhea.ascent,
         "hheaDescender": hhea.descent,
+        "inkTop": round(max(ink(c)[1] for c in "ÉÅ")),
+        "inkBottom": round(min(ink(c)[0] for c in "gyjp")),
+    }
+
+
+def approved_line_box(
+    font: TTFont,
+    font_bytes: bytes,
+    height: float,
+    latin: dict[str, int],
+    quran: Path | None,
+) -> dict[str, Any]:
+    """The approved line box of `height` em with its top and bottom, and the
+    corpus coverage box that places it.
+    """
+    words = lab_linebox.corpus_words(DEFAULT_STRESS, DEFAULT_MIXED, quran)
+    everyday = set(EVERYDAY_CODEPOINTS)
+    extents = lab_linebox.ink_extents(
+        font, font_bytes, (lab_linebox.everyday_text(w, everyday) for w in words)
+    )
+    coverage = lab_linebox.coverage_box(extents)
+    placed = lab_linebox.split(
+        height,
+        latin["unitsPerEm"],
+        coverage,
+        (latin["inkTop"], latin["inkBottom"]),
+        extents,
+    )
+    return {
+        "height": height,
+        "top": placed["top"],
+        "bottom": placed["bottom"],
+        "held": round(placed["held"], 4),
+        "basis": LINE_BOX_BASIS,
+        "coverage": {
+            "share": lab_linebox.COVERAGE,
+            "top": coverage["top"],
+            "bottom": coverage["bottom"],
+            "words": coverage["words"],
+            "held": round(coverage["held"], 4),
+            "corpus": "tests/strings (mixed, stress)"
+            + (", Tanzil Uthmani" if quran is not None else ""),
+        },
+    }
+
+
+def positioning(
+    font: TTFont,
+    font_bytes: bytes,
+    definition: dict[str, Any],
+    lines: dict[str, Any],
+) -> dict[str, Any]:
+    """Every mark-attachment lookup and class, the anchors of each glyph a
+    cell or edge-case line uses, the GSUB lookup each alternate glyph comes
+    from, and per cell its glyphs in visual order with, for each mark, the
+    glyph it hangs on and the class, as [glyph index, class id, kind].
+    """
+    from sawa_tools.lab_parts import glyph_class
+
+    names = font.getGlyphOrder()
+    marks = {n for n in names if glyph_class(font, n) == "mark"}
+    table = lab_gpos.anchors(font)
+    cmap = font.getBestCmap() or {}
+    used: set[str] = set()
+    out_cells: dict[str, Any] = {}
+    for cell in cells(definition):
+        cps = [int(cp[2:], 16) for cp in cell["codepoints"]]
+        shaped = shape(font_bytes, cps)
+        glyphs = [names[g[0]] for g in shaped]
+        used |= set(glyphs)
+        attach = lab_gpos.attachments(shaped, names, table, marks)
+        out_cells[f"{cell['letter']}|{cell['form']}|{cell['mark']}"] = {
+            "glyphs": glyphs,
+            "attach": [
+                None if a is None else [a["parent"], a["class"], a["kind"]]
+                for a in attach
+            ],
+        }
+    for entry in lines.values():
+        for line in entry["lines"]:
+            run = shape(font_bytes, [ord(c) for c in line["text"]])
+            used |= {names[g[0]] for g in run}
+    starts = {cmap[cp] for cp in required_codepoints(definition) if cp in cmap}
+    found = lab_lines.reachable(starts, lab_lines.substitutions(font))
+    return {
+        "lookups": lab_gpos.lookups(font),
+        "anchors": {
+            name: table[name].to_json() for name in sorted(used) if name in table
+        },
+        "alternates": {
+            glyph: {"lookup": alt.lookup, "feature": alt.feature}
+            | ({"context": alt.context} if alt.context else {})
+            for glyph, alt in sorted(found.items())
+            if glyph in used
+        },
+        "cells": out_cells,
     }
 
 
@@ -473,6 +574,11 @@ def build_lab_fonts(
     if quran is not None:
         words += lab_lines.quran_words(quran)
     lines = lab_lines.edge_lines(saved, calib_bytes, definition, forms, words)
+    gpos = positioning(saved, calib_bytes, definition, lines)
+    (out_dir / "positioning.json").write_text(
+        json.dumps(gpos, separators=(",", ":"), ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
     used = {name for form in forms.values() for name in form["glyphs"]}
     used |= {
         line["glyph"]
@@ -492,6 +598,7 @@ def build_lab_fonts(
         json.dumps(shaping, separators=(",", ":")) + "\n", encoding="utf-8"
     )
     shas = sorted(sources[name]["sha256"] for name in names)
+    metrics = latin_metrics(noto_sans)
     lab = {
         "build": build_id(shas, scale),
         "family": family.name,
@@ -501,10 +608,13 @@ def build_lab_fonts(
             "calib": "calib.ttf",
             "notoArabic": "noto-arabic.ttf",
             "notoSans": "noto-sans.ttf",
+            "positioning": "positioning.json",
         },
         "harfbuzz": harfbuzz_versions(),
-        "metrics": latin_metrics(noto_sans),
-        "approvedLineBox": {"height": line_box, "basis": LINE_BOX_BASIS},
+        "metrics": metrics,
+        "approvedLineBox": approved_line_box(
+            saved, calib_bytes, line_box, metrics, quran
+        ),
         "clearance": family.mark_clearance,
         "matrix": definition,
         "letterForms": forms,

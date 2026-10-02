@@ -34,6 +34,9 @@ export interface Metrics {
   descender: number;
   hheaAscender: number;
   hheaDescender: number;
+  /** The highest and lowest Latin ink: É and Å, and g, y, j and p. */
+  inkTop: number;
+  inkBottom: number;
 }
 
 export interface LabData {
@@ -44,7 +47,7 @@ export interface LabData {
   fonts: { calib: string; notoArabic: string; notoSans: string };
   harfbuzz: { harfbuzz: string; uharfbuzz: string };
   metrics: Metrics;
-  approvedLineBox: { height: number; basis: string };
+  approvedLineBox: ApprovedLineBox;
   clearance: number;
   matrix: Matrix;
   /** Keyed "U+0628|initial". */
@@ -53,6 +56,25 @@ export interface LabData {
   /** Keyed by the letter's codepoint. */
   lines: Record<string, LetterLines>;
   credits: { tanzil: string };
+}
+
+/** The approved line box in font units, and the corpus coverage box that places it. */
+export interface ApprovedLineBox {
+  /** In em. */
+  height: number;
+  top: number;
+  bottom: number;
+  /** The share of corpus words whose everyday ink it holds. */
+  held: number;
+  basis: string;
+  coverage: {
+    share: number;
+    top: number;
+    bottom: number;
+    words: number;
+    held: number;
+    corpus: string;
+  };
 }
 
 export type FontChoice = "calib" | "source";

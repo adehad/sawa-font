@@ -51,12 +51,14 @@ describe.skipIf(!present)("the calibrated font's everyday envelope", () => {
     ]);
   });
 
-  it("centres the approved 2.36 em line box on it", () => {
+  it("places the approved 2.06 em line box inside it, in the corpus's proportion", () => {
     const lab = model();
     const approved = lab.approvedLineBox();
-    expect(approved.height).toBe(2360);
-    expect(approved.top).toBeGreaterThan(lab.arabicEnvelope("calib").top);
-    expect(approved.bottom).toBeLessThan(lab.arabicEnvelope("calib").bottom);
+    const { coverage } = lab.data.approvedLineBox;
+    expect(approved.height).toBe(2060);
+    expect(approved.top).toBeLessThan(lab.arabicEnvelope("calib").top);
+    expect(approved.bottom).toBeGreaterThan(lab.arabicEnvelope("calib").bottom);
+    expect(approved.top / -approved.bottom).toBeCloseTo(coverage.top / -coverage.bottom, 1);
   });
 
   it("reaches further with impossible combinations included", () => {

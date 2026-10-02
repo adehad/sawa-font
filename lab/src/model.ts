@@ -390,18 +390,10 @@ export class Model {
     return result;
   }
 
-  /**
-   * The owner's approved line box, centred on the calibrated font's plausible
-   * everyday envelope as drawn by the font itself.
-   */
+  /** The owner's approved line box, placed on the baseline by `sawa lab fonts`. */
   approvedLineBox(): { top: number; bottom: number; height: number } {
-    const state = this.state;
-    this.state = { ...state, baked: false };
-    const env = this.fontEnvelope("calib", false);
-    this.state = state;
-    const height = this.data.approvedLineBox.height * this.upm;
-    const extra = (height - (env.top - env.bottom)) / 2;
-    return { top: env.top + extra, bottom: env.bottom - extra, height };
+    const { top, bottom } = this.data.approvedLineBox;
+    return { top, bottom, height: top - bottom };
   }
 
   latinEnvelope(choice: FontChoice): LatinEnvelope {

@@ -398,7 +398,7 @@ Resolved: the per-letter clearance lookups of `build/anchors.py` are replaced by
 Sawa Lab (`lab/`, run as its README says) is where the owner checks letters and leaves feedback, rather than reacting to static proofs (retro of 30 September). It renders one calibration build, Sawa Sans 400 with the Arabic at 1.15 and Noto's original mark placement, beside the unscaled Noto sources. `sawa lab fonts --arabic-scale` rebuilds it at another scale.
 
 - A matrix of letters by form with one mark sequence at a time, or every everyday mark at once, each cell with its clash status (0.03 em) and ink extent.
-- A vertical envelope, always visible: Latin ink against every plausible everyday cell's (1.503 to -0.799 em at 1.15), the line box both need, and the approved 2.36 em line box. Implausible combinations (shadda on alef, hamza below on yeh and the like) are left out unless asked for.
+- A vertical envelope, always visible: Latin ink against every plausible everyday cell's (1.503 to -0.799 em at 1.15), the line box both need, and the approved 2.06 em line box, placed 1.442 to -0.618 em in the proportion of the box that holds 99.5% of corpus words' everyday ink (1.471 to -0.631 em). Implausible combinations (shadda on alef, hamza below on yeh and the like) are left out unless asked for.
 - An inspector at 300 px per em on the Latin grid, with context and reading sizes, draggable marks and pinned notes.
 - Notes and proposed offsets export as `annotations.json` and `overrides.json` (schemas in `lab/README.md`), each keyed by letter, form, mark sequence and build id.
 
