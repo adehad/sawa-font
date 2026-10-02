@@ -97,7 +97,8 @@ NO_SHADDA = ALEFS | {chr(cp) for cp in (0x0621, 0x0649, 0x0629)}
 
 # The line box the owner approved: the plausible everyday envelope of
 # Sans 400 at 1.15 (2.302 em, rounded up to 2.31) plus 0.05 em.
-APPROVED_LINE_BOX = {"height": 2.36, "basis": "plausible everyday envelope + 0.05 em"}
+DEFAULT_LINE_BOX = 2.36
+LINE_BOX_BASIS = "plausible everyday envelope + 0.05 em"
 
 FORMS = ["isolated", "initial", "medial", "final"]
 
@@ -247,6 +248,32 @@ def cells(definition: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def letter_forms(
+    font: TTFont, font_bytes: bytes, definition: dict[str, Any]
+) -> dict[str, Any]:
+    """Each letter form's body glyph and parts, keyed "U+0628|initial"."""
+    from sawa_tools import lab_parts
+
+    order = font.getGlyphOrder()
+    return {
+        f"{letter['codepoint']}|{form}": lab_parts.letter_form_parts(
+            font,
+            shape(font_bytes, cell_codepoints(letter["char"], form, [])),
+            glyph_name=order.__getitem__,
+        )
+        for letter in definition["letters"]
+        for form in letter["forms"]
+    }
+
+
+def glyph_table(font: TTFont, names: set[str]) -> dict[str, Any]:
+    """Advance, class, parts with outlines, and anchors of each named glyph."""
+    from sawa_tools import lab_parts
+
+    anchors = lab_parts.anchors(font)
+    return {name: lab_parts.glyph_entry(font, name, anchors) for name in sorted(names)}
+
+
 def shape(font_bytes: bytes, codepoints: list[int]) -> list[list[int]]:
     """HarfBuzz's output for `codepoints` as [glyph id, cluster, x advance,
     x offset, y offset] per glyph, clusters counted in codepoints.
@@ -351,7 +378,8 @@ def latin_metrics(font: TTFont) -> dict[str, int]:
 
 def build_id(shas: list[str], scale: float) -> str:
     digest = hashlib.sha256(json.dumps([shas, scale, WGHT]).encode("utf-8"))
-    digest.update(Path(__file__).read_bytes().replace(b"\r\n", b"\n"))
+    for source in sorted(Path(__file__).parent.glob("lab*.py")):
+        digest.update(source.read_bytes().replace(b"\r\n", b"\n"))
     return f"sans-{WGHT:g}-{scale:g}-{digest.hexdigest()[:10]}"
 
 
@@ -359,6 +387,7 @@ def build_lab_fonts(
     *,
     out_dir: Path,
     scale: float,
+    line_box: float = DEFAULT_LINE_BOX,
     manifest: Path,
     families: Path,
     cache_dir: Path,
@@ -417,6 +446,9 @@ def build_lab_fonts(
     (out_dir / "expected-shaping.json").write_text(
         json.dumps(shaping, separators=(",", ":")) + "\n", encoding="utf-8"
     )
+    saved = TTFont(out_dir / "calib.ttf")
+    forms = letter_forms(saved, (out_dir / "calib.ttf").read_bytes(), definition)
+    used = {name for form in forms.values() for name in form["glyphs"]}
     shas = sorted(sources[name]["sha256"] for name in names)
     lab = {
         "build": build_id(shas, scale),
@@ -430,9 +462,11 @@ def build_lab_fonts(
         },
         "harfbuzz": harfbuzz_versions(),
         "metrics": latin_metrics(noto_sans),
-        "approvedLineBox": APPROVED_LINE_BOX,
+        "approvedLineBox": {"height": line_box, "basis": LINE_BOX_BASIS},
         "clearance": family.mark_clearance,
         "matrix": definition,
+        "letterForms": forms,
+        "glyphs": glyph_table(saved, used),
     }
     (out_dir / "lab.json").write_text(
         json.dumps(lab, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -453,6 +487,12 @@ def add_parsers(subparsers: argparse._SubParsersAction) -> None:
         default=DEFAULT_SCALE,
         help="Scale of the Arabic against the Latin (default: %(default)s)",
     )
+    parser.add_argument(
+        "--line-box",
+        type=float,
+        default=DEFAULT_LINE_BOX,
+        help="The approved line box in em the lab draws (default: %(default)s)",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--families", type=Path, default=DEFAULT_FAMILIES)
@@ -467,6 +507,7 @@ def run(args: argparse.Namespace) -> int:
         lab = build_lab_fonts(
             out_dir=args.out,
             scale=args.arabic_scale,
+            line_box=args.line_box,
             manifest=args.manifest,
             families=args.families,
             cache_dir=args.cache,

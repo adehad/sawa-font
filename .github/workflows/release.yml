@@ -173,6 +173,9 @@ jobs:
       - name: Build the calibration fonts and expected shaping
         working-directory: .
         run: uv run --locked --group build sawa lab fonts
+      - name: Test the lab's Python side against the cached Noto sources
+        working-directory: .
+        run: uv run --locked --group build pytest tests/python/test_lab.py tests/python/test_lab_parts.py
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.0"

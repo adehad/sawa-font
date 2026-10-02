@@ -13,7 +13,9 @@ bun install
 bun run dev                              # http://localhost:4410/
 ```
 
-`sawa lab fonts --arabic-scale 1.2` writes the fonts at another scale. The build id in the footer, and in every note and offset, changes with it.
+`sawa lab fonts --arabic-scale 1.2` writes the fonts at another scale, and `--line-box 2.4` draws another approved line box. The build id in the footer, and in every note and offset, changes with the scale.
+
+`lab.json` also splits each letter form into the parts the lab can move. `letterForms["U+0628|initial"]` names the form's body glyph and its parts: the body, and each dot group with its position (above, below or inside) and number of dots. In Noto Sans Arabic a dot group is a glyph of its own, which `ccmp` splits off the letter; a dot drawn inside the body glyph, as a component named like a dot or a small outer contour, is a part too. `glyphs` holds every such glyph's advance, GDEF class, parts with their SVG paths in font units, and GPOS anchors.
 
 Checks: `bun run lint`, `bun run fmt:check`, `bun run test` (unit tests and the HarfBuzz parity test), `bun run build`, `bun run test:e2e` (Playwright smoke test against the built lab).
 
